@@ -1,0 +1,26 @@
+{
+ "address": "1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1",
+ "description": "Complementary & alternative money demo - Wallet 2 - BitCoins (https://www.blocktrail.com)",
+ "favicon": "favicon.ico",
+ "files": {
+  "index.html": {
+   "sha512": "d26d6886cc603becc770a3c09d5a31303ec26e1e25ee7e59191113b895d131bb",
+   "size": 41
+  }
+ },
+ "ignore": "((js|css)/(?!all.(js|css))|.idea|.git)",
+ "inner_path": "content.json",
+ "modified": 1493991044,
+ "postmessage_nonce_security": true,
+ "sign": [
+  35400916459785361683850440892709058138563906943659252335010514106149404778935,
+  75088347064632829879428165537310995213002088500002652954630981289826567060107
+ ],
+ "signers_sign": "G07H0Zdvu6yUtEe7wxc515d5wVoZJpezNYNiKN8T1cwlBkZTYqZRbBzltNbJkstHlOMLxVLGQP6OdGCNEMCI8zE=",
+ "signs": {
+  "1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1": "HBnkZTbObCl33DE/sOoiiedwjf9fF2Hg0EQFroGUYkEUGuxU0zseJ2GOecM/0tvLK2HWEcSMWUCnthVFfMWdK3Q="
+ },
+ "signs_required": 1,
+ "title": "Money Network - W2",
+ "zeronet_version": "0.5.4"
+}
