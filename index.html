@@ -22,10 +22,55 @@
 
             Summary:
             <ul style="list-style-type:disc">
-                <li>Status: Is being implemented just now. Please do NOT used with real BitCoin's</li>
+                <li>Status: Is being implemented just now. Please do NOT used with real BitCoins!</li>
                 <li><a href="https://github.com/jaros1/Money-Network-W2" target="_top" rel="noopener noreferrer">GitHub</a></li>
             </ul>
 
+        </div>
+
+        <div>
+            <table>
+                <thead>
+                <tr>
+                    <th>Name</th>
+                    <th></th>
+                    <th>Value</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td>Network</td>
+                    <td>:</td>
+                    <td><input type="text" placeholder="Start typing" ng-model="w.bitcoin_network" class="user_info"
+                               style="width: 100px"
+                               uib-typeahead="n as n.text for n in w.bitcoin_networks | filter:$viewValue | limitTo:8"
+                               typeahead-editable="false"
+                               alt="Select BitCoin network" title="Select BitCoin network"
+                               typeahead-on-select="w.network_changed()"> Please use Bitcoin TestNet
+                    </td>
+                </tr>
+                <tr>
+                    <td>Wallet Id</td>
+                    <td>:</td>
+                    <td><input type="text" ng-model="w.wallet_id" style="width: 300px"> Generate <input type="button" value="Wallet Id" ng-click="w.gen_wallet_id()"/></td>
+                </tr>
+                <tr>
+                    <td>Wallet password</td>
+                    <td>:</td>
+                    <td><input type="text" ng-model="w.wallet_password" style="width: 300px"> Generate <input type="button" value="Wallet password" ng-click="w.gen_wallet_pwd()"/></td>
+                </tr>
+                <tr><td colspan="3">&nbsp;</td> </tr>
+                <tr>
+                    <td>Wallet operations:</td>
+                    <td>:</td>
+                    <td>
+                        <input type="button" value="Create wallet" ng-click="w.create_new_wallet()"/>
+                        <input type="button" value="Wallet log in" ng-click="w.init_wallet()"/>
+                        <input type="button" value="Delete wallet" ng-click="w.delete_wallet()"/>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
         </div>
 
         <!-- end wallet.html -->
