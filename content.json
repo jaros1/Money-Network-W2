@@ -3,22 +3,30 @@
  "description": "Complementary & alternative money demo - Wallet 2 - BitCoins (https://www.blocktrail.com)",
  "favicon": "favicon.ico",
  "files": {
+  "css/all.css": {
+   "sha512": "07e53598ed55d1e5465eaec0386aab9aadda399a83323a679ac4634423a691cd",
+   "size": 163926
+  },
   "index.html": {
-   "sha512": "d26d6886cc603becc770a3c09d5a31303ec26e1e25ee7e59191113b895d131bb",
-   "size": 41
+   "sha512": "e12df3580db09dbe8956939f7b66b44394d8ff776a741d8804ac4a63d0f9a06d",
+   "size": 3925
+  },
+  "js/all.js": {
+   "sha512": "dd4465aab8df027702c62dc75ba27478c77645cee38c94fa083f3748c64ec562",
+   "size": 4526675
   }
  },
- "ignore": "((js|css)/(?!all.(js|css))|.idea|.git)",
+ "ignore": "((js|css)/(?!all.(js|css))|.idea|.git|data/users/.*/.*)",
  "inner_path": "content.json",
- "modified": 1493991044,
+ "modified": 1494424426,
  "postmessage_nonce_security": true,
  "sign": [
-  35400916459785361683850440892709058138563906943659252335010514106149404778935,
-  75088347064632829879428165537310995213002088500002652954630981289826567060107
+  69627766719594860419192875986174588743393571085228971842768265336529129054589,
+  103144216651631460378750677373411156461496399103569691937783890975831279153246
  ],
  "signers_sign": "G07H0Zdvu6yUtEe7wxc515d5wVoZJpezNYNiKN8T1cwlBkZTYqZRbBzltNbJkstHlOMLxVLGQP6OdGCNEMCI8zE=",
  "signs": {
-  "1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1": "HBnkZTbObCl33DE/sOoiiedwjf9fF2Hg0EQFroGUYkEUGuxU0zseJ2GOecM/0tvLK2HWEcSMWUCnthVFfMWdK3Q="
+  "1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1": "HFKC+4c+BW4Tm6npGjAdw2GI1E3Z4qClu9VGkwbW1vnqFcjGFdsPwtbggfnkJxcnA3B8mNghjT5Tjn/iu+qcV44="
  },
  "signs_required": 1,
  "title": "Money Network - W2",
