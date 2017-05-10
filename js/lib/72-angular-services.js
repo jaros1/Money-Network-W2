@@ -8,7 +8,10 @@ angular.module('MoneyNetworkW2')
 
             function create_new_wallet(wallet_id, wallet_password, cb) {
                 MoneyNetworkHelper.create_new_wallet(wallet_id, wallet_password, cb) ;
-            } // create_new_wallet
+            }
+            function init_wallet(wallet_id, wallet_password, cb) {
+                MoneyNetworkHelper.init_wallet(wallet_id, wallet_password, cb) ;
+            }
             function delete_wallet (cb) {
                 MoneyNetworkHelper.delete_wallet(cb) ;
             }
@@ -16,6 +19,7 @@ angular.module('MoneyNetworkW2')
             // export MoneyNetworkW2Service
             return {
                 create_new_wallet: create_new_wallet,
+                init_wallet: init_wallet,
                 delete_wallet: delete_wallet
             };
 

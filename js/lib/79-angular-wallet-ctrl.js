@@ -37,7 +37,15 @@ angular.module('MoneyNetworkW2')
                 }
             }) ;
         };
-
+        self.init_wallet = function () {
+            moneyNetworkService.init_wallet(self.wallet_id, self.wallet_password, function (error) {
+                if (error) ZeroFrame.cmd("wrapperNotification", ["error", error]);
+                else {
+                    ZeroFrame.cmd("wrapperNotification", ["info", 'Bitcoin wallet was initialized OK.', 5000]);
+                    $rootScope.$apply() ;
+                }
+            }) ;
+        };
         self.delete_wallet = function () {
             moneyNetworkService.delete_wallet(function (error) {
                 if (error) ZeroFrame.cmd("wrapperNotification", ["error", error]);

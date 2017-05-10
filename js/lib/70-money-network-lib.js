@@ -71,6 +71,30 @@ var MoneyNetworkHelper = (function () {
         }) ;
     } // create_new_wallet
 
+    function init_wallet(wallet_id, wallet_password, cb) {
+        var pgm = module + '.init_wallet: ';
+        if (!wallet_id || !wallet_password) return cb('Wallet ID and/or password is missing');
+        init_api_client();
+        api_client.initWallet(
+            {identifier: wallet_id, passphrase: wallet_password},
+            function (err, wallet, primaryMnemonic, backupMnemonic, blocktrailPubKeys) {
+                if (!err) {
+                    bitcoin_wallet = wallet;
+                    bitcoin_wallet_backup_info = null;
+                }
+                cb(err);
+        }).then(
+            function () {
+                console.log(pgm + 'success: arguments = ', arguments);
+                cb(null);
+            },
+            function (error) {
+                console.log(pgm + 'error: arguments = ', arguments);
+                cb(error.message);
+            }
+        );
+    } // init_wallet
+
     function delete_wallet (cb) {
         if (!bitcoin_wallet) return cb('Wallet not open. Please log in first') ;
         bitcoin_wallet.deleteWallet(function (error, success) {
@@ -87,6 +111,7 @@ var MoneyNetworkHelper = (function () {
         init_api_client: init_api_client,
         generate_random_string: generate_random_string,
         create_new_wallet: create_new_wallet,
+        init_wallet: init_wallet,
         delete_wallet: delete_wallet,
         get_wallet_status: get_wallet_status
     };
