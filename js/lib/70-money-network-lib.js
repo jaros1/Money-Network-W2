@@ -29,18 +29,8 @@ var MoneyNetworkHelper = (function () {
     var API_Key = '44bb2b39eaf2a164afe164560c725b4bf2842698' ;
     var API_Secret = 'f057354b22d9cbf9098e4c2db8e1643a3342c6fa' ;
     var api_client, bitcoin_wallet, bitcoin_wallet_backup_info ;
-
-    var bitcoin_networks = [{value: 'BTC', text: 'Bitcoin'}, { value:'tBTC', text: 'Bitcoin TestNet'}] ;
-    var bitcoin_network = bitcoin_networks[1] ; // TestNet
-
-    function get_bitcoin_networks () {
-        return bitcoin_networks ;
-    }
-    function get_bitcoin_network () {
-        return bitcoin_network ;
-    }
-    function set_bitcoin_network (network) {
-        bitcoin_network = network ;
+    function get_wallet_status () {
+        return (bitcoin_wallet ? 'open' : 'n/a') ;
     }
 
     function init_api_client () {
@@ -81,15 +71,24 @@ var MoneyNetworkHelper = (function () {
         }) ;
     } // create_new_wallet
 
-    function get_bitcoin_wallet () {
-        return bitcoin_wallet ;
-    }
+    function delete_wallet (cb) {
+        if (!bitcoin_wallet) return cb('Wallet not open. Please log in first') ;
+        bitcoin_wallet.deleteWallet(function (error, success) {
+            if (success) {
+                bitcoin_wallet = null ;
+                cb(null);
+            }
+            else cb('Could not delete wallet. error = ' + JSON.stringify(error)) ;
+        }) ;
+    } // delete_wallet
 
     // export helpers
     return {
         init_api_client: init_api_client,
         generate_random_string: generate_random_string,
-        create_new_wallet: create_new_wallet
+        create_new_wallet: create_new_wallet,
+        delete_wallet: delete_wallet,
+        get_wallet_status: get_wallet_status
     };
 
 })();

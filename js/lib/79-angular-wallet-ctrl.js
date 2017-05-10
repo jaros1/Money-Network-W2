@@ -24,21 +24,29 @@ angular.module('MoneyNetworkW2')
             self.wallet_password = generate_random_string(30, true) ;
         };
 
+        self.wallet_status = function () {
+            return MoneyNetworkHelper.get_wallet_status() ;
+        };
+
         self.create_new_wallet = function () {
             moneyNetworkService.create_new_wallet(self.wallet_id, self.wallet_password, function (error) {
                 if (error) ZeroFrame.cmd("wrapperNotification", ["error", error]);
-                else ZeroFrame.cmd("wrapperNotification", ["info", 'New Bitcoin wallet was created OK.<br>Please save backup info<br>See console log', 5000]);
+                else {
+                    ZeroFrame.cmd("wrapperNotification", ["info", 'New Bitcoin wallet was created OK.<br>Please save backup info<br>See console log', 5000]);
+                    $rootScope.$apply() ;
+                }
             }) ;
         };
 
         self.delete_wallet = function () {
             moneyNetworkService.delete_wallet(function (error) {
-                console.log('error = ' + error) ;
+                if (error) ZeroFrame.cmd("wrapperNotification", ["error", error]);
+                else {
+                    ZeroFrame.cmd("wrapperNotification", ["info", 'Bitcoin wallet was deleted', 5000]);
+                    $rootScope.$apply() ;
+                }
             })
         };
-
-
-
 
         // end WalletCtrl
     }])
