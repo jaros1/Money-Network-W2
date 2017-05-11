@@ -9,6 +9,8 @@ angular.module('MoneyNetworkW2')
             return moneyNetworkService.generate_random_string(length, use_special_characters) ;
         } // generate_random_string
 
+        self.wallet_info = moneyNetworkService.get_wallet_info() ;
+
         self.gen_wallet_id = function() {
             if (self.wallet_id) {
                 ZeroFrame.cmd("wrapperNotification", ["info", 'Old Wallet Id was not replaced', 5000]);
@@ -46,6 +48,12 @@ angular.module('MoneyNetworkW2')
                 }
             }) ;
         };
+        self.close_wallet = function () {
+            moneyNetworkService.close_wallet(function (error) {
+                if (error) ZeroFrame.cmd("wrapperNotification", ["error", error]);
+                else ZeroFrame.cmd("wrapperNotification", ["info", 'Bitcoin wallet closed', 5000]);
+            })
+        } ;
         self.delete_wallet = function () {
             moneyNetworkService.delete_wallet(function (error) {
                 if (error) ZeroFrame.cmd("wrapperNotification", ["error", error]);

@@ -8,9 +8,15 @@ angular.module('MoneyNetworkW2')
 
             var API_Key = '44bb2b39eaf2a164afe164560c725b4bf2842698' ;
             var API_Secret = 'f057354b22d9cbf9098e4c2db8e1643a3342c6fa' ;
-            var api_client, bitcoin_wallet, bitcoin_wallet_backup_info ;
-            function get_wallet_status () {
-                return (bitcoin_wallet ? 'open' : 'n/a') ;
+            var api_client, bitcoin_wallet, bitcoin_wallet_backup_info, bitcoin_wallet_confirmed_balance, bitcoin_wallet_unconfirmed_balance ;
+
+            var wallet_info = {
+                status: 'n/a',
+                confirmed_balance: null,
+                unconfirmed_balance: null
+            } ;
+            function get_wallet_info () {
+                return wallet_info ;
             }
 
             function init_api_client () {
@@ -36,19 +42,39 @@ angular.module('MoneyNetworkW2')
                 return string.join('');
             } // generate_random_string
 
+            function get_wallet_balance (cb) {
+                bitcoin_wallet.getBalance(
+                    function(err, confirmedBalance, unconfirmedBalance) {
+                        if (err) return cb(err) ;
+                        wallet_info.confirmed_balance = blocktrail.toBTC(confirmedBalance) ;
+                        console.log('Balance: ', wallet_info.confirmed_balance);
+                        wallet_info.unconfirmed_balance = blocktrail.toBTC(unconfirmedBalance) ;
+                        console.log('Unconfirmed Balance: ', wallet_info.unconfirmed_balance);
+                        cb(null) ;
+                    }
+                );
+            }
+
             function create_new_wallet (wallet_id, wallet_password, cb) {
                 var pgm = service + '.create_new_wallet: ' ;
                 if (!wallet_id || !wallet_password) return cb('Wallet ID and/or password is missing') ;
                 init_api_client() ;
                 api_client.createNewWallet(wallet_id, wallet_password, function (err, wallet, backupInfo) {
-                    if (!err) {
-                        bitcoin_wallet = wallet ;
-                        console.log('Wallet = ' + CircularJSON.stringify(wallet)) ;
-                        bitcoin_wallet_backup_info = backupInfo ;
-                        console.log('Backup info = ' + CircularJSON.stringify(backupInfo)) ;
+                    if (err) return ;
+                    bitcoin_wallet = wallet ;
+                    bitcoin_wallet_backup_info = backupInfo ;
+                    console.log('Backup info = ' + CircularJSON.stringify(backupInfo)) ;
+                    wallet_info.status = 'Open' ;
+                    get_wallet_balance(cb) ;
+                }).then(
+                    function () {
+                        console.log(pgm + 'success: arguments = ', arguments);
+                    },
+                    function (error) {
+                        console.log(pgm + 'error: arguments = ', arguments);
+                        cb(error.message);
                     }
-                    cb(err) ;
-                }) ;
+                ) ;
             } // create_new_wallet
 
             function init_wallet(wallet_id, wallet_password, cb) {
@@ -58,15 +84,14 @@ angular.module('MoneyNetworkW2')
                 api_client.initWallet(
                     {identifier: wallet_id, passphrase: wallet_password},
                     function (err, wallet, primaryMnemonic, backupMnemonic, blocktrailPubKeys) {
-                        if (!err) {
-                            bitcoin_wallet = wallet;
-                            bitcoin_wallet_backup_info = null;
-                        }
-                        cb(err);
+                        if (err) return;
+                        bitcoin_wallet = wallet;
+                        bitcoin_wallet_backup_info = null;
+                        wallet_info.status = 'Open';
+                        get_wallet_balance(cb);
                     }).then(
                     function () {
                         console.log(pgm + 'success: arguments = ', arguments);
-                        cb(null);
                     },
                     function (error) {
                         console.log(pgm + 'error: arguments = ', arguments);
@@ -75,11 +100,24 @@ angular.module('MoneyNetworkW2')
                 );
             } // init_wallet
 
+            function close_wallet (cb) {
+                if (!bitcoin_wallet) return cb('Wallet not open. Please log in first') ;
+                bitcoin_wallet = null ;
+                bitcoin_wallet_backup_info = null ;
+                wallet_info.status = 'n/a' ;
+                wallet_info.confirmed_balance = null ;
+                wallet_info.unconfirmed_balance = null ;
+                cb(null) ;
+            } // close_wallet
+
             function delete_wallet (cb) {
                 if (!bitcoin_wallet) return cb('Wallet not open. Please log in first') ;
                 bitcoin_wallet.deleteWallet(function (error, success) {
                     if (success) {
                         bitcoin_wallet = null ;
+                        wallet_info.status = 'n/a' ;
+                        wallet_info.confirmed_balance = null ;
+                        wallet_info.unconfirmed_balance = null ;
                         cb(null);
                     }
                     else cb('Could not delete wallet. error = ' + JSON.stringify(error)) ;
@@ -89,9 +127,10 @@ angular.module('MoneyNetworkW2')
             // export
             return {
                 generate_random_string: generate_random_string,
-                get_wallet_status: get_wallet_status,
+                get_wallet_info: get_wallet_info,
                 create_new_wallet: create_new_wallet,
                 init_wallet: init_wallet,
+                close_wallet: close_wallet,
                 delete_wallet: delete_wallet
             };
 

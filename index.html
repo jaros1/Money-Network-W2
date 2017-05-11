@@ -16,7 +16,7 @@
                 <br>
                 Note that <a href="https://www.blocktrail.com" target="_blank" rel="noopener noreferrer">blocktrail.com</a>
                 has been acquired by <a href="https://btc.com/" target="_blank" rel="noopener noreferrer">btc.com</a>.
-                Blocktrails old <a href="https://www.blocktrail.com/api/docs" target="_blank" rel="noopener noreferrer">API</a>
+                Blocktrails Node.js <a href="https://www.blocktrail.com/api/docs" target="_blank" rel="noopener noreferrer">API</a>
                 is used for BitCoin operations.
             </p>
 
@@ -53,10 +53,26 @@
                     <td>:</td>
                     <td>
                         <input type="button" value="Create wallet" ng-click="w.create_new_wallet()"/>
-                        <input type="button" value="Wallet log in" ng-click="w.init_wallet()"/>
+                        <input type="button" value="Log in" ng-click="w.init_wallet()"/>
+                        <input type="button" value="Log out" ng-click="w.close_wallet()"/>
                         <input type="button" value="Delete wallet" ng-click="w.delete_wallet()"/>
-                        &nbsp;Status: <span ng-bind="w.wallet_status()"></span>
                     </td>
+                </tr>
+                <tr><td colspan="3">&nbsp;</td> </tr>
+                <tr>
+                    <td>Wallet status</td>
+                    <td>:</td>
+                    <td ng-bind="w.wallet_info.status"></td>
+                </tr>
+                <tr>
+                    <td>Confirmed balance</td>
+                    <td>:</td>
+                    <td ng-bind="w.wallet_info.confirmed_balance"></td>
+                </tr>
+                <tr>
+                    <td>Unconfirmed balance</td>
+                    <td>:</td>
+                    <td ng-bind="w.wallet_info.unconfirmed_balance"></td>
                 </tr>
                 </tbody>
             </table>

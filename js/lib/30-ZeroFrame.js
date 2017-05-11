@@ -131,6 +131,7 @@ ZeroFrame = (function() {
     };
 
     ZeroFrame.prototype.checkCertUserId = function() {
+        return ; // no certificate - no data saved on ZeroNet
         // user must be logged in with a ZeroNet certificate (ZeroNet ID provider or anonymous Money Network certificate)
         if (this.site_info.cert_user_id) return ; // already logged in
         // login to ZeroNet with an anonymous money network account

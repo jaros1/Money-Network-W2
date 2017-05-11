@@ -9,16 +9,16 @@ Status: Is being implemented.
 ## Money-Network-W2 demo links
 - http://127.0.0.1:43110/1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1/ ([ZeroNet](https://zeronet.readthedocs.io/en/latest/using_zeronet/installing/) required)
 - https://zeronet.korso.win/1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1/ (proxy)
-- https://proxy1.zn.kindlyfire.me/1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1/ (proxy *)
-- https://onlyzero.net/1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1/ (proxy *)
-- https://www.zerogate.tk/1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1/ (proxy *)
-- https://zeronet.iikb.org/1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1/ (proxy *)
-- https://zero.btnova.org/1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1/ (proxy *)
+- https://proxy1.zn.kindlyfire.me/1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1/ (error)
+- https://onlyzero.net/1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1/ (error)
+- https://www.zerogate.tk/1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1/ (error)
+- https://zeronet.iikb.org/1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1/ (error)
+- https://zero.btnova.org/1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1/ (proxy)
 - https://fuckcf.cf/1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1 (proxy)
 - https://zeronet.maxweiss.io/1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1 (proxy)
 - https://bit.surf:43110/1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1/ (proxy)
-- https://proxy.th3nd.com/1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1
-- https://zn.maly.io/1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1
-- Proxy * = not available at last test 15 april 2017
+- https://proxy.th3nd.com/1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1 (error)
+- https://zn.maly.io/1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1 (error)
+- error = proxy server not available at last test 11 may 2017
 
 This demo can be tested from a ZeroNet proxy server but do not use your normal ZeroNet certificate and do not use real Bitcoins!
