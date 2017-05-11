@@ -6,7 +6,7 @@ angular.module('MoneyNetworkW2')
         console.log(controller + ' loaded');
 
         function generate_random_string(length, use_special_characters) {
-            return MoneyNetworkHelper.generate_random_string(length, use_special_characters) ;
+            return moneyNetworkService.generate_random_string(length, use_special_characters) ;
         } // generate_random_string
 
         self.gen_wallet_id = function() {
@@ -25,7 +25,7 @@ angular.module('MoneyNetworkW2')
         };
 
         self.wallet_status = function () {
-            return MoneyNetworkHelper.get_wallet_status() ;
+            return moneyNetworkService.get_wallet_status() ;
         };
 
         self.create_new_wallet = function () {

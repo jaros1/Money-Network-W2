@@ -6268,7 +6268,7 @@ APIClient.prototype.createNewWallet = function(options, cb) {
     var self = this;
 
     var pgm = '50-blocktrail.js createNewWallet: ' ;
-    console.log(pgm + 'options = ', options, ', cb=̈́', cb) ;
+    // console.log(pgm + 'options = ', options, ', cb=̈́', cb) ;
 
     if (typeof options !== "object") {
         // get the old-style arguments
@@ -6546,7 +6546,7 @@ APIClient.prototype._createNewWalletV2 = function(options) {
 APIClient.prototype._createNewWalletV3 = function(options) {
     var self = this;
     var pgm = '50-blocktrail.js _createNewWalletV3: ' ;
-    console.log(pgm + 'options = ', options) ;
+    // console.log(pgm + 'options = ', options) ;
     var deferred = q.defer();
 
     // avoid modifying passed options
@@ -6758,7 +6758,7 @@ APIClient.prototype.storeNewWalletV3 = function(identifier, primaryPublicKey, ba
         checksum: checksum,
         key_index: keyIndex
     };
-    console.log(pgm + 'postData=', CircularJSON.stringify(postData)) ;
+    // console.log(pgm + 'postData=', CircularJSON.stringify(postData)) ;
 
     verifyPublicOnly(postData);
 
@@ -8250,7 +8250,7 @@ var noop = function() {};
 function Request(options) {
     var self = this;
     var pgm = '50-blocktrail.js Request: ' ;
-    console.log(pgm + 'options = ', options) ;
+    // console.log(pgm + 'options = ', options) ;
     self.https = options.https;
     self.host = options.host;
     self.endpoint = options.endpoint;
@@ -8297,7 +8297,7 @@ Request.qs = function(params) {
 Request.prototype.request = function(method, resource, params, data, fn) {
     var self = this;
     var pgm = '50-blocktrail.js Request.prototype.request: ' ;
-    console.log(pgm + 'params=', method, resource, params, data, fn) ;
+    // console.log(pgm + 'params=', method, resource, params, data, fn) ;
     self.deferred = q.defer();
 
     self.callback = fn || noop;
@@ -8350,7 +8350,7 @@ Request.prototype.request = function(method, resource, params, data, fn) {
 Request.prototype.performRequest = function(options) {
     var self = this;
     var pgm = '50-blocktrail.js Request.prototype.performRequest: ' ;
-    console.log(pgm + 'params=', options) ;
+    // console.log(pgm + 'params=', options) ;
     var method = options.method;
     var signHMAC = false;
 
@@ -8517,13 +8517,13 @@ RestClient.prototype.create_request = function(options) {
         params: _.defaults({}, self.defaultParams),
         headers: _.defaults({}, self.defaultHeaders)
     });
-    console.log(pgm + 'options = ', options) ;
+    // console.log(pgm + 'options = ', options) ;
     return new Request(options);
 };
 
 RestClient.prototype.post = function(path, params, data, fn, requireAuth) {
     var pgm = '50-blocktrail.js: RestClient.prototype.post: ' ;
-    console.log(pgm + 'params=', path, params, data, fn, requireAuth) ;
+    // console.log(pgm + 'params=', path, params, data, fn, requireAuth) ;
     requireAuth = typeof requireAuth === "undefined" ? true : requireAuth;
 
     var options = {};
@@ -58957,7 +58957,7 @@ function deprecate(callback, name, alternative) {
  */
 function Q(value) {
     var pgm = '50-blocktrail.js Q: ' ;
-    console.log(pgm + 'value=', value) ;
+    // console.log(pgm + 'value=', value) ;
     // If the object is already a Promise, return it directly.  This enables
     // the resolve function to both be used to created references from objects,
     // but to tolerably coerce non-promises to promises.
@@ -66361,7 +66361,7 @@ Emitter(Request.prototype);
 
 Request.prototype.use = function(fn) {
   var pgm = '50-blocktrail.js Request.prototype.use: ' ;
-  console.log(pgm + 'this=', this, ', fn=', fn) ;
+  // console.log(pgm + 'this=', this, ', fn=', fn) ;
   fn(this);
   return this;
 }
@@ -66657,7 +66657,7 @@ Request.prototype.attach = function(field, file, filename){
 
 Request.prototype.send = function(data){
   var pgm = '50-blocktrail.js Request.prototype.send: ' ;
-  console.log(pgm + 'params=', data) ; 
+  // console.log(pgm + 'params=', data) ; 
   var obj = isObject(data);
   var type = this.getHeader('Content-Type');
 
@@ -66755,9 +66755,9 @@ Request.prototype.withCredentials = function(){
 Request.prototype.end = function(fn){
   var self = this;
   var pgm = '50-blocktrail.js Request.prototype.end: ' ;
-  console.log(pgm + 'self=', self, ', params=', fn) ;
+  // console.log(pgm + 'self=', self, ', params=', fn) ;
   var xhr = this.xhr = getXHR();
-  console.log(pgm + 'xhr=', xhr) ;
+  // console.log(pgm + 'xhr=', xhr) ;
   var query = this._query.join('&');
   var timeout = this._timeout;
   var data = this._formData || this._data;
