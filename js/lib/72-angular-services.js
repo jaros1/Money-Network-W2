@@ -134,16 +134,37 @@ angular.module('MoneyNetworkW2')
             function get_new_address (cb) {
                 var pgm = service + '.get_new_address: ' ;
                 if (!bitcoin_wallet) return cb('No bitcoin wallet found') ;
-                bitcoin_wallet.getNewAddress(cb).then(
-                    function () {
+                bitcoin_wallet.getNewAddress(cb)
+                    .then(function () {
                         console.log(pgm + 'success: arguments = ', arguments);
                     },
                     function (error) {
                         console.log(pgm + 'error: arguments = ', arguments);
                         cb(error.message);
-                    }) ;
-            }
+                    });
+            } // get_new_address
 
+            function send_money (address, amount, cb) {
+                var pgm = service + '.send_money: ' ;
+                var satoshi = parseInt(amount) ;
+                var btc = satoshi / 100000000 ;
+                ZeroFrame.cmd("wrapperConfirm", ["Send " + satoshi + ' = ' + btc + ' tBTC<br>to ' + address +"?", "OK"], function (confirm) {
+                    if (!confirm) return cb('Money was not sent') ;
+                    var payment = {} ;
+                    payment[address] = satoshi ;
+                    bitcoin_wallet.pay(payment, null, false, true, blocktrail.Wallet.FEE_STRATEGY_BASE_FEE, cb)
+                        .then(
+                        function () {
+                            console.log(pgm + 'success: arguments = ', arguments);
+                        },
+                        function (error) {
+                            console.log(pgm + 'error: arguments = ', arguments);
+                            cb(error.message);
+                        });
+                }) ;
+
+
+            } // send_money
 
             // export
             return {
@@ -153,7 +174,8 @@ angular.module('MoneyNetworkW2')
                 init_wallet: init_wallet,
                 close_wallet: close_wallet,
                 delete_wallet: delete_wallet,
-                get_new_address: get_new_address
+                get_new_address: get_new_address,
+                send_money: send_money
             };
 
             // end MoneyNetworkW2Service

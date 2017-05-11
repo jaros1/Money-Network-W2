@@ -30,7 +30,7 @@ angular.module('MoneyNetworkW2')
             moneyNetworkService.create_new_wallet(self.wallet_id, self.wallet_password, function (error) {
                 if (error) ZeroFrame.cmd("wrapperNotification", ["error", error]);
                 else {
-                    ZeroFrame.cmd("wrapperNotification", ["info", 'New Bitcoin wallet was created OK.<br>Please save backup info<br>See console log', 5000]);
+                    ZeroFrame.cmd("wrapperNotification", ["done", 'New Bitcoin wallet was created OK.<br>Please save backup info<br>See console log', 5000]);
                     $rootScope.$apply() ;
                 }
             }) ;
@@ -54,7 +54,7 @@ angular.module('MoneyNetworkW2')
             moneyNetworkService.delete_wallet(function (error) {
                 if (error) ZeroFrame.cmd("wrapperNotification", ["error", error]);
                 else {
-                    ZeroFrame.cmd("wrapperNotification", ["info", 'Bitcoin wallet was deleted', 5000]);
+                    ZeroFrame.cmd("wrapperNotification", ["done", 'Bitcoin wallet was deleted', 5000]);
                     $rootScope.$apply() ;
                 }
             })
@@ -69,6 +69,17 @@ angular.module('MoneyNetworkW2')
                     $rootScope.$apply() ;
                 }
             }) ;
+        };
+        self.send_money = function () {
+            if (self.wallet_info.status != 'Open') return ZeroFrame.cmd("wrapperNotification", ["info", "No bitcoin wallet found", 3000]) ;
+            if (!self.send_address || !self.send_amount) return ZeroFrame.cmd("wrapperNotification", ["error", "Receiver and/or amount is missing", 5000]) ;
+            if (!self.send_amount.match(/^[0-9]+$/)) return ZeroFrame.cmd("wrapperNotification", ["error", "Amount must be an integer (Satoshi)", 5000]) ;
+            moneyNetworkService.send_money(self.send_address, self.send_amount, function (err, result) {
+                if (err) ZeroFrame.cmd("wrapperNotification", ["error", err]) ;
+                else ZeroFrame.cmd("wrapperNotification", ["done", "Money was send. result = " + JSON.stringify(result)]);
+            }) ;
+
+
         };
 
         // end WalletCtrl
