@@ -5,31 +5,27 @@ angular.module('MoneyNetworkW2')
         var controller = 'WalletCtrl';
         console.log(controller + ' loaded');
 
-        function generate_random_string(length, use_special_characters) {
-            return moneyNetworkService.generate_random_string(length, use_special_characters) ;
-        } // generate_random_string
-
-        self.wallet_info = moneyNetworkService.get_wallet_info() ;
-
+        // generate random wallet ID and password
         self.gen_wallet_id = function() {
             if (self.wallet_id) {
                 ZeroFrame.cmd("wrapperNotification", ["info", 'Old Wallet Id was not replaced', 5000]);
                 return ;
             }
-            self.wallet_id = generate_random_string(30, false) ;
+            self.wallet_id = moneyNetworkService.generate_random_string(30, false) ;
         };
         self.gen_wallet_pwd = function() {
             if (self.wallet_password) {
                 ZeroFrame.cmd("wrapperNotification", ["info", 'Old Wallet Password was not replaced', 5000]);
                 return ;
             }
-            self.wallet_password = generate_random_string(30, true) ;
+            self.wallet_password = moneyNetworkService.generate_random_string(30, true) ;
         };
 
-        self.wallet_status = function () {
-            return moneyNetworkService.get_wallet_status() ;
-        };
 
+        // wallet status and balance
+        self.wallet_info = moneyNetworkService.get_wallet_info() ;
+
+        // wallet operations
         self.create_new_wallet = function () {
             moneyNetworkService.create_new_wallet(self.wallet_id, self.wallet_password, function (error) {
                 if (error) ZeroFrame.cmd("wrapperNotification", ["error", error]);
@@ -62,6 +58,17 @@ angular.module('MoneyNetworkW2')
                     $rootScope.$apply() ;
                 }
             })
+        };
+
+        self.get_new_address = function () {
+            if (self.wallet_info.status != 'Open') return ZeroFrame.cmd("wrapperNotification", ["info", "No bitcoin wallet found", 3000]) ;
+            else self.receiver_address = moneyNetworkService.get_new_address(function (err, address) {
+                if (err) return ZeroFrame.cmd("wrapperNotification", ['error', 'Could not get a new address. error = ' + err]) ;
+                else {
+                    self.receiver_address = address ;
+                    $rootScope.$apply() ;
+                }
+            }) ;
         };
 
         // end WalletCtrl

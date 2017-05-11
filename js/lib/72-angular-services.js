@@ -112,17 +112,38 @@ angular.module('MoneyNetworkW2')
 
             function delete_wallet (cb) {
                 if (!bitcoin_wallet) return cb('Wallet not open. Please log in first') ;
-                bitcoin_wallet.deleteWallet(function (error, success) {
-                    if (success) {
-                        bitcoin_wallet = null ;
-                        wallet_info.status = 'n/a' ;
-                        wallet_info.confirmed_balance = null ;
-                        wallet_info.unconfirmed_balance = null ;
-                        cb(null);
-                    }
-                    else cb('Could not delete wallet. error = ' + JSON.stringify(error)) ;
+                // confirm operation!
+                ZeroFrame.cmd("wrapperConfirm", ["Delele wallet?", "OK"], function (confirm) {
+                    if (!confirm) return cb('Wallet was not deleted')  ;
+                    // delete wallet
+                    bitcoin_wallet.deleteWallet(function (error, success) {
+                        if (success) {
+                            bitcoin_wallet = null ;
+                            wallet_info.status = 'n/a' ;
+                            wallet_info.confirmed_balance = null ;
+                            wallet_info.unconfirmed_balance = null ;
+                            cb(null);
+                        }
+                        else cb('Could not delete wallet. error = ' + JSON.stringify(error)) ;
+                    }) ;
                 }) ;
+
             } // delete_wallet
+
+
+            function get_new_address (cb) {
+                var pgm = service + '.get_new_address: ' ;
+                if (!bitcoin_wallet) return cb('No bitcoin wallet found') ;
+                bitcoin_wallet.getNewAddress(cb).then(
+                    function () {
+                        console.log(pgm + 'success: arguments = ', arguments);
+                    },
+                    function (error) {
+                        console.log(pgm + 'error: arguments = ', arguments);
+                        cb(error.message);
+                    }) ;
+            }
+
 
             // export
             return {
@@ -131,7 +152,8 @@ angular.module('MoneyNetworkW2')
                 create_new_wallet: create_new_wallet,
                 init_wallet: init_wallet,
                 close_wallet: close_wallet,
-                delete_wallet: delete_wallet
+                delete_wallet: delete_wallet,
+                get_new_address: get_new_address
             };
 
             // end MoneyNetworkW2Service

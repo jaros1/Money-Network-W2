@@ -74,6 +74,22 @@
                     <td>:</td>
                     <td ng-bind="w.wallet_info.unconfirmed_balance"></td>
                 </tr>
+                <tr><td colspan="3">&nbsp;</td> </tr>
+                <tr>
+                    <td>Send money</td>
+                    <td>:</td>
+                    <td>Receiver: <input type="text" ng-model="w.send_address" style="width: 300px">
+                        Amount: <input type="text" ng-model="w.send_amount" style="width: 100px"> Satoshi&nbsp;&nbsp;
+                        <input type="button" value="Send" ng-click="w.send_money()"/>
+                    </td>
+                </tr>
+                <tr>
+                    <td>Receive money</td>
+                    <td>:</td>
+                    <td>Address : <input type="text" ng-model="w.receiver_address" style="width: 300px" readonly>
+                        <input type="button" value="Get address" ng-click="w.get_new_address()"/>
+                    </td>
+                </tr>
                 </tbody>
             </table>
         </div>
