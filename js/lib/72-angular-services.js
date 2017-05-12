@@ -47,9 +47,9 @@ angular.module('MoneyNetworkW2')
                     function(err, confirmedBalance, unconfirmedBalance) {
                         if (err) return cb(err) ;
                         wallet_info.confirmed_balance = blocktrail.toBTC(confirmedBalance) ;
-                        console.log('Balance: ', wallet_info.confirmed_balance);
+                        // console.log('Balance: ', wallet_info.confirmed_balance);
                         wallet_info.unconfirmed_balance = blocktrail.toBTC(unconfirmedBalance) ;
-                        console.log('Unconfirmed Balance: ', wallet_info.unconfirmed_balance);
+                        // console.log('Unconfirmed Balance: ', wallet_info.unconfirmed_balance);
                         cb(null) ;
                     }
                 );
@@ -164,6 +164,7 @@ angular.module('MoneyNetworkW2')
                 get_wallet_info: get_wallet_info,
                 create_new_wallet: create_new_wallet,
                 init_wallet: init_wallet,
+                get_balance: get_wallet_balance,
                 close_wallet: close_wallet,
                 delete_wallet: delete_wallet,
                 get_new_address: get_new_address,

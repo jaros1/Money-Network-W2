@@ -44,6 +44,13 @@ angular.module('MoneyNetworkW2')
                 }
             }) ;
         };
+        self.get_balance = function () {
+            if (self.wallet_info.status != 'Open') return ZeroFrame.cmd("wrapperNotification", ["info", "No bitcoin wallet found", 3000]) ;
+            moneyNetworkService.get_balance(function(error) {
+                if (error) ZeroFrame.cmd("wrapperNotification", ["error", error]);
+                else $rootScope.$apply() ;
+            })
+        } ;
         self.close_wallet = function () {
             moneyNetworkService.close_wallet(function (error) {
                 if (error) ZeroFrame.cmd("wrapperNotification", ["error", error]);
