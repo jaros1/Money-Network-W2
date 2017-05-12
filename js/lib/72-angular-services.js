@@ -148,19 +148,11 @@ angular.module('MoneyNetworkW2')
                 var pgm = service + '.send_money: ' ;
                 var satoshi = parseInt(amount) ;
                 var btc = satoshi / 100000000 ;
-                ZeroFrame.cmd("wrapperConfirm", ["Send " + satoshi + ' = ' + btc + ' tBTC<br>to ' + address +"?", "OK"], function (confirm) {
+                ZeroFrame.cmd("wrapperConfirm", ["Send " + satoshi + ' satoshi = ' + btc + ' tBTC<br>to ' + address +"?", "OK"], function (confirm) {
                     if (!confirm) return cb('Money was not sent') ;
                     var payment = {} ;
                     payment[address] = satoshi ;
-                    bitcoin_wallet.pay(payment, null, false, true, blocktrail.Wallet.FEE_STRATEGY_BASE_FEE, cb)
-                        .then(
-                        function () {
-                            console.log(pgm + 'success: arguments = ', arguments);
-                        },
-                        function (error) {
-                            console.log(pgm + 'error: arguments = ', arguments);
-                            cb(error.message);
-                        });
+                    bitcoin_wallet.pay(payment, null, false, true, blocktrail.Wallet.FEE_STRATEGY_BASE_FEE, cb) ;
                 }) ;
 
 

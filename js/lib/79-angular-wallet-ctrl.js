@@ -55,6 +55,12 @@ angular.module('MoneyNetworkW2')
                 if (error) ZeroFrame.cmd("wrapperNotification", ["error", error]);
                 else {
                     ZeroFrame.cmd("wrapperNotification", ["done", 'Bitcoin wallet was deleted', 5000]);
+                    // clear form
+                    self.wallet_id = null ;
+                    self.wallet_password = null ;
+                    self.send_address = null ;
+                    self.send_amount = null ;
+                    self.receiver_address = null ;
                     $rootScope.$apply() ;
                 }
             })
@@ -71,11 +77,16 @@ angular.module('MoneyNetworkW2')
             }) ;
         };
         self.send_money = function () {
+            var pgm = controller + '.send_money: ' ;
             if (self.wallet_info.status != 'Open') return ZeroFrame.cmd("wrapperNotification", ["info", "No bitcoin wallet found", 3000]) ;
             if (!self.send_address || !self.send_amount) return ZeroFrame.cmd("wrapperNotification", ["error", "Receiver and/or amount is missing", 5000]) ;
             if (!self.send_amount.match(/^[0-9]+$/)) return ZeroFrame.cmd("wrapperNotification", ["error", "Amount must be an integer (Satoshi)", 5000]) ;
             moneyNetworkService.send_money(self.send_address, self.send_amount, function (err, result) {
-                if (err) ZeroFrame.cmd("wrapperNotification", ["error", err]) ;
+                if (err) {
+                    if ((typeof err == 'object') && err.message) err = err.message ;
+                    console.log(pgm + 'err = ' + JSON.stringify(err)) ;
+                    ZeroFrame.cmd("wrapperNotification", ["error", err]) ;
+                }
                 else ZeroFrame.cmd("wrapperNotification", ["done", "Money was send. result = " + JSON.stringify(result)]);
             }) ;
 
