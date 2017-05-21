@@ -2,7 +2,7 @@
 Demo with complementary and alternative money. Implemented in ZeroFrame and AngularJS. Focus on privacy, encryption, max data on client and min data on server.
 
 The Main site is [Money-Network](https://github.com/jaros1/Money-Network).
-Money-Network-W2 is a plugin sub-site with a BitCoin wallet using [blocktrail.com / btc.com](https://www.blocktrail.com/api/docs) API for BitCoin operations.
+Money-Network-W2 is ZeroNet merger site hub with a BitCoin wallet using [blocktrail.com / btc.com](https://www.blocktrail.com/api/docs) API for BitCoin operations.
 
 Status: Is being implemented. 
 
