@@ -4,7 +4,7 @@ Demo with complementary and alternative money. Implemented in ZeroFrame and Angu
 The Main site is [Money-Network](https://github.com/jaros1/Money-Network).
 Money-Network-W2 is ZeroNet merger site hub with a BitCoin wallet using [blocktrail.com / btc.com](https://www.blocktrail.com/api/docs) API for BitCoin operations.
 
-Status: Is being implemented. 
+Status: Test OK with test Bitcoins. ZeroNet merger site hub integration not ready.
 
 ## Money-Network-W2 demo links
 - http://127.0.0.1:43110/1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1/ ([ZeroNet](https://zeronet.readthedocs.io/en/latest/using_zeronet/installing/) required)
