@@ -20,6 +20,21 @@
                 is used for BitCoin operations.
             </p>
 
+            <p ng-show="w.show_zeronet_id()">
+                ZeroNet ID
+                <a href="" ng-bind="w.site_info.cert_user_id|shortCertId"
+                   ng-click="w.select_zeronet_cert()"
+                   title="{{w.site_info.cert_user_id}}">select ...
+                </a>
+                <a href="" id="zeronet_cert_changed_link" ng-click="w.zeronet_cert_changed()" style="display: none"></a>
+                is used for wallet communication. Use an anonymous @moneynetwork.bit ZeroNet ID
+                or use your preferred ZeroNet ID provider.<br>
+                Click on ZeroNet ID link to change ZeroNet certificate.
+                Send me a <a href="/moneynetwork.bit/?path=/chat2/jro@zeroid.bit" target="_top" rel="noopener noreferrer">PM ✉</a>
+                if your preferred ZeroNet ID povider is not on the list.
+                <br>
+            </p>
+
         </div>
 
         <div>
@@ -137,8 +152,12 @@
 </div>
 
 
-<!-- script type="text/javascript" src="js/all.js"></script -->
+<!--script type="text/javascript" src="js/all.js"></script-->
 <script type="text/javascript" src="js/all.js.zip/all.js"></script>
+
+<script>
+    console.log('window.opener = ', window.opener) ;
+</script>
 
 </body>
 </html>

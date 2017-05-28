@@ -1,38 +1,61 @@
 {
  "address": "1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1",
- "description": "Complementary & alternative money demo - Wallet 2 - BitCoins (https://www.blocktrail.com)",
+ "cloneable": true,
+ "description": "Money Network - Wallet 2 - BitCoins www.blocktrail.com - runner jro",
  "favicon": "favicon.ico",
  "files": {
+  "MoneyNetworkW2.txt": {
+   "sha512": "730b089c1cb83f5fa069f725f49b73323c9643dd3c11290adbaa2daf0e9a3219",
+   "size": 42
+  },
   "README.md": {
-   "sha512": "7af475a47943da62e83a4430ca09d7e3dd72510a7b934aade6a1863e3ffa9084",
-   "size": 1585
+   "sha512": "216fc66ffdb94e8e6f678498e671b226733179ffc6c41a034dcc2c35f9e81cfa",
+   "size": 1643
   },
   "css/all.css": {
    "sha512": "07e53598ed55d1e5465eaec0386aab9aadda399a83323a679ac4634423a691cd",
    "size": 163926
   },
   "index.html": {
-   "sha512": "71c27f00097b3e1f3c603e63855db7d8090e2cb0d207752cece41608cb85ad8f",
-   "size": 5692
+   "sha512": "d440860d764f0fbc89a628bedd3d4f0660bc7c4ba7af755794fc72ed5903ba7e",
+   "size": 6649
+  },
+  "js/all.js": {
+   "sha512": "7e40e2a628f5e665d9bac719593d620b00302a39d312d69ce7ff7d042340a3ff",
+   "size": 4559897
   },
   "js/all.js.zip": {
-   "sha512": "d36fa5bb23b9198221ce9aac862b1a2eb08747ad684efe073f7238aa1c0614ac",
-   "size": 1060934
+   "sha512": "de9700b27e30919f5d2485632cf90607e9beb57eb34481c9ee3dccd675512e93",
+   "size": 1067327
   }
  },
  "ignore": "((js|css)/(?!all.(js|css))|.idea|.git|data/users/.*/.*)",
+ "includes": {
+  "data/users/content.json": {
+   "signers": [],
+   "signers_required": 1
+  }
+ },
  "inner_path": "content.json",
- "modified": 1494580488,
+ "modified": 1495986932,
  "postmessage_nonce_security": true,
+ "settings": {
+  "default_hubs": {
+   "1HXzvtSLuvxZfh6LgdaqTk4FSVf7x8w7NJ": {
+    "description": "Money Network - W2 - Wallet hub - runner jro",
+    "title": "W2 - Wallet hub"
+   }
+  }
+ },
  "sign": [
-  42608592506494664741495019426637164657449852502610031523952907282819652703967,
-  87327467883368001572830380817733980286688678701772031087857756260864923993110
+  102827985553668791539452214726481832909955350093082807548980375528143709756463,
+  22672450649007035831354398015203836472296950065071663914659782933488151113104
  ],
  "signers_sign": "G07H0Zdvu6yUtEe7wxc515d5wVoZJpezNYNiKN8T1cwlBkZTYqZRbBzltNbJkstHlOMLxVLGQP6OdGCNEMCI8zE=",
  "signs": {
-  "1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1": "G7/ye4nIW6ECKISh4FAuGYTNDhGeWYJV4GuX7HFZuEbqbJA9e3DLl9WhI69XBEo4vp4/iPYFyNgGUhT/M6fKguw="
+  "1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1": "Gw/NEHIrIv4pOLsVXy36laCAepppOrqmbpL1XzQIRVKiTYFmi25JsbUT6oBG4Jd19O7zrFH9Ihq9LV2tk/DBgP4="
  },
  "signs_required": 1,
- "title": "Money Network - W2",
- "zeronet_version": "0.5.4"
+ "title": "MoneyNetworkW2",
+ "zeronet_version": "0.5.5"
 }

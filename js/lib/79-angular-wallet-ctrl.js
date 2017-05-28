@@ -1,9 +1,91 @@
 angular.module('MoneyNetworkW2')
 
-    .controller('WalletCtrl', ['$rootScope', 'MoneyNetworkW2Service', function ($rootScope, moneyNetworkService) {
+    .controller('WalletCtrl', ['$rootScope', '$timeout', 'MoneyNetworkW2Service', function ($rootScope, $timeout, moneyNetworkService) {
         var self = this;
         var controller = 'WalletCtrl';
         console.log(controller + ' loaded');
+
+        if (moneyNetworkService.is_new_session()) return ; // wait for redirect without sessionid
+        var sessionid = moneyNetworkService.get_sessionid() ;
+        console.log(controller + ': sessionid = ' + sessionid) ;
+
+        // ZeroNet ID
+        self.show_zeronet_id = function () {
+            return sessionid ? true : false ;
+        };
+
+        self.site_info = {} ;
+        var old_cert_user_id = -1 ;
+        function check_merger_permission(cb) {
+            var pgm = controller + '.check_merger_permission: ' ;
+            if (!cb) cb = function (ok) {} ;
+            var request1 = function (cb) {
+                var pgm = controller + '.check_merger_permission.request1: ' ;
+                ZeroFrame.cmd("wrapperPermissionAdd", "Merger:MoneyNetwork", function (res) {
+                    console.log(pgm + 'res = ', JSON.stringify(res)) ;
+                    if (res == "Granted") request2(cb) ;
+                    else cb(false) ;
+                }) ;
+            } ; // request1
+            var request2 = function (cb) {
+                var pgm = controller + '.check_merger_permission.request2: ' ;
+                ZeroFrame.cmd("mergerSiteAdd", ["1HXzvtSLuvxZfh6LgdaqTk4FSVf7x8w7NJ"], function (res) {
+                    console.log(pgm + 'res = ', JSON.stringify(res)) ;
+                    cb((res == 'ok')) ;
+                }) ;
+            }; // request2
+            ZeroFrame.cmd("siteInfo", {}, function (site_info) {
+                var pgm = controller + '.check_merger_permission siteInfo callback 1: ' ;
+                console.log(pgm + 'old_cert_user_id = ' + old_cert_user_id) ;
+                console.log(pgm + 'site_info = ' + JSON.stringify(site_info));
+                ZeroFrame.site_info = site_info ;
+                self.site_info = site_info ;
+                if (old_cert_user_id == -1) old_cert_user_id = site_info.cert_user_id ;
+
+                // console.log(pgm , 'site_info = ' + JSON.stringify(site_info)) ;
+                if (site_info.settings.permissions.indexOf("Merger:MoneyNetwork") == -1) return request1(cb);
+                ZeroFrame.cmd("mergerSiteList", {}, function (merger_sites) {
+                    var pgm = controller + '.check_merger_permission mergerSiteList callback 2: ' ;
+                    console.log(pgm + 'merger_sites = ', JSON.stringify(merger_sites)) ;
+                    if (merger_sites["1HXzvtSLuvxZfh6LgdaqTk4FSVf7x8w7NJ"] == "MoneyNetwork") cb(true) ;
+                    else request2(cb) ;
+                }) ; // mergerSiteList callback 2
+            }) ; // siteInfo callback 1
+        } // check_merger_permission
+        check_merger_permission(function (res) {
+            var pgm = controller + ' 1: ' ;
+            console.log(pgm + 'check_merger_permission callback: res = ' + JSON.stringify(res));
+            if (res) {
+                console.log(pgm + 'calling save_pubkey2');
+                moneyNetworkService.save_pubkey2(function (res) {
+                    var pgm = controller + ' 1 save_pubkey2 callback: ' ;
+                    console.log(pgm + 'res = ' + JSON.stringify(res));
+                }) ;
+            }
+        }) ;
+
+        self.select_zeronet_cert = function() {
+            var pgm = controller + '.select_zeronet_cert: ' ;
+            console.log(pgm + 'click');
+            ZeroFrame.cmd("certSelect", [["moneynetwork.bit", "nanasi", "zeroid.bit", "kaffie.bit", "moneynetwork"]], function() {
+                var pgm = controller + '.select_zeronet_cert certSelect callback: ' ;
+                console.log(pgm + 'calling check_merger_permission') ;
+                check_merger_permission(function (res) {
+                    console.log(pgm + 'check_merger_permission callback: res = ' + JSON.stringify(res));
+                }) ;
+            });
+        };
+        self.zeronet_cert_changed = function () {
+            var pgm = controller + '.zeronet_cert_changed: ' ;
+            if (old_cert_user_id == ZeroFrame.site_info.cert_user_id) return ;
+            console.log(pgm + 'old_cert_user_id = ' + old_cert_user_id) ;
+            console.log(pgm + 'ZeroFrame.site_info = ' + JSON.stringify(ZeroFrame.site_info));
+            console.log(pgm + 'self.site_info = ' + JSON.stringify(self.site_info));
+            console.log(pgm + 'calling check_merger_permission') ;
+            check_merger_permission(function (res) {
+                console.log(pgm + 'check_merger_permission callback: res = ' + JSON.stringify(res));
+            }) ;
+        };
 
         // generate random wallet ID and password
         self.gen_wallet_id = function() {
