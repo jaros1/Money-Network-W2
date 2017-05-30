@@ -9,7 +9,7 @@ angular.module('MoneyNetworkW2')
         var sessionid = moneyNetworkService.get_sessionid() ;
         console.log(controller + ': sessionid = ' + sessionid) ;
 
-        // ZeroNet ID
+        // ZeroNet ID. Only relevant when called as part of Money Network. Not required in standalone test
         self.show_zeronet_id = function () {
             return sessionid ? true : false ;
         };
@@ -86,6 +86,20 @@ angular.module('MoneyNetworkW2')
                 console.log(pgm + 'check_merger_permission callback: res = ' + JSON.stringify(res));
             }) ;
         };
+
+        self.add_site = function () {
+            var pgm = controller + '.add_site: ' ;
+            var text ;
+            text = 'Test done and test data deleted?<br>Redirect and add this site to MoneyNetwork?' ;
+            ZeroFrame.cmd("wrapperConfirm", [text, "OK"], function (ok) {
+                var url ;
+                if (!ok) return ;
+                url = '/moneynetwork.bit/?path=/wallet?new_wallet_site=' + ZeroFrame.site_info.address ;
+                console.log(pgm + 'url = ' + url) ;
+                window.location = url ;
+            }); // wrapperConfirm
+
+        }; // self.add_site
 
         // generate random wallet ID and password
         self.gen_wallet_id = function() {

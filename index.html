@@ -27,12 +27,16 @@
                    title="{{w.site_info.cert_user_id}}">select ...
                 </a>
                 <a href="" id="zeronet_cert_changed_link" ng-click="w.zeronet_cert_changed()" style="display: none"></a>
-                is used for wallet communication. Use an anonymous @moneynetwork.bit ZeroNet ID
+                is used for Money Network integration. Use an anonymous @moneynetwork.bit ZeroNet ID
                 or use your preferred ZeroNet ID provider.<br>
                 Click on ZeroNet ID link to change ZeroNet certificate.
                 Send me a <a href="/moneynetwork.bit/?path=/chat2/jro@zeroid.bit" target="_top" rel="noopener noreferrer">PM ✉</a>
                 if your preferred ZeroNet ID povider is not on the list.
                 <br>
+            </p>
+            <p ng-hide="w.show_zeronet_id()">
+                Standalone usage. Add this wallet site to <a href="/moneynetwork.bit" target="_top" rel="noopener noreferrer">MoneyNetwork</a>?
+                <input type="button" value="Add site" ng-click="w.add_site()"/>
             </p>
 
         </div>
@@ -152,8 +156,10 @@
 </div>
 
 
-<!--script type="text/javascript" src="js/all.js"></script-->
-<script type="text/javascript" src="js/all.js.zip/all.js"></script>
+<!--script type="text/javascript" src="js/all.js"></script>
+<!-- -->
+<script type="text/javascript" src="js/all.js.zip/all.js"></script-->
+<!-- -->
 
 <script>
     console.log('window.opener = ', window.opener) ;
