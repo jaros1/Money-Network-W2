@@ -16,6 +16,7 @@ angular.module('MoneyNetworkW2')
 
         self.site_info = {} ;
         var old_cert_user_id = -1 ;
+        self.merger_permission = 'n/a' ;
         function check_merger_permission(cb) {
             var pgm = controller + '.check_merger_permission: ' ;
             if (!cb) cb = function (ok) {} ;
@@ -23,7 +24,10 @@ angular.module('MoneyNetworkW2')
                 var pgm = controller + '.check_merger_permission.request1: ' ;
                 ZeroFrame.cmd("wrapperPermissionAdd", "Merger:MoneyNetwork", function (res) {
                     console.log(pgm + 'res = ', JSON.stringify(res)) ;
-                    if (res == "Granted") request2(cb) ;
+                    if (res == "Granted") {
+                        request2(cb) ;
+                        self.merger_permission = 'Granted' ;
+                    }
                     else cb(false) ;
                 }) ;
             } ; // request1
@@ -43,7 +47,11 @@ angular.module('MoneyNetworkW2')
                 if (old_cert_user_id == -1) old_cert_user_id = site_info.cert_user_id ;
 
                 // console.log(pgm , 'site_info = ' + JSON.stringify(site_info)) ;
-                if (site_info.settings.permissions.indexOf("Merger:MoneyNetwork") == -1) return request1(cb);
+                if (site_info.settings.permissions.indexOf("Merger:MoneyNetwork") == -1) {
+                    self.merger_permission = 'Missing' ;
+                    return request1(cb);
+                }
+                self.merger_permission = 'Granted' ;
                 ZeroFrame.cmd("mergerSiteList", {}, function (merger_sites) {
                     var pgm = controller + '.check_merger_permission mergerSiteList callback 2: ' ;
                     console.log(pgm + 'merger_sites = ', JSON.stringify(merger_sites)) ;
