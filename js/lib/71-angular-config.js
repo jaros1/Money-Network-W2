@@ -30,19 +30,29 @@ angular.module('MoneyNetworkW2')
                 redirectTo: function () {
                     // error or startup. redirect to wallet page
                     var pgm = 'routeProvider.otherwise: ';
-                    var search, a_path, z_path, i, sessionid ;
+                    var search, a_path, z_path, i, sessionid, pubkey2, params ;
                     search = window.location.search;
                     console.log(pgm + 'search = ', search) ;
+                    params = [] ;
                     // check for sessionid
                     i = search.indexOf('sessionid=');
-                    if (i == -1) a_path = '/wallet'; // error or no sessionid in startup url. maybe a standalone wallet call
-                    else {
-                        // deep link
+                    if (i != -1) {
                         sessionid = search.substr(i + 10);
                         i = sessionid.indexOf('&');
                         if (i != -1) sessionid = sessionid.substr(0, i);
-                        a_path = '/wallet?sessionid=' + sessionid ;
+                        params.push('sessionid=' + sessionid) ;
                     }
+                    // check for pubkey2
+                    i = search.indexOf('pubkey2=');
+                    if (i != -1) {
+                        pubkey2 = search.substr(i + 8);
+                        i = pubkey2.indexOf('&');
+                        if (i != -1) pubkey2 = pubkey2.substr(0, i);
+                        params.push('pubkey2=' + pubkey2) ;
+                    }
+                    // redirect
+                    if (!params.length) a_path = '/wallet' ; // error or maybe a standalone wallet call
+                    else a_path = '/wallet?' + params.join('&') ; // sessionid and/or pubkey2
                     console.log(pgm + 'a_path = ' + a_path) ;
                     ZeroFrame.cmd("wrapperReplaceState", [{"scrollY": 100}, "", a_path]);
                     return a_path;

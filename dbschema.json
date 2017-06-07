@@ -1,0 +1,28 @@
+{
+  "db_name": "MoneyNetworkW2",
+  "db_file": "merged-MoneyNetwork/MoneyNetworkW2.db",
+  "version": 2,
+  "maps": {
+    ".+/data/users/.+/content.json": {
+      "to_keyvalue": [ "modified" ],
+      "to_table": [
+        { "node": "files_optional", "table": "files_optional", "key_col": "filename"}
+      ]
+    }
+  },
+  "tables": {
+    "files_optional": {
+      "cols": [
+        ["filename", "TEXT"],
+        ["sha512", "TEXT"],
+        ["size", "INTEGER"],
+        ["json_id", "INTEGER REFERENCES json (json_id)"]
+      ],
+      "indexes": [
+        "CREATE INDEX files_optional_i1 ON files_optional(json_id)",
+        "CREATE INDEX files_optional_i2 ON files_optional(filename)"
+      ],
+      "schema_changed": 1
+    }
+  }
+}

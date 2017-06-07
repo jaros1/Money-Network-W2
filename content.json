@@ -16,20 +16,24 @@
    "sha512": "07e53598ed55d1e5465eaec0386aab9aadda399a83323a679ac4634423a691cd",
    "size": 163926
   },
+  "dbschema.json": {
+   "sha512": "02f7e332cffc871f4a34d8583e9d991d6e8cd70a9631710bfe0b193808c8508c",
+   "size": 726
+  },
   "index.html": {
-   "sha512": "386d5c2b385dd1d8b90edd615b3ebfee32050afec93caf548f8df5d0129f171f",
-   "size": 7072
+   "sha512": "0df7be1c2919fc3fe4832f9972b76b3204d4492ebec258dd9cae7d12f770eafb",
+   "size": 7376
   },
   "js/all.js": {
-   "sha512": "6fd65233f7a0cecc734c5f2d06a2bbff6ac15cc53d1f0200b4a158fc49484f43",
-   "size": 4560896
+   "sha512": "1c0b41064e8c00a0442a3f41371c14a98dd6a13a894d1f1ba8a9c18fa4bc45f0",
+   "size": 4708184
   },
   "js/all.js.zip": {
-   "sha512": "9f79926498000fc7d59bbffbcfe74aef1a19439741e8308c374e66dc15b0e779",
-   "size": 1067537
+   "sha512": "ecaf8545fbce0b002ff535ce2e094238aafd2b982702adcb66c2af236a27e2f3",
+   "size": 1101730
   }
  },
- "ignore": "((js|css)/(?!all.(js|css))|.idea|.git|data/users/.*/.*)",
+ "ignore": "((js|css)/(?!all.(js|css))|.idea|.git|data/users/.*/.*|merged-.*)",
  "includes": {
   "data/users/content.json": {
    "signers": [],
@@ -37,7 +41,7 @@
   }
  },
  "inner_path": "content.json",
- "modified": 1496306515,
+ "modified": 1496852034,
  "postmessage_nonce_security": true,
  "settings": {
   "default_hubs": {
@@ -48,12 +52,12 @@
   }
  },
  "sign": [
-  42217400688626321428996094304546867186550958692928578136966471007268806112140,
-  104709949951481258403005214467265571412838936053763892593134280437623482168874
+  47363184021671670992524831963556951007436134151742806723191598010093794239173,
+  26396163889790549990434706265376154812439584818120597032149875373200736281016
  ],
  "signers_sign": "G07H0Zdvu6yUtEe7wxc515d5wVoZJpezNYNiKN8T1cwlBkZTYqZRbBzltNbJkstHlOMLxVLGQP6OdGCNEMCI8zE=",
  "signs": {
-  "1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1": "G6yuevCSTnsxJV6V2StOH6kxvx4aoWCzIKyPwAYMnOrxVXDtxZ6hg4eGtgTLquBdj+J7wtCPX0ZfmMreoXAwaq4="
+  "1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1": "Gyv5dkeRK3txkqpXEPSNqmI+zCwBIJItv5F3rtrxSOi+AUQHPWWF4Q041wMEsAqAl4sLFrk/KqM8e1i2BWYNYow="
  },
  "signs_required": 1,
  "title": "MoneyNetworkW2",

@@ -7,6 +7,7 @@ angular.module('MoneyNetworkW2')
 
         if (moneyNetworkService.is_new_session()) return ; // wait for redirect without sessionid
         var sessionid = moneyNetworkService.get_sessionid() ;
+        var pubkey2 =
         console.log(controller + ': sessionid = ' + sessionid) ;
 
         // ZeroNet ID. Only relevant when called as part of Money Network. Not required in standalone test
@@ -33,9 +34,11 @@ angular.module('MoneyNetworkW2')
             } ; // request1
             var request2 = function (cb) {
                 var pgm = controller + '.check_merger_permission.request2: ' ;
-                ZeroFrame.cmd("mergerSiteAdd", ["1HXzvtSLuvxZfh6LgdaqTk4FSVf7x8w7NJ"], function (res) {
-                    console.log(pgm + 'res = ', JSON.stringify(res)) ;
-                    cb((res == 'ok')) ;
+               moneyNetworkService.get_my_user_hub(function (hub) {
+                   ZeroFrame.cmd("mergerSiteAdd", [hub], function (res) {
+                       console.log(pgm + 'res = ', JSON.stringify(res)) ;
+                       cb((res == 'ok')) ;
+                   }) ;
                 }) ;
             }; // request2
             ZeroFrame.cmd("siteInfo", {}, function (site_info) {
@@ -55,8 +58,10 @@ angular.module('MoneyNetworkW2')
                 ZeroFrame.cmd("mergerSiteList", {}, function (merger_sites) {
                     var pgm = controller + '.check_merger_permission mergerSiteList callback 2: ' ;
                     console.log(pgm + 'merger_sites = ', JSON.stringify(merger_sites)) ;
-                    if (merger_sites["1HXzvtSLuvxZfh6LgdaqTk4FSVf7x8w7NJ"] == "MoneyNetwork") cb(true) ;
-                    else request2(cb) ;
+                    moneyNetworkService.get_my_user_hub(function (hub) {
+                        if (merger_sites[hub] == "MoneyNetwork") cb(true) ;
+                        else request2(cb) ;
+                    }) ;
                 }) ; // mergerSiteList callback 2
             }) ; // siteInfo callback 1
         } // check_merger_permission
@@ -64,9 +69,9 @@ angular.module('MoneyNetworkW2')
             var pgm = controller + ' 1: ' ;
             console.log(pgm + 'check_merger_permission callback: res = ' + JSON.stringify(res));
             if (res) {
-                console.log(pgm + 'calling save_pubkey2');
-                moneyNetworkService.save_pubkey2(function (res) {
-                    var pgm = controller + ' 1 save_pubkey2 callback: ' ;
+                console.log(pgm + 'calling create_session');
+                moneyNetworkService.create_session(function (res) {
+                    var pgm = controller + ' 1 create_session callback: ' ;
                     console.log(pgm + 'res = ' + JSON.stringify(res));
                 }) ;
             }
@@ -94,6 +99,18 @@ angular.module('MoneyNetworkW2')
                 console.log(pgm + 'check_merger_permission callback: res = ' + JSON.stringify(res));
             }) ;
         };
+
+
+        // save MoneyNetwork <=> MoneyNetworkW2 session information encrypted on ZeroNet
+        // saved is:
+        // - sessionid
+        // - ????
+        self.save_session = false ;
+        self.save_session_changed = function() {
+            var pgm = controller + '.save_session: ' ;
+            console.log(pgm + 'save_session = ' + save_session) ;
+        }; // save_session_changed
+
 
         self.add_site = function () {
             var pgm = controller + '.add_site: ' ;
