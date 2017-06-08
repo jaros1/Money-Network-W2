@@ -43,10 +43,12 @@ angular.module('MoneyNetworkW2')
             }; // request2
             ZeroFrame.cmd("siteInfo", {}, function (site_info) {
                 var pgm = controller + '.check_merger_permission siteInfo callback 1: ' ;
+                var key ;
                 console.log(pgm + 'old_cert_user_id = ' + old_cert_user_id) ;
                 console.log(pgm + 'site_info = ' + JSON.stringify(site_info));
                 ZeroFrame.site_info = site_info ;
-                self.site_info = site_info ;
+                for (key in self.site_info) delete self.site_info[key] ;
+                for (key in site_info) self.site_info[key] = site_info[key] ;
                 if (old_cert_user_id == -1) old_cert_user_id = site_info.cert_user_id ;
 
                 // console.log(pgm , 'site_info = ' + JSON.stringify(site_info)) ;
@@ -97,6 +99,7 @@ angular.module('MoneyNetworkW2')
             console.log(pgm + 'calling check_merger_permission') ;
             check_merger_permission(function (res) {
                 console.log(pgm + 'check_merger_permission callback: res = ' + JSON.stringify(res));
+                // $rootScope.$apply() ;
             }) ;
         };
 
