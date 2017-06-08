@@ -221,33 +221,167 @@ angular.module('MoneyNetworkW2')
                 get_user_path(function (user_path) {
                     inner_path = user_path + 'content.json' ;
                     console.log(pgm + 'publishing ' + inner_path) ;
-                    ZeroFrame.cmd("siteSign", {inner_path: inner_path}, function (res) {
-                        var pgm = service + '.z_publish siteSign callback 2: ';
-                        console.log(pgm + 'res = ' + res) ;
-                        if (res != "ok") {
-                            ZeroFrame.cmd("wrapperNotification", ["error", "Failed to publish: " + res.error, 5000]);
-                            // error - repeat sitePublish in 30, 60, 120, 240 etc seconds (device maybe offline or no peers)
-                            if (!z_publish_interval) z_publish_interval = 30;
-                            else z_publish_interval = z_publish_interval * 2;
-                            console.log(pgm + 'Error. Failed to publish: ' + res.error + '. Try again in ' + z_publish_interval + ' seconds');
-                            var retry_zeronet_site_publish = function () {
-                                z_publish();
-                            };
-                            if (cb) cb(res.error);
-                            $timeout(retry_zeronet_site_publish, zeronet_site_publish_interval * 1000);
-                            // debug_info() ;
-                            return;
-                        }
+                    add_optional_files_support(function() {
+                        console.log(pgm + inner_path + ' siteSign start') ;
+                        ZeroFrame.cmd("siteSign", {inner_path: inner_path}, function (res) {
+                            var pgm = service + '.z_publish siteSign callback 3: ';
+                            console.log(pgm + 'res = ' + res) ;
+                            if (res != "ok") {
+                                ZeroFrame.cmd("wrapperNotification", ["error", "Failed to publish: " + res.error, 5000]);
+                                // error - repeat sitePublish in 30, 60, 120, 240 etc seconds (device maybe offline or no peers)
+                                if (!z_publish_interval) z_publish_interval = 30;
+                                else z_publish_interval = z_publish_interval * 2;
+                                console.log(pgm + 'Error. Failed to publish: ' + res.error + '. Try again in ' + z_publish_interval + ' seconds');
+                                var retry_zeronet_site_publish = function () {
+                                    z_publish();
+                                };
+                                if (cb) cb(res.error);
+                                $timeout(retry_zeronet_site_publish, z_publish_interval * 1000);
+                                // debug_info() ;
+                                return;
+                            }
 
-                        // sitePublish OK
-                        z_publish_interval = 0;
-                        cb(null);
+                            // sitePublish OK
+                            z_publish_interval = 0;
+                            cb(null);
 
-                    }) ; // sitePublish callback 2
+                        }) ; // sitePublish callback 3
+
+                    }) ; // add_optional_files_support callback 2
 
                 }) ; // get_user_path callback 1
 
             } // z_publish
+
+            // optional file pattern must be added to content.json before first sign and publish
+            var optional_files_support_ok = null ;
+            var add_optional_files_support_cbs = [] ; // pending callbacks (first call)
+            function add_optional_files_support (cb) {
+                var pgm = service + '.add_optional_files_support: ' ;
+                if (optional_files_support_ok == true) return cb() ;
+                if (optional_files_support_ok == false) return add_optional_files_support_cbs.push(cb) ;
+                optional_files_support_ok = false ; // start callback queue
+                get_user_path(function (user_path) {
+                    var pgm = service + '.add_optional_files_support get_user_path callback 1: ' ;
+                    get_content_json(function (content) {
+                        var pgm = service + '.add_optional_files_support get_content_json callback 2: ' ;
+                        var optional, json_raw, execute_callbacks, inner_path ;
+                        optional = "^[0-9a-f]{10}.[0-9]{13}$" ;
+                        console.log(pgm + 'content = ' + JSON.stringify(content)) ;
+                        console.log(pgm + 'optional = ' + optional) ;
+                        execute_callbacks = function() {
+                            optional_files_support_ok = true ;
+                            cb() ;
+                            while (add_optional_files_support_cbs.length) { cb = add_optional_files_support_cbs.shift() ; cb() }
+                        } ;
+                        if (content.optional == optional) return execute_callbacks() ; // optional files support already OK
+                        inner_path = user_path + 'content.json' ;
+                        if (JSON.stringify(content).length == 2) {
+                            write_wallet_json(function (res) {
+                                var pgm = service + '.add_optional_files_support write_wallet_json callback 3: ' ;
+                                console.log(pgm + 'res = ' + JSON.stringify(res)) ;
+                                console.log(pgm + 'sign content.json without optional files support') ;
+                                console.log(pgm + inner_path + ' siteSign start');
+                                ZeroFrame.cmd("siteSign", {inner_path: inner_path}, function (res) {
+                                    var pgm = service + '.add_optional_files_support write_wallet_json callback 4: ' ;
+                                    console.log(pgm + 'res = ' + JSON.stringify(res)) ;
+                                    console.log(pgm + 'adding optional to new content.json file');
+                                    // read updated content.json file (disable z_cache)
+                                    delete z_cache.content_json ;
+                                    get_content_json(function (content) {
+                                        // add optional files support
+                                        content.optional = optional ;
+                                        console.log(pgm + 'content = ' + JSON.stringify(content)) ;
+                                        write_content_json(function (res) {
+                                            var pgm = service + '.add_optional_files_support fileWrite callback 6: ' ;
+                                            console.log(pgm + 'res = ' + JSON.stringify(res)) ;
+                                            if (res != 'ok') {
+                                                console.log(pgm + 'content.json write failed.') ;
+                                                return ;
+                                            }
+                                            // sign updated content.json with optional files support
+                                            console.log(pgm + inner_path + ' siteSign start');
+                                            ZeroFrame.cmd("siteSign", {inner_path: inner_path}, function (res) {
+                                                var pgm = service + '.add_optional_files_support callback 7: ' ;
+                                                console.log(pgm + 'res = ' + JSON.stringify(res)) ;
+                                                execute_callbacks() ;
+                                            }) ; // siteSign callback 7
+
+                                        }) ; // write_content_json callback 6
+
+                                    }) ; // get_content_json callback 5
+
+                                }) ; // siteSign callback 4
+
+                            }) ; // write_wallet_json callback 3
+                            return ;
+                        }
+                        console.log(pgm + 'adding optional to existing content.json file. will fail if there are existing optional files');
+                        content.optional = optional ;
+                        // write content.json
+                        json_raw = unescape(encodeURIComponent(JSON.stringify(content, null, "\t")));
+                        console.log(pgm + inner_path + ' fileWrite start');
+                        ZeroFrame.cmd("fileWrite", [inner_path, btoa(json_raw)], function (res) {
+                            var pgm = service + '.add_optional_files_support fileWrite callback 3: ' ;
+                            console.log(pgm + 'res = ' + JSON.stringify(res)) ;
+                            if (res != 'ok') {
+                                console.log(pgm + 'content.json write failed.') ;
+                                return ;
+                            }
+                            // sign updated content.json
+                            console.log(pgm + inner_path + ' siteSign start');
+                            ZeroFrame.cmd("siteSign", {inner_path: inner_path}, function (res) {
+                                var pgm = service + '.write_pubkeys siteSign callback 5: ' ;
+                                console.log(pgm + 'res = ' + JSON.stringify(res)) ;
+                                execute_callbacks() ;
+                            }) ; // siteSign callback 5
+
+                        }); // fileWrite callback 3
+
+                    }) ; // get_content_json callback 2
+
+                }) ; // get_user_path callback 1
+
+            } // add_optional_files_support
+
+
+            var get_content_json_cbs = [] ; // callbacks waiting for first get_content_json request to finish
+            function get_content_json (cb) {
+                var pgm = service + '.get_content_json: ' ;
+                if (z_cache.content_json == true) return get_content_json_cbs.push(cb) ; // wait for first get_content_json request to finish
+                if (z_cache.content_json) return cb(z_cache.content_json) ; // wallet.json is already in cache
+                z_cache.content_json = true ;
+                get_user_path(function (user_path) {
+                    var inner_path ;
+                    inner_path = user_path + 'content.json' ;
+                    ZeroFrame.cmd("fileGet", {inner_path: inner_path, required: false}, function (content_str) {
+                        var content ;
+                        if (!content_str) content = {} ;
+                        else content = JSON.parse(content_str) ;
+                        z_cache.content_json = content ;
+                        cb(z_cache.content_json) ;
+                        while (get_content_json_cbs.length) { cb = get_content_json_cbs.shift() ; cb(z_cache.content_json)} ;
+                    }) ; // fileGet callback 2
+                }) ; // get_user_path callback 1
+            } // get_content_json
+
+            function write_content_json(cb) {
+                var pgm = service + '.write_content_json: ';
+                var inner_path, data, json_raw, debug_seq;
+                data = z_cache.content_json || {};
+                json_raw = unescape(encodeURIComponent(JSON.stringify(data, null, "\t")));
+                get_user_path(function (user_path) {
+                    var pgm = service + '.write_content_json get_user_path callback 1: ';
+                    var inner_path ;
+                    inner_path = user_path + 'content.json' ;
+                    console.log(pgm + 'calling fileWrite. path = ' + inner_path) ;
+                    ZeroFrame.cmd("fileWrite", [inner_path, btoa(json_raw)], function (res) {
+                        var pgm = service + '.write_content_json fileWrite callback 2: ';
+                        console.log(pgm + 'res = ' + JSON.stringify(res)) ;
+                        cb(res);
+                    }); // fileWrite callback 2
+                }) ; // get_user_path callback 2
+            } // write_content_json
 
             var get_wallet_json_cbs = [] ; // callbacks waiting for first get_wallet_json request to finish
             function get_wallet_json (cb) {
@@ -355,7 +489,7 @@ angular.module('MoneyNetworkW2')
                         return ;
                     }
                     inner_path = 'merged-MoneyNetwork/' + res[0].directory + '/' + res[0].filename ;
-                    console.log(pgm + 'pubkeys message inner_path = ' + inner_path) ;
+                    console.log(pgm +  inner_path + ' fileGet start') ;
                     ZeroFrame.cmd("fileGet", [inner_path, true], function (pubkeys_str) {
                         var pgm = service + '.read_pubkeys fileGet callback 2: ' ;
                         var pubkeys, now, content_signed, file_timestamp ;
@@ -415,30 +549,34 @@ angular.module('MoneyNetworkW2')
                 get_user_path(function (user_path) {
                     var my_pubkey = get_my_pubkey() ;
                     get_my_pubkey2(function (my_pubkey2) {
-                        var pgm = service + 'write_pubkeys get_my_pubkey2 callback 2: ' ;
-                        var inner_path2, json, json_raw ;
-                        inner_path2 = user_path + this_session_filename + '.' + (new Date().getTime()) ;
-                        json = {
-                            msgtype: 'pubkeys',
-                            pubkey: my_pubkey, // for JSEncrypt
-                            pubkey2: my_pubkey2 // for cryptMessage
-                        } ;
-                        // todo: validate json. API with msgtypes and validating rules
-                        json_raw = unescape(encodeURIComponent(JSON.stringify(json, null, "\t")));
-                        console.log(pgm + 'writing optional file ' + inner_path2) ;
-                        ZeroFrame.cmd("fileWrite", [inner_path2, btoa(json_raw)], function (res) {
-                            var pgm = service + 'write_pubkeys fileWrite callback 3: ' ;
-                            var inner_path3 ;
-                            console.log(pgm + 'res = ' + JSON.stringify(res)) ;
-                            // sign. should update wallet database. publish is not needed.
-                            inner_path3 = user_path + 'content.json' ;
-                            console.log(pgm + 'sign content.json with optional file ' + inner_path2) ;
-                            ZeroFrame.cmd("siteSign", {inner_path: inner_path3}, function (res) {
-                                var pgm = service + '.write_pubkeys siteSign callback 4: ' ;
+                        add_optional_files_support(function() {
+                            var pgm = service + '.write_pubkeys get_my_pubkey2 callback 2: ' ;
+                            var inner_path2, json, json_raw ;
+                            inner_path2 = user_path + this_session_filename + '.' + (new Date().getTime()) ;
+                            json = {
+                                msgtype: 'pubkeys',
+                                pubkey: my_pubkey, // for JSEncrypt
+                                pubkey2: my_pubkey2 // for cryptMessage
+                            } ;
+                            // todo: validate json. API with msgtypes and validating rules
+                            json_raw = unescape(encodeURIComponent(JSON.stringify(json, null, "\t")));
+                            console.log(pgm + 'writing optional file ' + inner_path2) ;
+                            ZeroFrame.cmd("fileWrite", [inner_path2, btoa(json_raw)], function (res) {
+                                var pgm = service + '.write_pubkeys fileWrite callback 3: ' ;
+                                var inner_path3 ;
                                 console.log(pgm + 'res = ' + JSON.stringify(res)) ;
-                            }) ; // siteSign callback 4
+                                // sign. should update wallet database. publish is not needed.
+                                inner_path3 = user_path + 'content.json' ;
+                                console.log(pgm + 'sign content.json with optional file ' + inner_path2) ;
+                                    ZeroFrame.cmd("siteSign", {inner_path: inner_path3}, function (res) {
+                                        var pgm = service + '.write_pubkeys siteSign callback 5: ' ;
+                                        console.log(pgm + 'res = ' + JSON.stringify(res)) ;
+                                    }) ; // siteSign callback 5
 
-                        }) ; // writeFile callback 3
+
+                            }) ; // writeFile callback 4
+
+                        }) ; // add_optional_files_support callback 3
 
                     }) ; // get_my_pubkey2 callback 2
 
