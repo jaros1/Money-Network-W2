@@ -2,7 +2,7 @@
 <!--suppress HtmlUnknownAttribute, HtmlUnknownAttribute, HtmlUnknownAttribute, HtmlUnknownAttribute, HtmlUnknownAttribute, HtmlUnknownAttribute -->
 <html ng-app="MoneyNetworkW2">
 <head>
-    <title>Money Network W2</title>
+    <title>MoneyNetworkW2</title>
     <meta name="keywords" content="money">
     <link rel="stylesheet" media="all" href="css/all.css"/>
 
@@ -11,7 +11,7 @@
         <div>
 
             <p>
-                Money Network W2 - test BitCoin wallet (<a href="https://www.blocktrail.com" target="_blank" rel="noopener noreferrer">blocktrail.com</a>)
+                MoneyNetworkW2 - test BitCoin wallet (<a href="https://www.blocktrail.com" target="_blank" rel="noopener noreferrer">blocktrail.com</a>)
                 used by <a href="/moneynetwork.bit" target="_top" rel="noopener noreferrer">MoneyNetwork</a>.
                 <br>
                 Note that <a href="https://www.blocktrail.com" target="_blank" rel="noopener noreferrer">blocktrail.com</a>
@@ -20,29 +20,38 @@
                 is used for BitCoin operations.
             </p>
 
-            <p ng-show="w.show_zeronet_id()">
-                ZeroNet ID
+            <p>
+                Optional ZeroNet ID
                 <a href="" ng-bind="w.site_info.cert_user_id|shortCertId"
                    ng-click="w.select_zeronet_cert()"
                    title="{{w.site_info.cert_user_id}}">select ...
-                </a>
+                </a>.
                 <a href="" id="zeronet_cert_changed_link" ng-click="w.zeronet_cert_changed()" style="display: none"></a>
-                is used for Money Network integration. Use an anonymous @moneynetwork.bit ZeroNet ID
-                or use your preferred ZeroNet ID provider.<br>
+                Can be used for wallet login storage and/or MoneyNetwork integration.<br>
+                Use an anonymous @moneynetwork.bit ZeroNet ID or use your preferred ZeroNet ID provider.<br>
                 Click on ZeroNet ID link to change ZeroNet certificate.
                 Send me a <a href="/moneynetwork.bit/?path=/chat2/jro@zeroid.bit" target="_top" rel="noopener noreferrer">PM ✉</a>
                 if your preferred ZeroNet ID povider is not on the list.
-                <br><br>
+                </p>
+            <p ng-show="w.moneynetwork_session()">
                 Merger:MoneyNetwork permission: <span ng-bind="w.merger_permission"></span><br>
                 MoneyNetwork session handshake: ????
                 <br><br>
-                Save MoneyNetwork wallet session information encrypted on ZeroNet?
-                <input type="checkbox" ng-model="w.save_session" ng-change="w.save_session_changed()"><br>
-
             </p>
-            <p ng-hide="w.show_zeronet_id()">
+            <p>
+                Save wallet login?<br>
+                <input type="radio" ng-model="w.save_wallet_login" value="0" ng-change="w.save_wallet_login_changed()">
+                No thank you, I will remember wallet login by myself.<br>
+                <input type="radio" ng-model="w.save_wallet_login" value="1" ng-change="w.save_wallet_login_changed()">
+                Save wallet login in MoneyNetworkW2 (browser/localStorage) encrypted with my ZeroId certificate.
+                <span ng-show="w.moneynetwork_session()">
+                    <br>
+                    <input type="radio" ng-model="w.save_wallet_login" value="2" ng-change="w.save_wallet_login_changed()">
+                    Save wallet login in MoneyNetwork (browser/localStorage) encrypted with my MoneyNetwork password.
+                </span>
+            </p>
+            <p ng-hide="w.moneynetwork_session()">
                 Standalone usage. Add this wallet site to <a href="/moneynetwork.bit/?path=/wallet&new_wallet_site=1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1" target="_top" rel="noopener noreferrer">MoneyNetwork</a>?
-                <input type="button" value="Add site" ng-click="w.add_site()" ng-disabled="!(w.site_info.cert_user_id)"/>
             </p>
 
         </div>
@@ -161,10 +170,11 @@
 
 </div>
 
+<script type="text/javascript" src="/moneynetwork.bit/js-api/69-MoneyNetworkAPI.js"></script>
 
-<script type="text/javascript" src="js/all.js"></script>
+<!--script type="text/javascript" src="js/all.js"></script>
 <!-- -->
-<!--script type="text/javascript" src="js/all.js.zip/all.js"></script>
+<script type="text/javascript" src="js/all.js.zip/all.js"></script>
 <!-- -->
 
 <script>

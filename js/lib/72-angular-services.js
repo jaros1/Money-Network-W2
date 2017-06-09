@@ -467,7 +467,6 @@ angular.module('MoneyNetworkW2')
             // money network session from MoneyNetwork. only relevant if wallet is called from MoneyNetwork with a sessionid
             var sessionid ; // unique sessionid. also like a password known only by MoneyNetwork and MoneyNetworkW2 sessions
             var this_session_filename ;  // filename used by MoneyNetwork wallet session
-            var this_prvkey ;            // JSEncrypt private key used by MoneyNetwork wallet session
             var this_pubkey ;            // JSEncrypt public key used by MoneyNetwork wallet session
             var this_pubkey2 ;           // cryptMessage public key used by MoneyNetwork wallet session
             var other_pubkey ;           // JSEncrypt pubkey from MoneyNetwork session
@@ -531,11 +530,10 @@ angular.module('MoneyNetworkW2')
                             ', now = ' + now) ;
                         console.log(pgm + 'todo: validate pubkeys json message') ;
                         pubkeys = JSON.parse(pubkeys_str) ;
-                        other_pubkey = pubkeys.pubkey ;
-                        other_pubkey2 = pubkeys.pubkey2 ;
                         console.log(pgm + 'MoneyNetwork session keys: ' +
-                            'pubkey2 = ' + other_pubkey2 +
-                            ', pubkey = ' + other_pubkey) ;
+                            'pubkey2 = ' + pubkeys.pubkey2 +
+                            ', pubkey = ' + pubkeys.pubkey) ;
+                        MoneyNetworkAPI.setup_encryption({pubkey: pubkeys.pubkey, pubkey2: pubkeys.pubkey2}) ;
 
                         // return my public keys to MoneyNetwork session
                         write_pubkeys() ;
@@ -548,13 +546,15 @@ angular.module('MoneyNetworkW2')
 
             // get public key for JSEncrypt
             function get_my_pubkey () {
-                var crypt ;
+                var crypt, prvkey ;
                 if (this_pubkey) return this_pubkey ;
                 // generate key pair for client to client RSA encryption
                 crypt = new JSEncrypt({default_key_size: 1024});
                 crypt.getKey();
                 this_pubkey = crypt.getPublicKey();
-                this_prvkey = crypt.getPrivateKey();
+                prvkey = crypt.getPrivateKey();
+                // save JSEncrypt private key for decrypt_2
+                MoneyNetworkAPI.setup_encryption({prvkey: prvkey}) ;
                 return this_pubkey ;
             } // get_my_pubkey
 
@@ -567,110 +567,6 @@ angular.module('MoneyNetworkW2')
                 }) ;
             } // get_my_pubkey2
 
-
-            // encrypt/decrypt helpers
-
-            // 1: cryptMessage encrypt/decrypt using ZeroNet cryptMessage plugin (pubkey2)
-            function encrypt_1 (clear_text, cb) {
-                // 1a. get random password
-                ZeroFrame.cmd("aesEncrypt", [""], function (res1) {
-                    var password ;
-                    password = res1[0];
-                    // 1b. encrypt password
-                    ZeroFrame.cmd("eciesEncrypt", [password, other_pubkey2], function (key) {
-                        // 1c. encrypt text
-                        ZeroFrame.cmd("aesEncrypt", [clear_text, password], function (res3) {
-                            var iv, encrypted_text, encrypted_array ;
-                            // forward encrypted result to next function in encryption chain
-                            iv = res3[1] ;
-                            encrypted_text = res3[2];
-                            encrypted_array = [key, iv, encrypted_text] ;
-                            cb(JSON.stringify(encrypted_array)) ;
-                        }) ; // aesEncrypt callback 3
-                    }) ; // eciesEncrypt callback 2
-                }) ; // aesEncrypt callback 1
-            } // encrypt_1
-            function decrypt_1 (encrypted_text_1, cb) {
-                var encrypted_array, key, iv, encrypted_text ;
-                encrypted_array = JSON.parse(encrypted_text_1) ;
-                key = encrypted_array[0] ;
-                iv = encrypted_array[1] ;
-                encrypted_text = encrypted_array[2] ;
-                // 1a. decrypt key = password
-                ZeroFrame.cmd("eciesDecrypt", [key], function(password) {
-                    // 1b. decrypt encrypted_text
-                    ZeroFrame.cmd("aesDecrypt", [iv, encrypted_text, password], function (clear_text) {
-                        cb(clear_text) ;
-                    }) ; // aesDecrypt callback 2
-                }) ; // eciesDecrypt callback 1
-            } // decrypt_1
-
-            // 2: JSEncrypt encrypt/decrypt using pubkey/prvkey
-            function encrypt_2 (encrypted_text_1, cb) {
-                var pgm = service + '.encrypt_2: ';
-                var password, encrypt, key, output_wa, encrypted_text, encrypted_array, encrypted_text_2 ;
-                encrypt = new JSEncrypt();
-                encrypt.setPublicKey(other_pubkey);
-                password = generate_random_string(100, true) ;
-                key = encrypt.encrypt(password);
-                output_wa = CryptoJS.AES.encrypt(encrypted_text_1, password, {format: CryptoJS.format.OpenSSL}); //, { mode: CryptoJS.mode.CTR, padding: CryptoJS.pad.AnsiX923, format: CryptoJS.format.OpenSSL });
-                encrypted_text = output_wa.toString(CryptoJS.format.OpenSSL);
-                encrypted_array = [key, encrypted_text] ;
-                encrypted_text_2 = JSON.stringify(encrypted_array) ;
-                console.log(pgm + 'encrypted_text_2 = ' + encrypted_text_2) ;
-                cb(encrypted_text_2) ;
-            } // encrypt_2
-            function decrypt_2 (encrypted_text_2, cb) {
-                var encrypted_array, key, encrypted_text, encrypt, password, output_wa, encrypted_text_1 ;
-                encrypted_array = JSON.parse(encrypted_text_2) ;
-                key = encrypted_array[0] ;
-                encrypted_text = encrypted_array[1] ;
-                encrypt = new JSEncrypt();
-                encrypt.setPrivateKey(this_prvkey);
-                password = encrypt.decrypt(key);
-                output_wa = CryptoJS.AES.decrypt(encrypted_text, password, {format: CryptoJS.format.OpenSSL}); // , { mode: CryptoJS.mode.CTR, padding: CryptoJS.pad.AnsiX923, format: CryptoJS.format.OpenSSL });
-                encrypted_text_1 = output_wa.toString(CryptoJS.enc.Utf8);
-                cb(encrypted_text_1)
-            } // decrypt_2
-
-            // 3: symmetric encrypt/decrypt using sessionid
-            function encrypt_3 (encrypted_text_2, cb) {
-                var output_wa, encrypted_text_3 ;
-                output_wa = CryptoJS.AES.encrypt(encrypted_text_2, sessionid, {format: CryptoJS.format.OpenSSL}); //, { mode: CryptoJS.mode.CTR, padding: CryptoJS.pad.AnsiX923, format: CryptoJS.format.OpenSSL });
-                encrypted_text_3 = output_wa.toString(CryptoJS.format.OpenSSL);
-                cb(encrypted_text_3) ;
-            } // encrypt_3
-            function decrypt_3 (encrypted_text_3, cb) {
-                var output_wa, encrypted_text_2 ;
-                output_wa = CryptoJS.AES.decrypt(encrypted_text_3, sessionid, {format: CryptoJS.format.OpenSSL}); // , { mode: CryptoJS.mode.CTR, padding: CryptoJS.pad.AnsiX923, format: CryptoJS.format.OpenSSL });
-                encrypted_text_2 = output_wa.toString(CryptoJS.enc.Utf8);
-                cb(encrypted_text_2)
-            } // decrypt_3
-
-            // encrypt/decrypt json messages
-            // clear text => 1 cryptMessage => 2 JSEncrypt => 3 symmetric => encrypted message
-            function encrypt_json(json, cb) {
-                var clear_text = JSON.stringify(json) ;
-                encrypt_1(clear_text, function (encrypted_text_1) {
-                    encrypt_2(encrypted_text_1, function (encrypted_text_2) {
-                        encrypt_3(encrypted_text_2, function (encrypted_text_3) {
-                            cb(encrypted_text_3) ;
-                        }) ; // encrypt_3 callback 3
-                    }) ; // encrypt_2 callback 2
-                }) ; // encrypt_1 callback 1
-                cb(json) ;
-            } // encrypt_json
-            // encrypted message => 3 symmetric => 2 JSEncrypt => 1 cryptMessage => clear text
-            function decrypt_json(encrypted_text_3, cb) {
-                decrypt_3(encrypted_text_3, function (encrypted_text_2) {
-                    decrypt_2(encrypted_text_2, function (encrypted_text_1) {
-                        decrypt_1(encrypted_text_1, function (clear_text) {
-                            var json = JSON.parse(clear_text) ;
-                            cb(json) ;
-                        }) ;
-                    }) ;
-                }) ;
-            } // decrypt_json
 
             function write_pubkeys() {
                 // collect info before returning public keys information to MoneyNetwork session
@@ -687,7 +583,7 @@ angular.module('MoneyNetworkW2')
                                 pubkey: my_pubkey, // for JSEncrypt
                                 pubkey2: my_pubkey2 // for cryptMessage
                             } ;
-                            encrypt_json(json, function(encrypted_text) {
+                            MoneyNetworkAPI.encrypt_json(json, function(encrypted_text) {
                                 var pgm = service + '.write_pubkeys encrypt_json callback 4: ' ;
                                 raw = unescape(encodeURIComponent(encrypted_text));
                                 console.log(pgm + 'writing optional file ' + inner_path2) ;
@@ -725,6 +621,7 @@ angular.module('MoneyNetworkW2')
                 if (!new_sessionid) return false ; // no session
                 // new session. save and redirect without sessionid
                 sessionid = new_sessionid ;
+                MoneyNetworkAPI.setup_encryption({sessionid: new_sessionid, debug: true}) ;
                 sha256 = CryptoJS.SHA256(sessionid).toString() ;
                 other_session_filename = sha256.substr(0,10) ; // first 10 characters of sha256 signature
                 this_session_filename = sha256.substr(sha256.length-10); // last 10 characters of sha256 signature

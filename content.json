@@ -21,16 +21,16 @@
    "size": 726
   },
   "index.html": {
-   "sha512": "fa99d1822941f089b94a9e0c30b845ccb15ff06037624058a432c4efaed70534",
-   "size": 7433
+   "sha512": "fa8b9f298464fd79a754fa88cf5031a12f4a086a076eba562518a5da5af51fee",
+   "size": 8125
   },
   "js/all.js": {
-   "sha512": "f8e6134206d5586ee89d1462a4d20edd674309e3ad8698c81dda105e2eacbcd3",
-   "size": 4777200
+   "sha512": "0f587f737c35b15252767429627f6da5e8d097542594541eea208dd71a6190b7",
+   "size": 4772195
   },
   "js/all.js.zip": {
-   "sha512": "37505c3d5caa01c46db6bca4308acebdbc92e63e227f93b5218751db465f441d",
-   "size": 1112558
+   "sha512": "82b5ed20fa52a5ace75db134ab285c568b1971107fabeea17aecff7a726c7bdc",
+   "size": 1111833
   }
  },
  "ignore": "((js|css)/(?!all.(js|css))|.idea|.git|data/users/.*/.*|merged-.*)",
@@ -41,7 +41,7 @@
   }
  },
  "inner_path": "content.json",
- "modified": 1496940740,
+ "modified": 1497026323,
  "postmessage_nonce_security": true,
  "settings": {
   "default_hubs": {
@@ -52,12 +52,12 @@
   }
  },
  "sign": [
-  49011566861301298479578172120357316359404814715867797982557804726139551991191,
-  38359614957150382521460668343951322546454057265675065708261358435101858608955
+  85190658528921445966046439420248866106945381391919601403055974117042530907327,
+  44273179015159287085296498758969563324881653933923395661544082629715614889155
  ],
  "signers_sign": "G07H0Zdvu6yUtEe7wxc515d5wVoZJpezNYNiKN8T1cwlBkZTYqZRbBzltNbJkstHlOMLxVLGQP6OdGCNEMCI8zE=",
  "signs": {
-  "1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1": "G1O6s83dVgHnZGME9Ojku4yHpbyOovJhczQjhbVrpPYOFrKtkcWgUXfa3u45Ffe8oZiiAhugpEL3CPQJO7pIRFA="
+  "1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1": "HBBK2pFh8Wol9iqJo+/ZYBYFV1rdI8vFmR5pmnGKFE/Db9sLWMrhhLZUVWN5uDP/NSbFPjPLjDEjY2cVyYofg8c="
  },
  "signs_required": 1,
  "title": "MoneyNetworkW2",

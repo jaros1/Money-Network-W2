@@ -11,7 +11,7 @@ angular.module('MoneyNetworkW2')
         console.log(controller + ': sessionid = ' + sessionid) ;
 
         // ZeroNet ID. Only relevant when called as part of Money Network. Not required in standalone test
-        self.show_zeronet_id = function () {
+        self.moneynetwork_session = function () {
             return sessionid ? true : false ;
         };
 
@@ -82,7 +82,7 @@ angular.module('MoneyNetworkW2')
         self.select_zeronet_cert = function() {
             var pgm = controller + '.select_zeronet_cert: ' ;
             console.log(pgm + 'click');
-            ZeroFrame.cmd("certSelect", [["moneynetwork.bit", "nanasi", "zeroid.bit", "kaffie.bit", "moneynetwork"]], function() {
+            ZeroFrame.cmd("certSelect", [["moneynetwork.bit", "nanasi", "zeroid.bit", "kaffie.bit"]], function() {
                 var pgm = controller + '.select_zeronet_cert certSelect callback: ' ;
                 console.log(pgm + 'calling check_merger_permission') ;
                 check_merger_permission(function (res) {
@@ -104,14 +104,14 @@ angular.module('MoneyNetworkW2')
         };
 
 
-        // save MoneyNetwork <=> MoneyNetworkW2 session information encrypted on ZeroNet
-        // saved is:
-        // - sessionid
-        // - ????
-        self.save_session = false ;
-        self.save_session_changed = function() {
+        // save wallet login:
+        // - 0: No thank you, I will remember wallet login by myself.
+        // - 1: Save wallet login in MoneyNetworkW2 (browser/localStorage) encrypted with my ZeroId certificate.
+        // - 2: Save wallet login in MoneyNetwork (browser/localStorage) encrypted with my MoneyNetwork password (sessionid is required)
+        self.save_wallet_login = '0' ;
+        self.save_wallet_login_changed = function() {
             var pgm = controller + '.save_session: ' ;
-            console.log(pgm + 'save_session = ' + save_session) ;
+            console.log(pgm + 'save_session = ' + self.save_wallet_login) ;
         }; // save_session_changed
 
 
