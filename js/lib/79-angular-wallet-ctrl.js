@@ -1,13 +1,12 @@
 angular.module('MoneyNetworkW2')
 
-    .controller('WalletCtrl', ['$rootScope', '$timeout', 'MoneyNetworkW2Service', function ($rootScope, $timeout, moneyNetworkService) {
+    .controller('WalletCtrl', ['$rootScope', '$timeout', 'MoneyNetworkW2Service', 'btcService', function ($rootScope, $timeout, moneyNetworkService, btcService) {
         var self = this;
         var controller = 'WalletCtrl';
         console.log(controller + ' loaded');
 
         if (moneyNetworkService.is_new_session()) return ; // wait for redirect without sessionid
         var sessionid = moneyNetworkService.get_sessionid() ;
-        var pubkey2 =
         console.log(controller + ': sessionid = ' + sessionid) ;
 
         // ZeroNet ID. Only relevant when called as part of Money Network. Not required in standalone test
@@ -15,57 +14,58 @@ angular.module('MoneyNetworkW2')
             return sessionid ? true : false ;
         };
 
-        self.site_info = {} ;
+        self.z = ZeroFrame ;
         var old_cert_user_id = -1 ;
         self.merger_permission = 'n/a' ;
-        function check_merger_permission(cb) {
-            var pgm = controller + '.check_merger_permission: ' ;
-            if (!cb) cb = function (ok) {} ;
-            var request1 = function (cb) {
-                var pgm = controller + '.check_merger_permission.request1: ' ;
-                ZeroFrame.cmd("wrapperPermissionAdd", "Merger:MoneyNetwork", function (res) {
-                    console.log(pgm + 'res = ', JSON.stringify(res)) ;
-                    if (res == "Granted") {
-                        request2(cb) ;
-                        self.merger_permission = 'Granted' ;
-                    }
-                    else cb(false) ;
-                }) ;
-            } ; // request1
-            var request2 = function (cb) {
-                var pgm = controller + '.check_merger_permission.request2: ' ;
-               moneyNetworkService.get_my_user_hub(function (hub) {
-                   ZeroFrame.cmd("mergerSiteAdd", [hub], function (res) {
-                       console.log(pgm + 'res = ', JSON.stringify(res)) ;
-                       cb((res == 'ok')) ;
-                   }) ;
-                }) ;
-            }; // request2
-            ZeroFrame.cmd("siteInfo", {}, function (site_info) {
-                var pgm = controller + '.check_merger_permission siteInfo callback 1: ' ;
-                var key ;
-                console.log(pgm + 'old_cert_user_id = ' + old_cert_user_id) ;
-                console.log(pgm + 'site_info = ' + JSON.stringify(site_info));
-                ZeroFrame.site_info = site_info ;
-                for (key in self.site_info) delete self.site_info[key] ;
-                for (key in site_info) self.site_info[key] = site_info[key] ;
-                if (old_cert_user_id == -1) old_cert_user_id = site_info.cert_user_id ;
 
-                // console.log(pgm , 'site_info = ' + JSON.stringify(site_info)) ;
-                if (site_info.settings.permissions.indexOf("Merger:MoneyNetwork") == -1) {
-                    self.merger_permission = 'Missing' ;
-                    return request1(cb);
-                }
-                self.merger_permission = 'Granted' ;
-                ZeroFrame.cmd("mergerSiteList", {}, function (merger_sites) {
-                    var pgm = controller + '.check_merger_permission mergerSiteList callback 2: ' ;
-                    console.log(pgm + 'merger_sites = ', JSON.stringify(merger_sites)) ;
-                    moneyNetworkService.get_my_user_hub(function (hub) {
-                        if (merger_sites[hub] == "MoneyNetwork") cb(true) ;
-                        else request2(cb) ;
-                    }) ;
-                }) ; // mergerSiteList callback 2
-            }) ; // siteInfo callback 1
+        function check_merger_permission(cb) {
+            var pgm = controller + '.check_merger_permission: ';
+            if (!cb) cb = function (ok) {
+            };
+            var request1 = function (cb) {
+                var pgm = controller + '.check_merger_permission.request1: ';
+                ZeroFrame.cmd("wrapperPermissionAdd", "Merger:MoneyNetwork", function (res) {
+                    console.log(pgm + 'res = ', JSON.stringify(res));
+                    if (res == "Granted") {
+                        request2(cb);
+                        self.merger_permission = 'Granted';
+                    }
+                    else cb(false);
+                });
+            }; // request1
+            var request2 = function (cb) {
+                var pgm = controller + '.check_merger_permission.request2: ';
+                moneyNetworkService.get_my_user_hub(function (hub) {
+                    ZeroFrame.cmd("mergerSiteAdd", [hub], function (res) {
+                        console.log(pgm + 'res = ', JSON.stringify(res));
+                        cb((res == 'ok'));
+                    });
+                });
+            }; // request2
+            // wait for ZeroFrame.site_info to be ready
+            var retry_check_merger_permission = function () {
+                check_merger_permission(cb)
+            };
+            if (!ZeroFrame.site_info) {
+                $timeout(retry_check_merger_permission, 500);
+                return;
+            }
+            if (!ZeroFrame.site_info.cert_user_id) return; // not logged in
+
+            // console.log(pgm , 'site_info = ' + JSON.stringify(site_info)) ;
+            if (ZeroFrame.site_info.settings.permissions.indexOf("Merger:MoneyNetwork") == -1) {
+                self.merger_permission = 'Missing';
+                return request1(cb);
+            }
+            self.merger_permission = 'Granted';
+            ZeroFrame.cmd("mergerSiteList", {}, function (merger_sites) {
+                var pgm = controller + '.check_merger_permission mergerSiteList callback 2: ';
+                console.log(pgm + 'merger_sites = ', JSON.stringify(merger_sites));
+                moneyNetworkService.get_my_user_hub(function (hub) {
+                    if (merger_sites[hub] == "MoneyNetwork") cb(true);
+                    else request2(cb);
+                });
+            }); // mergerSiteList callback 2
         } // check_merger_permission
         check_merger_permission(function (res) {
             var pgm = controller + ' 1: ' ;
@@ -84,6 +84,7 @@ angular.module('MoneyNetworkW2')
             console.log(pgm + 'click');
             ZeroFrame.cmd("certSelect", [["moneynetwork.bit", "nanasi", "zeroid.bit", "kaffie.bit"]], function() {
                 var pgm = controller + '.select_zeronet_cert certSelect callback: ' ;
+                $rootScope.$apply() ;
                 console.log(pgm + 'calling check_merger_permission') ;
                 check_merger_permission(function (res) {
                     console.log(pgm + 'check_merger_permission callback: res = ' + JSON.stringify(res));
@@ -92,13 +93,13 @@ angular.module('MoneyNetworkW2')
         };
         self.zeronet_cert_changed = function () {
             var pgm = controller + '.zeronet_cert_changed: ' ;
-            if (old_cert_user_id == ZeroFrame.site_info.cert_user_id) return ;
+            if (ZeroFrame.site_info.cert_user_id && (old_cert_user_id == ZeroFrame.site_info.cert_user_id)) return ;
             console.log(pgm + 'old_cert_user_id = ' + old_cert_user_id) ;
             console.log(pgm + 'ZeroFrame.site_info = ' + JSON.stringify(ZeroFrame.site_info));
-            console.log(pgm + 'self.site_info = ' + JSON.stringify(self.site_info));
             console.log(pgm + 'calling check_merger_permission') ;
             check_merger_permission(function (res) {
                 console.log(pgm + 'check_merger_permission callback: res = ' + JSON.stringify(res));
+                if (res) old_cert_user_id = ZeroFrame.site_info.cert_user_id ;
                 // $rootScope.$apply() ;
             }) ;
         };
@@ -109,10 +110,31 @@ angular.module('MoneyNetworkW2')
         // - 1: Save wallet login in MoneyNetworkW2 (browser/localStorage) encrypted with my ZeroId certificate.
         // - 2: Save wallet login in MoneyNetwork (browser/localStorage) encrypted with my MoneyNetwork password (sessionid is required)
         self.save_wallet_login = '0' ;
+        var old_save_wallet_login = self.save_wallet_login ;
+
+        // startup.
+        // - 1: check of wallet login is saved in localStorage encrypted with current ZeroId
+        // - 2: session: request wallet login info from MoneyNetwork if any
+        // - otherwise: 0: No thank you ....
+
         self.save_wallet_login_changed = function() {
             var pgm = controller + '.save_session: ' ;
+            if (!ZeroFrame.site_info.cert_user_id) {
+                ZeroFrame.cmd("wrapperNodification", ['info', 'Not logged in', 5000]) ;
+                self.save_wallet_login = old_save_wallet_login;
+                return ;
+            }
+            if (self.save_wallet_login == old_save_wallet_login) return ;
             console.log(pgm + 'save_session = ' + self.save_wallet_login) ;
+            save_login() ;
         }; // save_session_changed
+
+        function save_login () {
+            if (old_save_wallet_login != '0') {
+                // delete old storage from localStorage
+
+            }
+        }
 
 
         self.add_site = function () {
@@ -147,42 +169,46 @@ angular.module('MoneyNetworkW2')
 
 
         // wallet status and balance
-        self.wallet_info = moneyNetworkService.get_wallet_info() ;
+        self.wallet_info = btcService.get_wallet_info() ;
 
         // wallet operations
         self.create_new_wallet = function () {
-            moneyNetworkService.create_new_wallet(self.wallet_id, self.wallet_password, function (error) {
+            btcService.create_new_wallet(self.wallet_id, self.wallet_password, function (error) {
                 if (error) ZeroFrame.cmd("wrapperNotification", ["error", error]);
                 else {
                     ZeroFrame.cmd("wrapperNotification", ["done", 'New Bitcoin wallet was created OK.<br>Please save backup info<br>See console log', 5000]);
                     $rootScope.$apply() ;
                 }
             }) ;
-        };
+        }; // create_new_wallet
+
         self.init_wallet = function () {
-            moneyNetworkService.init_wallet(self.wallet_id, self.wallet_password, function (error) {
+            btcService.init_wallet(self.wallet_id, self.wallet_password, function (error) {
                 if (error) ZeroFrame.cmd("wrapperNotification", ["error", error]);
                 else {
                     ZeroFrame.cmd("wrapperNotification", ["info", 'Bitcoin wallet was initialized OK.', 5000]);
                     $rootScope.$apply() ;
                 }
             }) ;
-        };
+        }; // init_wallet
+
         self.get_balance = function () {
             if (self.wallet_info.status != 'Open') return ZeroFrame.cmd("wrapperNotification", ["info", "No bitcoin wallet found", 3000]) ;
-            moneyNetworkService.get_balance(function(error) {
+            btcService.get_balance(function(error) {
                 if (error) ZeroFrame.cmd("wrapperNotification", ["error", error]);
                 else $rootScope.$apply() ;
             })
-        } ;
+        } ; // get_balance
+
         self.close_wallet = function () {
-            moneyNetworkService.close_wallet(function (error) {
+            btcService.close_wallet(function (error) {
                 if (error) ZeroFrame.cmd("wrapperNotification", ["error", error]);
                 else ZeroFrame.cmd("wrapperNotification", ["info", 'Bitcoin wallet closed', 5000]);
             })
-        } ;
+        } ; // close_wallet
+
         self.delete_wallet = function () {
-            moneyNetworkService.delete_wallet(function (error) {
+            btcService.delete_wallet(function (error) {
                 if (error) ZeroFrame.cmd("wrapperNotification", ["error", error]);
                 else {
                     ZeroFrame.cmd("wrapperNotification", ["done", 'Bitcoin wallet was deleted', 5000]);
@@ -195,24 +221,25 @@ angular.module('MoneyNetworkW2')
                     $rootScope.$apply() ;
                 }
             })
-        };
+        }; // delete_wallet
 
         self.get_new_address = function () {
             if (self.wallet_info.status != 'Open') return ZeroFrame.cmd("wrapperNotification", ["info", "No bitcoin wallet found", 3000]) ;
-            else self.receiver_address = moneyNetworkService.get_new_address(function (err, address) {
+            else self.receiver_address = btcService.get_new_address(function (err, address) {
                 if (err) return ZeroFrame.cmd("wrapperNotification", ['error', 'Could not get a new address. error = ' + err]) ;
                 else {
                     self.receiver_address = address ;
                     $rootScope.$apply() ;
                 }
             }) ;
-        };
+        }; // get_new_address
+
         self.send_money = function () {
             var pgm = controller + '.send_money: ' ;
             if (self.wallet_info.status != 'Open') return ZeroFrame.cmd("wrapperNotification", ["info", "No bitcoin wallet found", 3000]) ;
             if (!self.send_address || !self.send_amount) return ZeroFrame.cmd("wrapperNotification", ["error", "Receiver and/or amount is missing", 5000]) ;
             if (!self.send_amount.match(/^[0-9]+$/)) return ZeroFrame.cmd("wrapperNotification", ["error", "Amount must be an integer (Satoshi)", 5000]) ;
-            moneyNetworkService.send_money(self.send_address, self.send_amount, function (err, result) {
+            btcService.send_money(self.send_address, self.send_amount, function (err, result) {
                 if (err) {
                     if ((typeof err == 'object') && err.message) err = err.message ;
                     console.log(pgm + 'err = ' + JSON.stringify(err)) ;
@@ -220,9 +247,7 @@ angular.module('MoneyNetworkW2')
                 }
                 else ZeroFrame.cmd("wrapperNotification", ["done", "Money was send. result = " + JSON.stringify(result)]);
             }) ;
-
-
-        };
+        }; // send_money
 
         // end WalletCtrl
     }])
