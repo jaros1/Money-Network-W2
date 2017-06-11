@@ -583,11 +583,12 @@ angular.module('MoneyNetworkW2')
                                 pubkey: my_pubkey, // for JSEncrypt
                                 pubkey2: my_pubkey2 // for cryptMessage
                             } ;
-                            MoneyNetworkAPI.encrypt_json(json, function(encrypted_text) {
+                            MoneyNetworkAPI.encrypt_json(json, [1,2,3], function(json) {
                                 var pgm = service + '.write_pubkeys encrypt_json callback 4: ' ;
-                                raw = unescape(encodeURIComponent(encrypted_text));
+                                var json_raw ;
+                                json_raw = unescape(encodeURIComponent(JSON.stringify(json, null, "\t")));
                                 console.log(pgm + 'writing optional file ' + inner_path2) ;
-                                ZeroFrame.cmd("fileWrite", [inner_path2, btoa(raw)], function (res) {
+                                ZeroFrame.cmd("fileWrite", [inner_path2, btoa(json_raw)], function (res) {
                                     var pgm = service + '.write_pubkeys fileWrite callback 5: ' ;
                                     var inner_path3 ;
                                     console.log(pgm + 'res = ' + JSON.stringify(res)) ;
