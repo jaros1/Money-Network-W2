@@ -628,6 +628,7 @@ angular.module('MoneyNetworkW2')
             var other_pubkey ;           // JSEncrypt pubkey from MoneyNetwork session
             var other_pubkey2 ;          // cryptMessage pubkey2 from MoneyNetwork session
             var other_session_filename ; // filename used by MoneyNetwork session
+            var encrypt2 = new MoneyNetworkAPI({debug: true}) ;
 
             // read "pubkeys" message from MoneyNetwork session
             // optional file with file format <other_session_filename>.<timestamp>
@@ -689,7 +690,7 @@ angular.module('MoneyNetworkW2')
                         console.log(pgm + 'MoneyNetwork session keys: ' +
                             'pubkey2 = ' + pubkeys.pubkey2 +
                             ', pubkey = ' + pubkeys.pubkey) ;
-                        MoneyNetworkAPI.setup_encryption({pubkey: pubkeys.pubkey, pubkey2: pubkeys.pubkey2}) ;
+                        encrypt2.setup_encryption({pubkey: pubkeys.pubkey, pubkey2: pubkeys.pubkey2}) ;
 
                         // return my public keys to MoneyNetwork session
                         write_pubkeys() ;
@@ -710,7 +711,7 @@ angular.module('MoneyNetworkW2')
                 this_pubkey = crypt.getPublicKey();
                 prvkey = crypt.getPrivateKey();
                 // save JSEncrypt private key for decrypt_2
-                MoneyNetworkAPI.setup_encryption({prvkey: prvkey}) ;
+                encrypt2.setup_encryption({prvkey: prvkey}) ;
                 return this_pubkey ;
             } // get_my_pubkey
 
@@ -739,7 +740,7 @@ angular.module('MoneyNetworkW2')
                                 pubkey: my_pubkey, // for JSEncrypt
                                 pubkey2: my_pubkey2 // for cryptMessage
                             } ;
-                            MoneyNetworkAPI.encrypt_json(json, [1,2,3], function(json) {
+                            encrypt2.encrypt_json(json, [1,2,3], function(json) {
                                 var pgm = service + '.write_pubkeys encrypt_json callback 4: ' ;
                                 var json_raw ;
                                 json_raw = unescape(encodeURIComponent(JSON.stringify(json, null, "\t")));
@@ -778,7 +779,7 @@ angular.module('MoneyNetworkW2')
                 if (!new_sessionid) return false ; // no session
                 // new session. save and redirect without sessionid
                 sessionid = new_sessionid ;
-                MoneyNetworkAPI.setup_encryption({sessionid: new_sessionid, debug: true}) ;
+                encrypt2.setup_encryption({sessionid: new_sessionid, debug: true}) ;
                 sha256 = CryptoJS.SHA256(sessionid).toString() ;
                 other_session_filename = sha256.substr(0,10) ; // first 10 characters of sha256 signature
                 this_session_filename = sha256.substr(sha256.length-10); // last 10 characters of sha256 signature
