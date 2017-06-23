@@ -8,6 +8,9 @@
       "to_table": [
         { "node": "files_optional", "table": "files_optional", "key_col": "filename"}
       ]
+    },
+    ".+/data/users/.+/wallet.json": {
+      "to_keyvalue": [ "wallet_address", "wallet_title", "wallet_description" ]
     }
   },
   "tables": {

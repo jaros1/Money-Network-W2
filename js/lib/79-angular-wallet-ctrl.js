@@ -1,12 +1,12 @@
 angular.module('MoneyNetworkW2')
 
-    .controller('WalletCtrl', ['$rootScope', '$timeout', 'MoneyNetworkW2Service', 'btcService', function ($rootScope, $timeout, moneyNetworkService, btcService) {
+    .controller('WalletCtrl', ['$rootScope', '$timeout', 'MoneyNetworkW2Service', 'btcService', function ($rootScope, $timeout, W2Service, btcService) {
         var self = this;
         var controller = 'WalletCtrl';
         console.log(controller + ' loaded');
 
-        if (moneyNetworkService.is_new_session()) return ; // wait for redirect without sessionid
-        var sessionid = moneyNetworkService.get_sessionid() ;
+        if (W2Service.is_new_session()) return ; // wait for redirect without sessionid
+        var sessionid = W2Service.get_sessionid() ;
         console.log(controller + ': sessionid = ' + sessionid) ;
 
         // ZeroNet ID. Only relevant when called as part of Money Network. Not required in standalone test
@@ -16,8 +16,9 @@ angular.module('MoneyNetworkW2')
 
         self.z = ZeroFrame ;
         var old_cert_user_id = -1 ;
-        self.merger_permission = 'n/a' ;
 
+        // check Merger:MoneyNetwork permission. Required for communicating with MoneyNetwork (session)
+        self.merger_permission = 'n/a' ;
         function check_merger_permission(cb) {
             var pgm = controller + '.check_merger_permission: ';
             if (!cb) cb = function (ok) {
@@ -35,7 +36,7 @@ angular.module('MoneyNetworkW2')
             }; // request1
             var request2 = function (cb) {
                 var pgm = controller + '.check_merger_permission.request2: ';
-                moneyNetworkService.get_my_user_hub(function (hub) {
+                W2Service.get_my_user_hub(function (hub) {
                     ZeroFrame.cmd("mergerSiteAdd", [hub], function (res) {
                         console.log(pgm + 'res = ', JSON.stringify(res));
                         cb((res == 'ok'));
@@ -61,7 +62,7 @@ angular.module('MoneyNetworkW2')
             ZeroFrame.cmd("mergerSiteList", {}, function (merger_sites) {
                 var pgm = controller + '.check_merger_permission mergerSiteList callback 2: ';
                 console.log(pgm + 'merger_sites = ', JSON.stringify(merger_sites));
-                moneyNetworkService.get_my_user_hub(function (hub) {
+                W2Service.get_my_user_hub(function (hub) {
                     if (merger_sites[hub] == "MoneyNetwork") cb(true);
                     else request2(cb);
                 });
@@ -72,7 +73,7 @@ angular.module('MoneyNetworkW2')
             console.log(pgm + 'check_merger_permission callback: res = ' + JSON.stringify(res));
             if (res) {
                 console.log(pgm + 'calling create_session');
-                moneyNetworkService.create_session(function (res) {
+                W2Service.create_session(function (res) {
                     var pgm = controller + ' 1 create_session callback: ' ;
                     console.log(pgm + 'res = ' + JSON.stringify(res));
                 }) ;
@@ -110,12 +111,32 @@ angular.module('MoneyNetworkW2')
         // - 1: Save wallet login in MoneyNetworkW2 (browser/localStorage) encrypted with my ZeroId certificate.
         // - 2: Save wallet login in MoneyNetwork (browser/localStorage) encrypted with my MoneyNetwork password (sessionid is required)
         self.save_wallet_login = '0' ;
-        var old_save_wallet_login = self.save_wallet_login ;
+        var old_save_wallet_login = null ; // null: not yet checked
 
         // startup.
-        // - 1: check of wallet login is saved in localStorage encrypted with current ZeroId
+        // - 1: check if wallet login is saved in localStorage encrypted with current ZeroId
         // - 2: session: request wallet login info from MoneyNetwork if any
         // - otherwise: 0: No thank you ....
+        // use ls_bind. localStorage may still be loading
+        W2Service.ls_bind(function() {
+            var pgm = controller + ' ls_bind callback: ' ;
+            var ls ;
+            if (!ZeroFrame.site_info.cert_user_id) {
+                // cannot wallet info without a ZeroNet cert
+                self.save_wallet_login = '0' ;
+                return ;
+            }
+            self.save_wallet_login = W2Service.get_save_wallet_login() ;
+            console.log(pgm + 'self.save_wallet_login = ' + self.save_wallet_login) ;
+            if (self.save_wallet_login == null) return ; // error
+            if (self.save_wallet_login == '0') return ; // wallet login is not saved for this cert_user_id in this browser
+            // 1: wallet login is saved encrypted (cryptMessage) in MoneyNetworkW2 localStorage
+            // 2: wallet login is saved encrypted (symmetric) in MoneyNetwork localStorage (session is required)
+            W2Service.get_wallet_login(self.save_wallet_login, function(wallet_id, wallet_password, error) {
+
+            }) ; // get_wallet_login callback
+
+        }) ; // ls_bind callback
 
         self.save_wallet_login_changed = function() {
             var pgm = controller + '.save_session: ' ;
@@ -157,14 +178,14 @@ angular.module('MoneyNetworkW2')
                 ZeroFrame.cmd("wrapperNotification", ["info", 'Old Wallet Id was not replaced', 5000]);
                 return ;
             }
-            self.wallet_id = moneyNetworkService.generate_random_string(30, false) ;
+            self.wallet_id = W2Service.generate_random_string(30, false) ;
         };
         self.gen_wallet_pwd = function() {
             if (self.wallet_password) {
                 ZeroFrame.cmd("wrapperNotification", ["info", 'Old Wallet Password was not replaced', 5000]);
                 return ;
             }
-            self.wallet_password = moneyNetworkService.generate_random_string(30, true) ;
+            self.wallet_password = W2Service.generate_random_string(30, true) ;
         };
 
 
