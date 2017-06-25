@@ -221,6 +221,11 @@ angular.module('MoneyNetworkW2')
                 ZeroFrame.cmd("wrapperSetLocalStorage", [ls], function () {}) ;
             } // ls_save
 
+
+            var encrypt1 = new MoneyNetworkAPI({debug: true}) ; // encrypt/decrypt data in localStorage ;
+
+            // get save wallet status: 0, 1 or 2
+            // todo: what about 2 and no session? user must connect to MoneyNetwork to get data from MoneyNetwork
             function get_save_wallet_login() {
                 if (!ZeroFrame.site_info.cert_user_id) return null ; // error - ZeroId is missing
                 if (!ls.save_wallet_login) ls.save_wallet_login = {} ;
@@ -229,14 +234,22 @@ angular.module('MoneyNetworkW2')
             } // get_save_wallet_login
 
 
+            // send message to MoneyNetwork and optional wait for response (receipt = true)
+            function send_message (json, receipt, cb) {
+                // send message using encrypt2 (MoneyNetworkAPI)
+                encrypt2.send_message(json, receipt, cb) ;
+            } // send_message
+
+
             // save_wallet_login:
             // - '1': wallet login is saved encrypted (cryptMessage) in MoneyNetworkW2 localStorage
             // - '2': wallet login is saved encrypted (symmetric) in MoneyNetwork localStorage (session is required)
             function get_wallet_login(save_wallet_login, cb) {
                 var pgm = service + '.get_wallet_login: ' ;
-                var error, cert_user_id ;
+                var error, cert_user_id, encrypted_json, json ;
                 if (['1','2'].indexOf(save_wallet_login) == -1) return cb(null, null, "Invalid call. save_wallet_login must be equal '1' or '2'") ;
                 if (save_wallet_login == '1') {
+                    // wallet login is saved encrypted (cryptMessage) in MoneyNetworkW2 localStorage
                     if (!ls.wallet_login) return cb(null, null, 'wallet_login hash was not found in localStorage') ;
                     if (typeof ls.wallet_login != 'object') {
                         error = 'wallet_login is not a hash. wallet_login = ' + JSON.stringify(ls.wallet_login) ;
@@ -244,20 +257,107 @@ angular.module('MoneyNetworkW2')
                         return cb(null, null, error) ;
                     }
                     cert_user_id = ZeroFrame.site_info.cert_user_id ;
-                    if (!ls.wallet_login[cert_user_id]) return cb(null, null, 'Wallet login for ' + cert_user_id + ' was not found') ;
-                    if (typeof ls.wallet_login[cert_user_id] != 'string') {
-                        error = 'Wallet login for ' + cert_user_id + ' is invalid. Expected an encrypted string. wallet_login = ' + JSON.stringify(ls.wallet_login[cert_user_id]);
-                        return cb(null, null, error) ;
-                    }
-                    encrypted_text = ls.wallet_login[cert_user_id] ;
-                    encrypted_array = JSON.parse(encrypted_text) ;
-                    // ls.wallet_login[cert_user_id] must be stringified array with ls.wallet_login[cert_user_id]
-                    // decrypt wallet login
-
+                    encrypted_json = ls.wallet_login[cert_user_id] ;
+                    if (!encrypted_json) return cb(null, null, 'Wallet login for ' + cert_user_id + ' was not found') ;
+                    console.log(pgm + 'encrypted_json = ' + JSON.stringify(encrypted_json));
+                    encrypt1.decrypt_json(encrypted_json, function(json) {
+                        var pgm = service + '.get_wallet_login decrypt_json callback: ' ;
+                        console.log(pgm + 'json = ' + JSON.stringify(json)) ;
+                        if (!json) cb(null, null, 'decrypt error. encrypted_json was ' + JSON.stringify(encrypted_json)) ;
+                        else cb(json.wallet_id, json.wallet_password, null) ;
+                    }) ; // decrypt_json callback
                 }
-            }
+                else {
+                    // save_wallet_login == '2'
+                    // wallet login is saved encrypted (symmetric) in MoneyNetwork localStorage (session is required)
+                    if (!sessionid) return cb(null, null, 'Cannot read wallet information. MoneyNetwork session was not found');
+                    // send get_data message to MoneyNetwork and wait for receipt
+                    json = { msgtype: 'get_data', receipt: true } ;
+                    send_message(json, true, function (json) {
+                        var encrypted_data ;
+                        if (json.error) return cb({error: json.error}) ;
+                        encrypted_data = json.data ;
+                        encrypt1.decrypt(encrypted_data, function (data) {
+                            if (!data) cb({error: 'decrypt receipt failed'}) ;
+                            else cb({wallet_id: data.wallet_id, wallet_password: data.wallet_password}) ;
+                        }) ; // decrypt callback
+                    }) ; // send_message callback
+                }
+            } // get_wallet_login
 
 
+            // save_wallet_login:
+            // - '0': no thank you. Clear any wallet data previously saved with '1' or '2'
+            // - '1': wallet login is saved encrypted (cryptMessage) in MoneyNetworkW2 localStorage
+            // - '2': wallet login is saved encrypted (symmetric) in MoneyNetwork localStorage (session is required)
+            function save_wallet_login(save_wallet_login, wallet_id, wallet_password, cb) {
+                var pgm = service + '.save_wallet_login: ' ;
+                var cert_user_id, ls_updated, data, request ;
+                if (['0', '1','2'].indexOf(save_wallet_login) == -1) return cb(null, null, "Invalid call. save_wallet_login must be equal '0', '1' or '2'") ;
+                // 1 - wallet login is saved encrypted (cryptMessage) in MoneyNetworkW2 localStorage
+                cert_user_id = ZeroFrame.site_info.cert_user_id ;
+                if (save_wallet_login == '1') {
+                    // save as 1
+                    if (!ls.wallet_login) ls.wallet_login = {} ;
+                    if (!ls.wallet_login[cert_user_id]) ls.wallet_login[cert_user_id] = {} ;
+                    ls.wallet_login[cert_user_id].wallet_id = wallet_id ;
+                    ls.wallet_login[cert_user_id].wallet_password = wallet_password ;
+                    console.log(pgm + 'ls.wallet_login = ' + JSON.stringify(ls.wallet_login)) ;
+                    ls_save() ;
+                }
+                else {
+                    // 0 or 2. clear old 1
+                    if (ls.wallet_login) {
+                        ls_updated = false ;
+                        if (ls.wallet_login[cert_user_id]) {
+                            delete ls.wallet_login[cert_user_id] ;
+                            ls_updated = true ;
+                        }
+                        if (!Object.keys(ls.wallet_login).length) {
+                            delete ls.wallet_login ;
+                            ls_updated = true ;
+                        }
+                        if (ls_updated) ls_save() ;
+                    }
+                }
+                // 2 - wallet login is saved encrypted (symmetric) in MoneyNetwork localStorage (session is required)
+                if (save_wallet_login == '2') {
+                    if (!sessionid) return cb('Cannot save wallet information. MoneyNetwork session was not found');
+                    // encrypt wallet data before sending data to MoneyNetwork
+                    data = { wallet_id: wallet_id, wallet_password: wallet_password} ;
+                    console.log(pgm + 'data = ' + JSON.stringify(data));
+                    // cryptMessage encrypt data with current ZeroId before sending data to MoneyNetwork
+                    encrypt1.encrypt_json(data, [2],function (encrypted_data) {
+                        var pgm = service + '.save_wallet_login encrypt_json callback 1: ';
+                        var json;
+                        console.log(pgm + 'data (encrypted) = ' + JSON.stringify(encrypted_data));
+                        // send encrypted wallet data to MoneyNetwork and wait for receipt
+                        json = { msgtype: 'save_data', data: encrypted, receipt: true} ;
+                        console.log(pgm + 'json = ' + JSON.stringify(json));
+                        send_message(json, true, function (receipt) {
+                            var pgm = service + '.save_wallet_login send_message callback 2: ';
+                            if (!receipt) cb({error: 'No receipt'}) ;
+                            else if (receipt.error) cb({error: receipt.error}) ;
+                            else cb({}) ;
+                        }) // send_message callback 2
+                    }) ; // encrypt_json callback 1
+                }
+                else {
+                    // 0 or 1. clear old 2
+                    if (!sessionid) return cb('Cannot clear wallet information. MoneyNetwork session was not found') ;
+                    // send data_delete to MoneyNetwork session
+                    request = {msgtype: 'delete_data', receipt: false};
+                    console.log(pgm + 'json = ' + JSON.stringify(request));
+                    send_message(request, true, function (response) {
+                        var pgm = service + '.save_wallet_login send_message callback 1: ';
+                        if (!response) cb({error: 'No response'}) ;
+                        else if (response.error) cb({error: response.error}) ;
+                        else cb({}) ;
+                    }); // send_message callback 1
+                }
+            } // save_wallet_login
+
+            // todo: changed ZeroId. clear z_cache.
             var z_cache = {} ; // cache some ZeroNet objects: user_hub, wallet.json
 
             function get_default_user_hub () {
@@ -273,6 +373,7 @@ angular.module('MoneyNetworkW2')
                 i = Math.floor(Math.random() * hubs.length);
                 return hubs[i] ;
             } // get_default_user_hub3
+
 
             var get_my_user_hub_cbs = [] ; // callbacks waiting for query 17 to finish
             function get_my_user_hub (cb) {
@@ -354,13 +455,23 @@ angular.module('MoneyNetworkW2')
 
             } // get_my_user_hub
 
+            var get_user_path_cbs = [] ;
             function get_user_path (cb) {
                 var pgm = service + '.user_path: ' ;
-                var user_path ;
                 if (!ZeroFrame.site_info) throw pgm + "invalid call. ZeroFrame is not finish loading" ;
                 if (!ZeroFrame.site_info.auth_address) throw pgm + "invalid call. ZeroId is missing" ;
+                if (z_cache.user_path == true) {
+                    // wait for previous user_path request to finish
+                    get_user_path_cbs.push(cb) ;
+                    return ;
+                }
+                if (z_cache.user_path) return cb(z_cache.user_path) ; // OK
+                z_cache.user_path = true ;
                 get_my_user_hub(function (my_hub) {
-                    cb('merged-MoneyNetwork/' + my_hub + '/data/users/' + ZeroFrame.site_info.auth_address + '/');
+                    z_cache.user_path = 'merged-MoneyNetwork/' + my_hub + '/data/users/' + ZeroFrame.site_info.auth_address + '/' ;
+                    encrypt2.setup_encryption({user_path: z_cache.user_path});
+                    cb(z_cache.user_path);
+                    while (get_user_path_cbs.length) { cb = get_user_path_cbs.shift() ; cb(z_cache.user_path)}
                 }) ;
             } // get_user_path
 
@@ -408,7 +519,7 @@ angular.module('MoneyNetworkW2')
 
             } // z_publish
 
-            // optional file pattern must be added to content.json before any optional files are written to user directory
+            // optional file pattern must be added to content.json BEFORE any optional files are written to user directory
             var optional_files_support_ok = null ;
             var add_optional_files_support_cbs = [] ; // pending callbacks (first call)
             function add_optional_files_support (cb) {
@@ -621,6 +732,7 @@ angular.module('MoneyNetworkW2')
             } // save_wallet
 
             // money network session from MoneyNetwork. only relevant if wallet is called from MoneyNetwork with a sessionid
+            var encrypt2 = new MoneyNetworkAPI({debug: true}) ; // encrypt/decrypt messages
             var sessionid ; // unique sessionid. also like a password known only by MoneyNetwork and MoneyNetworkW2 sessions
             var this_session_filename ;  // filename used by MoneyNetwork wallet session
             var this_pubkey ;            // JSEncrypt public key used by MoneyNetwork wallet session
@@ -628,7 +740,6 @@ angular.module('MoneyNetworkW2')
             var other_pubkey ;           // JSEncrypt pubkey from MoneyNetwork session
             var other_pubkey2 ;          // cryptMessage pubkey2 from MoneyNetwork session
             var other_session_filename ; // filename used by MoneyNetwork session
-            var encrypt2 = new MoneyNetworkAPI({debug: true}) ;
 
             // read "pubkeys" message from MoneyNetwork session
             // optional file with file format <other_session_filename>.<timestamp>
@@ -720,6 +831,7 @@ angular.module('MoneyNetworkW2')
                 if (this_pubkey2) return cb(this_pubkey2) ;
                 ZeroFrame.cmd("userPublickey", [0], function (my_pubkey2) {
                     this_pubkey2 = my_pubkey2 ;
+                    encrypt1.setup_encryption({pubkey2: my_pubkey2}) ;
                     cb(this_pubkey2) ;
                 }) ;
             } // get_my_pubkey2
@@ -814,13 +926,15 @@ angular.module('MoneyNetworkW2')
 
 
 
-            // export
+            // export kW2Service
             return {
                 // localStorage functions
                 ls_bind: ls_bind,
                 ls_get: ls_get,
                 ls_save: ls_save,
                 get_save_wallet_login: get_save_wallet_login,
+                get_wallet_login: get_wallet_login,
+                save_wallet_login: save_wallet_login,
                 // session functions
                 generate_random_string: generate_random_string,
                 is_new_session: is_new_session,
@@ -829,7 +943,7 @@ angular.module('MoneyNetworkW2')
                 get_my_user_hub: get_my_user_hub
             };
 
-            // end MoneyNetworkW2Service
+            // end kW2Service
         }])
 
 ;

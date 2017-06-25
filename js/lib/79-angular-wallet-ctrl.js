@@ -92,6 +92,12 @@ angular.module('MoneyNetworkW2')
                 }) ;
             });
         };
+
+        // todo: changed ZeroId
+        // - session: new cryptMessage encryption. must send a new pubkeys message to MoneyNetwork
+        // - session: MoneyNetwork must monitor for new pubkeys messages for old sessions (changed cert user id)
+        // - z_cache. must clear z_cache. new hub, user_path etc
+        // - must load any saved wallet into
         self.zeronet_cert_changed = function () {
             var pgm = controller + '.zeronet_cert_changed: ' ;
             if (ZeroFrame.site_info.cert_user_id && (old_cert_user_id == ZeroFrame.site_info.cert_user_id)) return ;
@@ -113,27 +119,34 @@ angular.module('MoneyNetworkW2')
         self.save_wallet_login = '0' ;
         var old_save_wallet_login = null ; // null: not yet checked
 
-        // startup.
-        // - 1: check if wallet login is saved in localStorage encrypted with current ZeroId
-        // - 2: session: request wallet login info from MoneyNetwork if any
-        // - otherwise: 0: No thank you ....
+        // startup. check if wallet login is saved in:
+        // - 1: wallet login is saved encrypted (cryptMessage) in MoneyNetworkW2 localStorage
+        // - 2: wallet login is saved encrypted (symmetric) in MoneyNetwork localStorage (session is required)
         // use ls_bind. localStorage may still be loading
         W2Service.ls_bind(function() {
             var pgm = controller + ' ls_bind callback: ' ;
             var ls ;
             if (!ZeroFrame.site_info.cert_user_id) {
-                // cannot wallet info without a ZeroNet cert
+                // cannot save and encrypt wallet info without a ZeroNet cert
                 self.save_wallet_login = '0' ;
                 return ;
             }
+            // localStorage: save_wallet_login: '0', '1' or '2'
             self.save_wallet_login = W2Service.get_save_wallet_login() ;
             console.log(pgm + 'self.save_wallet_login = ' + self.save_wallet_login) ;
             if (self.save_wallet_login == null) return ; // error
             if (self.save_wallet_login == '0') return ; // wallet login is not saved for this cert_user_id in this browser
-            // 1: wallet login is saved encrypted (cryptMessage) in MoneyNetworkW2 localStorage
-            // 2: wallet login is saved encrypted (symmetric) in MoneyNetwork localStorage (session is required)
+            // '1': wallet login is saved encrypted (cryptMessage) in MoneyNetworkW2 localStorage
+            // '2': wallet login is saved encrypted (symmetric) in MoneyNetwork localStorage (session is required)
             W2Service.get_wallet_login(self.save_wallet_login, function(wallet_id, wallet_password, error) {
-
+                var pgm = controller + ' get_wallet_login callback: ' ;
+                console.log(pgm + 'wallet_id = ' + wallet_id + ', wallet_password = ' + wallet_password + ', error = ' + error) ;
+                if (error) ZeroFrame.cmd("wrapperNotification", ['error', error, 10000]) ;
+                else {
+                    self.wallet_id = wallet_id ;
+                    self.wallet_password = wallet_password ;
+                    $rootScope.$apply() ;
+                }
             }) ; // get_wallet_login callback
 
         }) ; // ls_bind callback
@@ -145,18 +158,10 @@ angular.module('MoneyNetworkW2')
                 self.save_wallet_login = old_save_wallet_login;
                 return ;
             }
-            if (self.save_wallet_login == old_save_wallet_login) return ;
-            console.log(pgm + 'save_session = ' + self.save_wallet_login) ;
-            save_login() ;
+            W2Service.save_wallet_login(self.save_wallet_login, self.wallet_id, self.wallet_password, function(res) {
+                console.log(pgm + 'res = ' + JSON.stringify(res)) ;
+            }) ;
         }; // save_session_changed
-
-        function save_login () {
-            if (old_save_wallet_login != '0') {
-                // delete old storage from localStorage
-
-            }
-        }
-
 
         self.add_site = function () {
             var pgm = controller + '.add_site: ' ;
