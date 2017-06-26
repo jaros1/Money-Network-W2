@@ -222,7 +222,7 @@ angular.module('MoneyNetworkW2')
             } // ls_save
 
 
-            var encrypt1 = new MoneyNetworkAPI({debug: true}) ; // encrypt/decrypt data in localStorage ;
+            var encrypt1 = new MoneyNetworkAPI({ZeroFrame: ZeroFrame, debug: true}) ; // encrypt/decrypt data in localStorage ;
 
             // get save wallet status: 0, 1 or 2
             // todo: what about 2 and no session? user must connect to MoneyNetwork to get data from MoneyNetwork
@@ -732,7 +732,7 @@ angular.module('MoneyNetworkW2')
             } // save_wallet
 
             // money network session from MoneyNetwork. only relevant if wallet is called from MoneyNetwork with a sessionid
-            var encrypt2 = new MoneyNetworkAPI({debug: true}) ; // encrypt/decrypt messages
+            var encrypt2 = new MoneyNetworkAPI({ZeroFrame: ZeroFrame, debug: true}) ; // encrypt/decrypt messages
             var sessionid ; // unique sessionid. also like a password known only by MoneyNetwork and MoneyNetworkW2 sessions
             var this_session_filename ;  // filename used by MoneyNetwork wallet session
             var this_pubkey ;            // JSEncrypt public key used by MoneyNetwork wallet session
