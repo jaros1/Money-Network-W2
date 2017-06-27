@@ -222,6 +222,14 @@ angular.module('MoneyNetworkW2')
             } // ls_save
 
 
+            // start demon. listen for incoming messages from MoneyNetwork
+            function process_incoming_message (filename) {
+                var pgm = service + '.process_incoming_message: ' ;
+                console.log(pgm + 'filename = ' + filename) ;
+            }
+            MoneyNetworkAPIDemon.init({debug: true, ZeroFrame: ZeroFrame, cb: process_incoming_message}) ;
+
+            // encrypt1. internal wallet encryption
             var encrypt1 = new MoneyNetworkAPI({ZeroFrame: ZeroFrame, debug: true}) ; // encrypt/decrypt data in localStorage ;
 
             // get save wallet status: 0, 1 or 2
@@ -332,7 +340,7 @@ angular.module('MoneyNetworkW2')
                         var json;
                         console.log(pgm + 'data (encrypted) = ' + JSON.stringify(encrypted_data));
                         // send encrypted wallet data to MoneyNetwork and wait for receipt
-                        json = { msgtype: 'save_data', data: encrypted, receipt: true} ;
+                        json = { msgtype: 'save_data', data: encrypted_data, receipt: true} ;
                         console.log(pgm + 'json = ' + JSON.stringify(json));
                         send_message(json, true, function (receipt) {
                             var pgm = service + '.save_wallet_login send_message callback 2: ';
@@ -732,6 +740,7 @@ angular.module('MoneyNetworkW2')
             } // save_wallet
 
             // money network session from MoneyNetwork. only relevant if wallet is called from MoneyNetwork with a sessionid
+            // encrypt2 - encrypt messages between MoneyNetwork and MoneyNetworkW2
             var encrypt2 = new MoneyNetworkAPI({ZeroFrame: ZeroFrame, debug: true}) ; // encrypt/decrypt messages
             var sessionid ; // unique sessionid. also like a password known only by MoneyNetwork and MoneyNetworkW2 sessions
             var this_session_filename ;  // filename used by MoneyNetwork wallet session
@@ -891,11 +900,14 @@ angular.module('MoneyNetworkW2')
                 if (!new_sessionid) return false ; // no session
                 // new session. save and redirect without sessionid
                 sessionid = new_sessionid ;
-                encrypt2.setup_encryption({sessionid: new_sessionid, debug: true}) ;
+                MoneyNetworkAPIDemon.add_session(sessionid); // monitor incoming messages for this sessionid
+                encrypt2.setup_encryption({sessionid: sessionid, debug: true}) ;
                 sha256 = CryptoJS.SHA256(sessionid).toString() ;
                 other_session_filename = sha256.substr(0,10) ; // first 10 characters of sha256 signature
                 this_session_filename = sha256.substr(sha256.length-10); // last 10 characters of sha256 signature
-                console.log(pgm + 'this_session_filename = ' + this_session_filename);
+                console.log(pgm + 'sessionid              = ' + sessionid) ;
+                console.log(pgm + 'sha256                 = ' + sha256) ;
+                console.log(pgm + 'this_session_filename  = ' + this_session_filename);
                 console.log(pgm + 'other_session_filename = ' + other_session_filename);
                 // async read pubkey and pubkey2 from "pubkeys" message from MoneyNetwork using dbQuery wait and fileGet operations
                 read_pubkeys() ;
