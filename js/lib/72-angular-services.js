@@ -241,14 +241,6 @@ angular.module('MoneyNetworkW2')
                 return ls.save_wallet_login[ZeroFrame.site_info.cert_user_id] ;
             } // get_save_wallet_login
 
-
-            // send message to MoneyNetwork and optional wait for response (receipt = true)
-            function send_message (json, receipt, cb) {
-                // send message using encrypt2 (MoneyNetworkAPI)
-                encrypt2.send_message(json, receipt, cb) ;
-            } // send_message
-
-
             // save_wallet_login:
             // - '1': wallet login is saved encrypted (cryptMessage) in MoneyNetworkW2 localStorage
             // - '2': wallet login is saved encrypted (symmetric) in MoneyNetwork localStorage (session is required)
@@ -280,8 +272,8 @@ angular.module('MoneyNetworkW2')
                     // wallet login is saved encrypted (symmetric) in MoneyNetwork localStorage (session is required)
                     if (!sessionid) return cb(null, null, 'Cannot read wallet information. MoneyNetwork session was not found');
                     // send get_data message to MoneyNetwork and wait for receipt
-                    json = { msgtype: 'get_data', receipt: true } ;
-                    send_message(json, true, function (json) {
+                    json = { msgtype: 'get_data' } ;
+                    encrypt2.send_message(json, {receipt: true}, function (json) {
                         var encrypted_data ;
                         if (json.error) return cb({error: json.error}) ;
                         encrypted_data = json.data ;
@@ -340,9 +332,9 @@ angular.module('MoneyNetworkW2')
                         var json;
                         console.log(pgm + 'data (encrypted) = ' + JSON.stringify(encrypted_data));
                         // send encrypted wallet data to MoneyNetwork and wait for receipt
-                        json = { msgtype: 'save_data', data: encrypted_data, receipt: true} ;
+                        json = { msgtype: 'save_data', data: encrypted_data} ;
                         console.log(pgm + 'json = ' + JSON.stringify(json));
-                        send_message(json, true, function (receipt) {
+                        encrypt2.send_message(json, {receipt: true}, function (receipt) {
                             var pgm = service + '.save_wallet_login send_message callback 2: ';
                             if (!receipt) cb({error: 'No receipt'}) ;
                             else if (receipt.error) cb({error: receipt.error}) ;
@@ -354,9 +346,9 @@ angular.module('MoneyNetworkW2')
                     // 0 or 1. clear old 2
                     if (!sessionid) return cb('Cannot clear wallet information. MoneyNetwork session was not found') ;
                     // send data_delete to MoneyNetwork session
-                    request = {msgtype: 'delete_data', receipt: false};
+                    request = {msgtype: 'delete_data'};
                     console.log(pgm + 'json = ' + JSON.stringify(request));
-                    send_message(request, true, function (response) {
+                    encrypt2.send_message(request, {}, function (response) {
                         var pgm = service + '.save_wallet_login send_message callback 1: ';
                         if (!response) cb({error: 'No response'}) ;
                         else if (response.error) cb({error: response.error}) ;
