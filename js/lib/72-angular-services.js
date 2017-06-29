@@ -223,10 +223,25 @@ angular.module('MoneyNetworkW2')
 
 
             // start demon. listen for incoming messages from MoneyNetwork
-            function process_incoming_message (filename) {
-                var pgm = service + '.process_incoming_message: ' ;
-                console.log(pgm + 'filename = ' + filename) ;
-            }
+            function process_incoming_message (inner_path) {
+                var pgm = service + '.process_incoming_message: ';
+                console.log(pgm + 'inner_path = ' + inner_path);
+                ZeroFrame.cmd("fileGet", {inner_path: inner_path, required: false}, function (json_str) {
+                    var pgm = service + '.process_incoming_message fileGet callback 1: ';
+                    var encrypted_json ;
+                    if (!json_str) {
+                        console.log(pgm + 'fileGet ' + filename + ' failed') ;
+                        return ;
+                    }
+                    encrypted_json = JSON.parse(json_str) ;
+                    // decrypt json
+                    encrypt2.decrypt_json(encrypted_json, function (json) {
+                        var pgm = service + '.process_incoming_message decrypt_json callback 2: ';
+                        var error ;
+
+                    }) ; // decrypt_json callback 2
+                }); // fileGet callback 1
+            } // process_incoming_message
             MoneyNetworkAPIDemon.init({debug: true, ZeroFrame: ZeroFrame, cb: process_incoming_message}) ;
 
             // encrypt1. internal wallet encryption
@@ -271,14 +286,18 @@ angular.module('MoneyNetworkW2')
                     // save_wallet_login == '2'
                     // wallet login is saved encrypted (symmetric) in MoneyNetwork localStorage (session is required)
                     if (!sessionid) return cb(null, null, 'Cannot read wallet information. MoneyNetwork session was not found');
-                    // send get_data message to MoneyNetwork and wait for receipt
-                    json = { msgtype: 'get_data' } ;
-                    encrypt2.send_message(json, {receipt: true}, function (json) {
+                    // send get_data message to MoneyNetwork and wait for response
+                    json = { msgtype: 'get_data', key: 'login' } ;
+                    console.log(pgm + 'json = ' + JSON.stringify(json)) ;
+                    console.log(pgm + 'todo: validate get_data message before send') ;
+                    encrypt2.send_message(json, {response: true}, function (response) {
                         var encrypted_data ;
-                        if (json.error) return cb({error: json.error}) ;
-                        encrypted_data = json.data ;
+                        if (response.error) return cb({error: response.error}) ;
+                        encrypted_data = response.data ;
+                        console.log(pgm + 'todo: 1: response.data is an array') ;
+                        console.log(pgm + 'todo: 2: each row must be decrypted') ;
                         encrypt1.decrypt(encrypted_data, function (data) {
-                            if (!data) cb({error: 'decrypt receipt failed'}) ;
+                            if (!data) cb({error: 'decrypt get_data response failed'}) ;
                             else cb({wallet_id: data.wallet_id, wallet_password: data.wallet_password}) ;
                         }) ; // decrypt callback
                     }) ; // send_message callback
@@ -329,25 +348,29 @@ angular.module('MoneyNetworkW2')
                     // cryptMessage encrypt data with current ZeroId before sending data to MoneyNetwork
                     encrypt1.encrypt_json(data, [2],function (encrypted_data) {
                         var pgm = service + '.save_wallet_login encrypt_json callback 1: ';
-                        var json;
+                        var request;
                         console.log(pgm + 'data (encrypted) = ' + JSON.stringify(encrypted_data));
-                        // send encrypted wallet data to MoneyNetwork and wait for receipt
-                        json = { msgtype: 'save_data', data: encrypted_data} ;
-                        console.log(pgm + 'json = ' + JSON.stringify(json));
-                        encrypt2.send_message(json, {receipt: true}, function (receipt) {
+                        // send encrypted wallet data to MoneyNetwork and wait for response
+                        request = {
+                            msgtype: 'save_data',
+                            data: [{key: 'login', value: JSON.stringify(encrypted_data)}]
+                        } ;
+                        console.log(pgm + 'json = ' + JSON.stringify(request));
+                        encrypt2.send_message(request, {response: true}, function (response) {
                             var pgm = service + '.save_wallet_login send_message callback 2: ';
-                            if (!receipt) cb({error: 'No receipt'}) ;
-                            else if (receipt.error) cb({error: receipt.error}) ;
+                            if (!response) cb({error: 'No response'}) ;
+                            else if (response.error) cb({error: response.error}) ;
                             else cb({}) ;
-                        }) // send_message callback 2
+                        }); // send_message callback 2
                     }) ; // encrypt_json callback 1
                 }
                 else {
                     // 0 or 1. clear old 2
                     if (!sessionid) return cb('Cannot clear wallet information. MoneyNetwork session was not found') ;
                     // send data_delete to MoneyNetwork session
-                    request = {msgtype: 'delete_data'};
+                    request = {msgtype: 'delete_data', key: 'login'};
                     console.log(pgm + 'json = ' + JSON.stringify(request));
+                    console.log(pgm + 'todo: validate delete_data message before send') ;
                     encrypt2.send_message(request, {}, function (response) {
                         var pgm = service + '.save_wallet_login send_message callback 1: ';
                         if (!response) cb({error: 'No response'}) ;
