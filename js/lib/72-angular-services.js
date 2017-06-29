@@ -368,10 +368,10 @@ angular.module('MoneyNetworkW2')
                     // 0 or 1. clear old 2
                     if (!sessionid) return cb('Cannot clear wallet information. MoneyNetwork session was not found') ;
                     // send data_delete to MoneyNetwork session
-                    request = {msgtype: 'delete_data', key: 'login'};
+                    request = {msgtype: 'delete_data'}; // no keys array. delete all data for session
                     console.log(pgm + 'json = ' + JSON.stringify(request));
                     console.log(pgm + 'todo: validate delete_data message before send') ;
-                    encrypt2.send_message(request, {}, function (response) {
+                    encrypt2.send_message(request, {response: true}, function (response) {
                         var pgm = service + '.save_wallet_login send_message callback 1: ';
                         if (!response) cb({error: 'No response'}) ;
                         else if (response.error) cb({error: response.error}) ;
