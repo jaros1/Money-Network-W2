@@ -222,7 +222,7 @@ angular.module('MoneyNetworkW2')
             } // ls_save
 
 
-            // start demon. listen for incoming messages from MoneyNetwork
+            // start demon. listen for incoming messages from MoneyNetwork.
             function process_incoming_message (inner_path) {
                 var pgm = service + '.process_incoming_message: ';
                 console.log(pgm + 'inner_path = ' + inner_path);
@@ -238,6 +238,8 @@ angular.module('MoneyNetworkW2')
                     encrypt2.decrypt_json(encrypted_json, function (json) {
                         var pgm = service + '.process_incoming_message decrypt_json callback 2: ';
                         var error ;
+                        console.log(pgm + 'json = ' + JSON.stringify(json)) ;
+                        console.log(pgm + 'todo: not implemented') ;
 
                     }) ; // decrypt_json callback 2
                 }); // fileGet callback 1
@@ -287,7 +289,7 @@ angular.module('MoneyNetworkW2')
                     // wallet login is saved encrypted (symmetric) in MoneyNetwork localStorage (session is required)
                     if (!sessionid) return cb(null, null, 'Cannot read wallet information. MoneyNetwork session was not found');
                     // send get_data message to MoneyNetwork and wait for response
-                    json = { msgtype: 'get_data', key: 'login' } ;
+                    json = { msgtype: 'get_data', keys: ['login'] } ;
                     console.log(pgm + 'json = ' + JSON.stringify(json)) ;
                     console.log(pgm + 'todo: validate get_data message before send') ;
                     encrypt2.send_message(json, {response: true}, function (response) {
@@ -296,8 +298,12 @@ angular.module('MoneyNetworkW2')
                         encrypted_data = response.data ;
                         console.log(pgm + 'todo: 1: response.data is an array') ;
                         console.log(pgm + 'todo: 2: each row must be decrypted') ;
+
+
+
                         encrypt1.decrypt(encrypted_data, function (data) {
                             if (!data) cb({error: 'decrypt get_data response failed'}) ;
+                            else if (data.error) cb({error: 'get_data request failed. ' + data.error}) ;
                             else cb({wallet_id: data.wallet_id, wallet_password: data.wallet_password}) ;
                         }) ; // decrypt callback
                     }) ; // send_message callback
@@ -370,7 +376,6 @@ angular.module('MoneyNetworkW2')
                     // send data_delete to MoneyNetwork session
                     request = {msgtype: 'delete_data'}; // no keys array. delete all data for session
                     console.log(pgm + 'json = ' + JSON.stringify(request));
-                    console.log(pgm + 'todo: validate delete_data message before send') ;
                     encrypt2.send_message(request, {response: true}, function (response) {
                         var pgm = service + '.save_wallet_login send_message callback 1: ';
                         if (!response) cb({error: 'No response'}) ;
@@ -801,11 +806,14 @@ angular.module('MoneyNetworkW2')
                         sessionid = null ;
                         return ;
                     }
+                    // mark file as read. generic process_incoming_message should not process this file
+                    MoneyNetworkAPIDemon.wait_for_file(res[0].filename) ;
+                    // read file
                     inner_path = 'merged-MoneyNetwork/' + res[0].directory + '/' + res[0].filename ;
                     // console.log(pgm +  inner_path + ' fileGet start') ;
                     ZeroFrame.cmd("fileGet", [inner_path, true], function (pubkeys_str) {
                         var pgm = service + '.read_pubkeys fileGet callback 2: ' ;
-                        var pubkeys, now, content_signed, file_timestamp ;
+                        var pubkeys, now, content_signed, file_timestamp, error ;
                         // console.log(pgm + 'pubkeys_str = ' + pubkeys_str) ;
                         if (!pubkeys_str) {
                             console.log(pgm + prefix + 'read pubkeys failed. file + ' + inner_path + ' was not found') ;
@@ -820,14 +828,23 @@ angular.module('MoneyNetworkW2')
                             'file_timestamp = ' + file_timestamp +
                             ', content_signed = ' + content_signed +
                             ', now = ' + now) ;
-                        console.log(pgm + 'todo: validate pubkeys json message') ;
                         pubkeys = JSON.parse(pubkeys_str) ;
+                        error = encrypt2.validate_json(pgm, pubkeys) ;
+                        if (error) {
+                            console.log(pgm + prefix + 'invalid pubkeys message. error = ' + error) ;
+                            return ;
+                        }
+                        if (pubkeys.msgtype != 'pubkeys') {
+                            console.log(pgm + prefix + 'First message from MoneyNetwork was NOT a pubkeys message. message = ' + JSON.stringify(pubkeys) );
+                            return ;
+                        }
                         console.log(pgm + 'MoneyNetwork session keys: ' +
                             'pubkey2 = ' + pubkeys.pubkey2 +
                             ', pubkey = ' + pubkeys.pubkey) ;
                         encrypt2.setup_encryption({pubkey: pubkeys.pubkey, pubkey2: pubkeys.pubkey2}) ;
+                        // mark file as read.
 
-                        // return my public keys to MoneyNetwork session
+                        // return my public keys to MoneyNetwork session now running end2end encryption between the 2 sessions
                         write_pubkeys() ;
 
                     }) ; // fileGet callback 2
