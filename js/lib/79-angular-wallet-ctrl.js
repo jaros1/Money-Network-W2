@@ -5,7 +5,57 @@ angular.module('MoneyNetworkW2')
         var controller = 'WalletCtrl';
         console.log(controller + ' loaded');
 
-        if (W2Service.is_new_session()) return ; // wait for redirect without sessionid
+        // MoneyNetwork (MN) and MoneyNetwork W2 (W2) session handshake.
+
+        // create new session:
+        // 1) sessionid is received from MN
+        // 2) read file with MN pubkey and pubkey2 (unencrypted pubkeys message)
+        // 3) generate JSEncrypt keypair, random userid2 and send W2 pubkey and pubkey2 to MN (3 layer encrypted pubkeys message)
+        // 4) secure connection OK (3 layer encryption)
+        // 5) generate long password pw1+pw2
+        // 6) send pw2 to MN (save_password message)
+        // 7) save session in localStorage.
+        //    - encrypted: W2 prvkey, W2 userid2 and sessionid
+        //    - unencrypted: MN pubkeys, W2 pubkeys and pw1
+
+        // reconnect to old session:
+        // 1) find old session data in localStorage
+        // 2) generate temporary W2 keys
+        // 3) send a get_password request to MN (original W2 pubkeys (unique id), temporary W2 pubkeys) encrypted with MN pubkeys (2 layer encrypted message)
+        // 4) MN returns pw2 encrypted with temporary keys (2 layer encryption)
+        // 4) W2 uses pw1+pw2 to unlock old session information
+        // 5) ping to verify full encrypted connection (original session)
+
+        // todo: startup.
+        // 1) save any sessionid param in new_session and redirect without sessionid
+        // 2) check old saved session. get pwd2 from MN. use old sessionid if MN returns correct pwd2 within <n> seconds
+        // 3) check new_session. create new session with new sessionid
+
+        var sessionid ;
+        if (W2Service.is_sessionid()) return ; // 1: wait for redirect without sessionid in URL
+
+        // check MoneyNetwork merger permission.
+
+
+
+        // check for old and for new MN session
+        self.status = W2Service.get_status() ;
+        self.status.checking_old_session = true ;
+        W2Service.is_old_session(function (old_sessionid) {
+            if (old_sessionid) {
+                // old session was restored from localStorage
+                sessionid = old_sessionid ;
+                self.status.checking_old_session= false ;
+                return ;
+            }
+            self.status.checking_new_session = true ;
+            W2Service.is_new_session(function (new_sessionid) {
+                self.status.checking_new_session = false ;
+                if (new_sessionid) sessionid = new_sessionid ;
+            }) ;
+        }) ;
+
+        if (!W2Service.is_old_session)
         var sessionid = W2Service.get_sessionid() ;
         console.log(controller + ': sessionid = ' + sessionid) ;
 
@@ -19,66 +69,18 @@ angular.module('MoneyNetworkW2')
 
         // check Merger:MoneyNetwork permission. Required for communicating with MoneyNetwork (session)
         self.merger_permission = 'n/a' ;
-        function check_merger_permission(cb) {
-            var pgm = controller + '.check_merger_permission: ';
-            if (!cb) cb = function (ok) {
-            };
-            var request1 = function (cb) {
-                var pgm = controller + '.check_merger_permission.request1: ';
-                ZeroFrame.cmd("wrapperPermissionAdd", "Merger:MoneyNetwork", function (res) {
-                    console.log(pgm + 'res = ', JSON.stringify(res));
-                    if (res == "Granted") {
-                        request2(cb);
-                        self.merger_permission = 'Granted';
-                    }
-                    else cb(false);
-                });
-            }; // request1
-            var request2 = function (cb) {
-                var pgm = controller + '.check_merger_permission.request2: ';
-                W2Service.get_my_user_hub(function (hub) {
-                    ZeroFrame.cmd("mergerSiteAdd", [hub], function (res) {
-                        console.log(pgm + 'res = ', JSON.stringify(res));
-                        cb((res == 'ok'));
-                    });
-                });
-            }; // request2
-            // wait for ZeroFrame.site_info to be ready
-            var retry_check_merger_permission = function () {
-                check_merger_permission(cb)
-            };
-            if (!ZeroFrame.site_info) {
-                $timeout(retry_check_merger_permission, 500);
-                return;
-            }
-            if (!ZeroFrame.site_info.cert_user_id) return; // not logged in
 
-            // console.log(pgm , 'site_info = ' + JSON.stringify(site_info)) ;
-            if (ZeroFrame.site_info.settings.permissions.indexOf("Merger:MoneyNetwork") == -1) {
-                self.merger_permission = 'Missing';
-                return request1(cb);
-            }
-            self.merger_permission = 'Granted';
-            ZeroFrame.cmd("mergerSiteList", {}, function (merger_sites) {
-                var pgm = controller + '.check_merger_permission mergerSiteList callback 2: ';
-                console.log(pgm + 'merger_sites = ', JSON.stringify(merger_sites));
-                W2Service.get_my_user_hub(function (hub) {
-                    if (merger_sites[hub] == "MoneyNetwork") cb(true);
-                    else request2(cb);
-                });
-            }); // mergerSiteList callback 2
-        } // check_merger_permission
-        check_merger_permission(function (res) {
+        W2Service.check_merger_permission(function (ok) {
             var pgm = controller + ' 1: ' ;
-            console.log(pgm + 'check_merger_permission callback: res = ' + JSON.stringify(res));
-            if (res) {
-                console.log(pgm + 'calling create_session');
-                W2Service.create_session(function (res) {
-                    var pgm = controller + ' 1 create_session callback: ' ;
-                    console.log(pgm + 'res = ' + JSON.stringify(res));
-                }) ;
-            }
-        }) ;
+            console.log(pgm + 'check_merger_permission callback 1: ok = ' + JSON.stringify(ok));
+            if (!ok) return ; // No Merger:MoneyNetwork permission
+            if (!ZeroFrame.site_info.cert_user_id) return ; // not logged in
+            console.log(pgm + 'updating wallet.json');
+            W2Service.update_wallet_json(function (res) {
+                var pgm = controller + ' 1 update_wallet_json callback: ' ;
+                console.log(pgm + 'res = ' + JSON.stringify(res));
+            }) ; // update_wallet_json
+        }) ; // check_merger_permission callback 1
 
         self.select_zeronet_cert = function() {
             var pgm = controller + '.select_zeronet_cert: ' ;
@@ -87,7 +89,7 @@ angular.module('MoneyNetworkW2')
                 var pgm = controller + '.select_zeronet_cert certSelect callback: ' ;
                 $rootScope.$apply() ;
                 console.log(pgm + 'calling check_merger_permission') ;
-                check_merger_permission(function (res) {
+                W2Service.check_merger_permission(function (res) {
                     console.log(pgm + 'check_merger_permission callback: res = ' + JSON.stringify(res));
                 }) ;
             });
@@ -104,7 +106,7 @@ angular.module('MoneyNetworkW2')
             console.log(pgm + 'old_cert_user_id = ' + old_cert_user_id) ;
             console.log(pgm + 'ZeroFrame.site_info = ' + JSON.stringify(ZeroFrame.site_info));
             console.log(pgm + 'calling check_merger_permission') ;
-            check_merger_permission(function (res) {
+            W2.check_merger_permission(function (res) {
                 console.log(pgm + 'check_merger_permission callback: res = ' + JSON.stringify(res));
                 if (res) old_cert_user_id = ZeroFrame.site_info.cert_user_id ;
                 // $rootScope.$apply() ;
