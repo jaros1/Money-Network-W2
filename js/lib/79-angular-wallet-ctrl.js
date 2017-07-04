@@ -34,53 +34,25 @@ angular.module('MoneyNetworkW2')
         var sessionid ;
         if (W2Service.is_sessionid()) return ; // 1: wait for redirect without sessionid in URL
 
-        // check MoneyNetwork merger permission.
-
-
-
-        // check for old and for new MN session
+        // status: merger permission and session status
         self.status = W2Service.get_status() ;
-        self.status.checking_old_session = true ;
-        W2Service.is_old_session(function (old_sessionid) {
-            if (old_sessionid) {
-                // old session was restored from localStorage
-                sessionid = old_sessionid ;
-                self.status.checking_old_session= false ;
-                return ;
-            }
-            self.status.checking_new_session = true ;
-            W2Service.is_new_session(function (new_sessionid) {
-                self.status.checking_new_session = false ;
-                if (new_sessionid) sessionid = new_sessionid ;
-            }) ;
-        }) ;
+        self.z = ZeroFrame ;
 
-        if (!W2Service.is_old_session)
-        var sessionid = W2Service.get_sessionid() ;
-        console.log(controller + ': sessionid = ' + sessionid) ;
-
-        // ZeroNet ID. Only relevant when called as part of Money Network. Not required in standalone test
-        self.moneynetwork_session = function () {
-            return sessionid ? true : false ;
+        self.moneynetwork_session = function() {
+            W2Service.get_sessionid() ;
         };
 
-        self.z = ZeroFrame ;
+        // 2-6: startup sequence
+        // 2: check merger permission
+        // 3: check ZeroNet login
+        // 4: update wallet.json
+        // 5: check old session (restore from localStorage)
+        // 6: check new session (sessionid just received from MN)
+        W2Service.ls_bind(function() {
+            W2Service.initialize(true) ;
+        }) ;
+
         var old_cert_user_id = -1 ;
-
-        // check Merger:MoneyNetwork permission. Required for communicating with MoneyNetwork (session)
-        self.merger_permission = 'n/a' ;
-
-        W2Service.check_merger_permission(function (ok) {
-            var pgm = controller + ' 1: ' ;
-            console.log(pgm + 'check_merger_permission callback 1: ok = ' + JSON.stringify(ok));
-            if (!ok) return ; // No Merger:MoneyNetwork permission
-            if (!ZeroFrame.site_info.cert_user_id) return ; // not logged in
-            console.log(pgm + 'updating wallet.json');
-            W2Service.update_wallet_json(function (res) {
-                var pgm = controller + ' 1 update_wallet_json callback: ' ;
-                console.log(pgm + 'res = ' + JSON.stringify(res));
-            }) ; // update_wallet_json
-        }) ; // check_merger_permission callback 1
 
         self.select_zeronet_cert = function() {
             var pgm = controller + '.select_zeronet_cert: ' ;
@@ -88,16 +60,14 @@ angular.module('MoneyNetworkW2')
             ZeroFrame.cmd("certSelect", [["moneynetwork.bit", "nanasi", "zeroid.bit", "kaffie.bit"]], function() {
                 var pgm = controller + '.select_zeronet_cert certSelect callback: ' ;
                 $rootScope.$apply() ;
-                console.log(pgm + 'calling check_merger_permission') ;
-                W2Service.check_merger_permission(function (res) {
-                    console.log(pgm + 'check_merger_permission callback: res = ' + JSON.stringify(res));
-                }) ;
+                W2Service.initialize(false);
             });
         };
 
         // todo: changed ZeroId
-        // - session: new cryptMessage encryption. must send a new pubkeys message to MoneyNetwork
-        // - session: MoneyNetwork must monitor for new pubkeys messages for old sessions (changed cert user id)
+        // - cancel current session.
+        // - check old session for new cert_user_id. send get_password message
+        // - check for new session. new_sessionid and no pubkeys response. send pubkeys message
         // - z_cache. must clear z_cache. new hub, user_path etc
         // - must load any saved wallet into
         self.zeronet_cert_changed = function () {
@@ -106,11 +76,7 @@ angular.module('MoneyNetworkW2')
             console.log(pgm + 'old_cert_user_id = ' + old_cert_user_id) ;
             console.log(pgm + 'ZeroFrame.site_info = ' + JSON.stringify(ZeroFrame.site_info));
             console.log(pgm + 'calling check_merger_permission') ;
-            W2.check_merger_permission(function (res) {
-                console.log(pgm + 'check_merger_permission callback: res = ' + JSON.stringify(res));
-                if (res) old_cert_user_id = ZeroFrame.site_info.cert_user_id ;
-                // $rootScope.$apply() ;
-            }) ;
+            W2Service.initialize(false);
         };
 
 
