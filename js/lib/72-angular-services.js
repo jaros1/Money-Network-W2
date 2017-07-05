@@ -791,11 +791,12 @@ angular.module('MoneyNetworkW2')
             // read "pubkeys" message from MN session
             // optional file with file format <other_session_filename>.<timestamp>
             // pubkey used by JSEncrypt (client) and pubkey2 used by cryptMessage (ZeroNet)
-            function read_pubkeys () {
+            function read_pubkeys (cb) {
                 var pgm = service + '.read_pubkeys: ' ;
-                var prefix = "Error. MN-W2 session handshake failed. " ;
-
-                var query =
+                var prefix, query ;
+                if (!cb) cb = function() {} ;
+                prefix = "Error. MN-W2 session handshake failed. " ;
+                query =
                     "select " +
                     "  json.directory," +
                     "  substr(json.directory, 1, instr(json.directory,'/')-1) as hub," +
@@ -816,16 +817,16 @@ angular.module('MoneyNetworkW2')
                         console.log(pgm + prefix + 'cannot read pubkeys message. dbQuery failed with ' + res.error) ;
                         console.log(pgm + 'query = ' + query) ;
                         sessionid = null ;
-                        return ;
+                        return cb(sessionid) ;
                     }
                     if (res.length == 0) {
                         console.log(pgm + prefix + 'pubkeys message was not found') ;
                         console.log(pgm + 'query = ' + query) ;
                         sessionid = null ;
-                        return ;
+                        return cb(sessionid) ;
                     }
                     // mark file as read. generic process_incoming_message should not process this file
-                    MoneyNetworkAPIDemon.wait_for_file(res[0].filename) ;
+                    MoneyNetworkAPIDemon.wait_for_file({msgtype: 'n/a'}, res[0].filename) ;
                     // read file
                     inner_path = 'merged-MoneyNetwork/' + res[0].directory + '/' + res[0].filename ;
                     // console.log(pgm +  inner_path + ' fileGet start') ;
@@ -836,7 +837,7 @@ angular.module('MoneyNetworkW2')
                         if (!pubkeys_str) {
                             console.log(pgm + prefix + 'read pubkeys failed. file + ' + inner_path + ' was not found') ;
                             sessionid = null ;
-                            return ;
+                            return cb(sessionid) ;
                         }
                         // todo: check pubkeys message timestamps. must not be old or > now.
                         now = Math.floor(new Date().getTime()/1000) ;
@@ -850,11 +851,13 @@ angular.module('MoneyNetworkW2')
                         error = encrypt2.validate_json(pgm, pubkeys) ;
                         if (error) {
                             console.log(pgm + prefix + 'invalid pubkeys message. error = ' + error) ;
-                            return ;
+                            sessionid = null ;
+                            return cb(sessionid) ;
                         }
                         if (pubkeys.msgtype != 'pubkeys') {
                             console.log(pgm + prefix + 'First message from MN was NOT a pubkeys message. message = ' + JSON.stringify(pubkeys) );
-                            return ;
+                            sessionid = null ;
+                            return cb(sessionid);
                         }
                         console.log(pgm + 'MN public keys: ' +
                             'pubkey2 = ' + pubkeys.pubkey2 +
@@ -863,7 +866,7 @@ angular.module('MoneyNetworkW2')
                         // mark file as read.
 
                         // return W2 public keys to MN session for full end2end encryption between the 2 sessions
-                        write_pubkeys() ;
+                        write_pubkeys(cb) ;
 
                     }) ; // fileGet callback 2
 
@@ -902,7 +905,9 @@ angular.module('MoneyNetworkW2')
 
             // pubkeys message from W2 to MN. public keys + a session password
             // todo: add cb parameter? part is is_new_session callback chain
-            function write_pubkeys() {
+            function write_pubkeys(cb) {
+                var pgm = service + '.write_pubkeys: ' ;
+                if (!cb) cb = function() {} ;
                 // collect info before returning W2 public keys information to MN session
                 get_user_path(function (user_path) {
                     var my_pubkey = get_my_pubkey() ;
@@ -910,10 +915,9 @@ angular.module('MoneyNetworkW2')
                         add_optional_files_support(function() {
                             var pgm = service + '.write_pubkeys get_my_pubkey2 callback 3: ' ;
                             var password, request ;
-                            console.log(pgm + 'todo: generate W2 password and send part of W2 password to MN in pubkeys message. W2 password is used for W2 localStorage encryption');
                             // W2 password
-                            // - pw1: cryptMessage encryped and saved in W2 localStorage
-                            // - pw2: encrypted with pw1 and saved in MN
+                            // - pwd1: cryptMessage encryped and saved in W2 localStorage
+                            // - pwd2: encrypted with pwd1 and saved in MN.
                             session_pwd1 = generate_random_string(50, true) ;
                             session_pwd2 = generate_random_string(50, true) ;
                             request = {
@@ -922,14 +926,16 @@ angular.module('MoneyNetworkW2')
                                 pubkey2: my_pubkey2, // for cryptMessage
                                 password: encrypt2.aes_encrypt(session_pwd2, session_pwd1) // for session restore
                             } ;
-                            console.log(pgm + 'todo: validate pubkeys message before send or use send_message');
+                            console.log(pgm + 'request = ' + JSON.stringify(request)) ;
                             encrypt2.send_message(request, {response: true, msgtype: 'pubkeys'}, function (response) {
                                 var pgm = service + '.write_pubkeys send_message callback 4: ' ;
-                                console.log(pgm + 'res = ' + JSON.stringify(response)) ;
+                                console.log(pgm + 'response = ' + JSON.stringify(response)) ;
                                 if (!response.error) {
                                     // session handshake ok. save session
+                                    cb(true) ;
                                     save_session() ;
                                 }
+                                else cb(false) ;
                             }) ; // send_message callback 4
 
                         }) ; // add_optional_files_support callback 3
@@ -945,7 +951,7 @@ angular.module('MoneyNetworkW2')
             //   - W2 pubkey and W2 pubkey2
             //   - MN pubkey and MN pubkey2
             // - encrypted with cryptMessage (ZeroId)
-            //   - session_pwd1
+            //   - session_pwd1, unlock_pwd2, this_session_filename, other_session_filename
             // - encrypted with session password
             //   - W2 prvkey
             //   - sessionid
@@ -954,7 +960,7 @@ angular.module('MoneyNetworkW2')
                 var pgm = service + '.save_session: ' ;
                 var array ;
                 // cryptMessage encrypt session_pwd1, this_session_filename and other_session_filename
-                array = [ session_pwd1, encrypt2.this_session_filename, encrypt2.other_session_filename] ;
+                array = [ session_pwd1, encrypt2.unlock_pwd2, encrypt2.this_session_filename, encrypt2.other_session_filename] ;
                 encrypt1.encrypt_2(JSON.stringify(array), function(encrypted_info) {
                     var pgm = service + '.save_session encrypt_2 callback: ' ;
                     var cert_user_id, info, prvkey, password ;
@@ -966,7 +972,7 @@ angular.module('MoneyNetworkW2')
                     info.this_pubkey2 = this_pubkey2 ; // W2 (clear text)
                     info.other_pubkey = encrypt2.other_session_pubkey ; // MN (clear text)
                     info.other_pubkey2 = encrypt2.other_session_pubkey2 ; // MN (clear text)
-                    info.encrypted_info = encrypted_info ; // W2 (cryptMessage). pwd1, this_session_filename and other_session_filename
+                    info.encrypted_info = encrypted_info ; // W2 (cryptMessage). pwd1, unlock_pwd2, this_session_filename and other_session_filename
                     prvkey = encrypt2.this_session_prvkey ;
                     password = session_pwd1 + session_pwd2 ;
                     info.prvkey = encrypt1.aes_encrypt(prvkey, password) ; // W2 (symmetric encrypted)
@@ -1083,6 +1089,8 @@ angular.module('MoneyNetworkW2')
                 }
                 if (!info.encrypted_info) {
                     console.log(pgm + 'error in saved session for ' + cert_user_id + '. no encrypted_info. info = ' + JSON.stringify(info)) ;
+                    delete ls.sessions[cert_user_id] ;
+                    ls_save() ;
                     return cb() ;
                 }
 
@@ -1095,6 +1103,12 @@ angular.module('MoneyNetworkW2')
                         var pgm = service + '.is_old_session decrypt_2 callback 2: ' ;
                         var array, temp_pwd1, request ;
                         array = JSON.parse(decrypted_info) ;
+                        if (array.length != 4) {
+                            console.log(pgm + 'error in saved session for ' + cert_user_id + '. Expected encrypted_info array.length = 4. Found length = ' + array.length) ;
+                            delete ls.sessions[cert_user_id] ;
+                            ls_save() ;
+                            return cb() ;
+                        }
                         temp_pwd1 = array[0] ;
                         // setup temporary encryption for get_password message.
                         // request and response is encrypted with cryptMessage only!
@@ -1103,14 +1117,15 @@ angular.module('MoneyNetworkW2')
                             debug: true,
                             pubkey2: info.other_pubkey2,
                             user_path: user_path,
-                            this_session_filename: array[1],
-                            other_session_filename: array[2]
+                            this_session_filename: array[2],
+                            other_session_filename: array[3]
                         }) ;
                         // send get_password message. wait for max 5 seconds for response. MN session must be running and logged in with correct account
                         request = {
                             msgtype: 'get_password',
                             pubkey: info.this_pubkey,
-                            pubkey2: info.this_pubkey2
+                            pubkey2: info.this_pubkey2,
+                            unlock_pwd2: array[1]
                         } ;
                         console.log(pgm + 'request = ' + JSON.stringify(request)) ;
                         encrypt2.send_message(request, {encryptions:2, response:5000}, function (response) {
@@ -1169,10 +1184,12 @@ angular.module('MoneyNetworkW2')
                 console.log(pgm + 'sessionid              = ' + sessionid) ;
                 // read MN public keys message using dbQuery loop and fileGet operations
                 console.log(pgm + 'todo: transfer cb to read_pubkeys and write_pubkeys calls.');
-                read_pubkeys() ;
-                console.log(pgm + 'saved sessionid = ' + sessionid) ;
-                cb(sessionid) ;
-                return sessionid;
+                read_pubkeys(function (ok) {
+                    var pgm = service + '.is_new_session read_pubkeys callback: ' ;
+                    console.log(pgm + 'ok = ' + JSON.stringify(ok)) ;
+                    console.log(pgm + 'saved sessionid = ' + sessionid) ;
+                    cb(sessionid) ;
+                }) ; // read_pubkeys callback
             } // is_new_session
 
             // startup sequence 2-6:
@@ -1201,9 +1218,10 @@ angular.module('MoneyNetworkW2')
                             var pgm = service + '.initialize is_old_session callback 3: ' ;
                             console.log(pgm + 'sessionid = ' + JSON.stringify(sessionid)) ;
                             if (sessionid) return ; // session was restored from localStorage
-                            is_new_session(function(ok) {
+                            is_new_session(function(sessionid) {
                                 var pgm = service + '.initialize is_new_session callback 4: ' ;
-                                console.log(pgm + 'ok = ' + JSON.stringify(ok)) ;
+                                console.log(pgm + 'sessionid = ' + JSON.stringify(sessionid)) ;
+                                if (sessionid) save_session() ;
 
                             }) ; // is_new_session callback 4
 
