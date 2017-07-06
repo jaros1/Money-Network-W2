@@ -956,6 +956,7 @@ angular.module('MoneyNetworkW2')
             //   - W2 prvkey
             //   - sessionid
 
+            var old_saved_session ;
             function save_session() {
                 var pgm = service + '.save_session: ' ;
                 var array ;
@@ -975,7 +976,26 @@ angular.module('MoneyNetworkW2')
                     info.encrypted_info = encrypted_info ; // W2 (cryptMessage). pwd1, unlock_pwd2, this_session_filename and other_session_filename
                     prvkey = encrypt2.this_session_prvkey ;
                     password = session_pwd1 + session_pwd2 ;
+
+                    console.log(pgm + 'encrypting prvkey. prvkey = ' + prvkey + ', password = ' + password) ;
                     info.prvkey = encrypt1.aes_encrypt(prvkey, password) ; // W2 (symmetric encrypted)
+                    console.log(pgm + 'encrypted prvkey. info.prvkey = ' + info.prvkey) ;
+
+                    // debug. two save_session calls with different aes_encrypt output!!!
+                    if (old_saved_session && (old_saved_session.prvkey == prvkey) && (old_saved_session.password == password) && (old_saved_session.encrypted_prvkey != info.prvkey)) {
+                        console.log(pgm + 'error. different old and new aes_encrypt for identical input') ;
+                        console.log(pgm + 'prvkey = ' + prvkey) ;
+                        console.log(pgm + 'password = ' + password) ;
+                        console.log(pgm + 'encrypted prvkey1 = ' + old_saved_session.encrypted_prvkey) ;
+                        console.log(pgm + 'encrypted prvkey2 = ' + info.prvkey) ;
+                        throw pgm + 'error. different old and new aes_encrypt for identical input' ;
+                    }
+                    old_saved_session = {
+                        prvkey: prvkey,
+                        password: password,
+                        encrypted_prvkey: info.prvkey
+                    };
+
                     info.sessionid = encrypt1.aes_encrypt(sessionid, password) // MN+W2 (symmetric encrypted)
                     console.log(pgm + 'info = ' + JSON.stringify(info)) ;
                     //info = {
@@ -1140,7 +1160,11 @@ angular.module('MoneyNetworkW2')
                             // got pwd2 from MN. ready for session restore
                             temp_pwd2 = response.password ;
                             temp_pwd = temp_pwd1 + temp_pwd2 ;
+
+                            console.log(pgm + 'decrypting prvkey. info.prevkey = ' + info.prvkey + ', temp_pwd = ' + temp_pwd) ;
                             temp_prvkey = encrypt1.aes_decrypt(info.prvkey, temp_pwd) ;
+                            console.log(pgm + 'decrypted prvkey. prvkey = ' + temp_prvkey) ;
+
                             temp_sessionid = encrypt1.aes_decrypt(info.sessionid, temp_pwd) ;
                             status.session_handshake = 'Old session restored' ;
                             sessionid = temp_sessionid ;
