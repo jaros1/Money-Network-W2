@@ -914,17 +914,18 @@ angular.module('MoneyNetworkW2')
                     get_my_pubkey2(function (my_pubkey2) {
                         add_optional_files_support(function() {
                             var pgm = service + '.write_pubkeys get_my_pubkey2 callback 3: ' ;
-                            var password, request ;
+                            var request, encrypted_pwd2 ;
                             // W2 password
                             // - pwd1: cryptMessage encryped and saved in W2 localStorage
                             // - pwd2: encrypted with pwd1 and saved in MN.
                             session_pwd1 = generate_random_string(50, true) ;
                             session_pwd2 = generate_random_string(50, true) ;
+                            encrypted_pwd2 = encrypt2.aes_encrypt(session_pwd2, session_pwd1) ;
                             request = {
                                 msgtype: 'pubkeys',
                                 pubkey: my_pubkey, // for JSEncrypt
                                 pubkey2: my_pubkey2, // for cryptMessage
-                                password: encrypt2.aes_encrypt(session_pwd2, session_pwd1) // for session restore
+                                password: encrypted_pwd2 // for session restore
                             } ;
                             console.log(pgm + 'request = ' + JSON.stringify(request)) ;
                             encrypt2.send_message(request, {response: true, msgtype: 'pubkeys'}, function (response) {
@@ -988,7 +989,7 @@ angular.module('MoneyNetworkW2')
                         console.log(pgm + 'password = ' + password) ;
                         console.log(pgm + 'encrypted prvkey1 = ' + old_saved_session.encrypted_prvkey) ;
                         console.log(pgm + 'encrypted prvkey2 = ' + info.prvkey) ;
-                        throw pgm + 'error. different old and new aes_encrypt for identical input' ;
+                        // throw pgm + 'error. different old and new aes_encrypt for identical input' ;
                     }
                     old_saved_session = {
                         prvkey: prvkey,
@@ -1150,17 +1151,18 @@ angular.module('MoneyNetworkW2')
                         console.log(pgm + 'request = ' + JSON.stringify(request)) ;
                         encrypt2.send_message(request, {encryptions:2, response:5000}, function (response) {
                             var pgm = service + '.is_old_session send_message callback 3: ' ;
-                            var temp_pwd2, temp_pwd, temp_prvkey, temp_sessionid ;
+                            var temp_pwd2, temp_pwd, temp_prvkey, temp_sessionid, encrypted_pwd2 ;
                             console.log(pgm + 'response = ' + JSON.stringify(response));
                             if (!response || response.error) {
                                 console.log(pgm + 'get_password request failed. response = ' + JSON.stringify(response)) ;
                                 status.session_handshake = 'n/a' ;
                                 return cb() ;
                             }
-                            // got pwd2 from MN. ready for session restore
-                            temp_pwd2 = response.password ;
+                            // got cryptMessage encrypted pwd2 from MN
+                            encrypted_pwd2 = response.password ;
+                            temp_pwd2 = encrypt2.aes_decrypt(encrypted_pwd2, temp_pwd1) ;
                             temp_pwd = temp_pwd1 + temp_pwd2 ;
-
+                            console.log(pgm + 'got encrypted pwd2 from MN. encrypted_pwd2 = ' + encrypted_pwd2 + ', temp_pwd2 = ' + temp_pwd2) ;
                             console.log(pgm + 'decrypting prvkey. info.prevkey = ' + info.prvkey + ', temp_pwd = ' + temp_pwd) ;
                             temp_prvkey = encrypt1.aes_decrypt(info.prvkey, temp_pwd) ;
                             console.log(pgm + 'decrypted prvkey. prvkey = ' + temp_prvkey) ;
