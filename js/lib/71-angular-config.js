@@ -14,7 +14,7 @@ angular.module('MoneyNetworkW2')
             a_search = $location.search();
             z_path = "?path=" + a_path;
             for (key in a_search) z_path += '&' + key + '=' + a_search[key];
-            console.log(pgm + 'z_path = ' + z_path) ;
+            // console.log(pgm + 'z_path = ' + z_path) ;
             ZeroFrame.cmd("wrapperReplaceState", [{"scrollY": 100}, "Money Network W2", z_path]);
             return z_path;
         }];
@@ -32,7 +32,7 @@ angular.module('MoneyNetworkW2')
                     var pgm = 'routeProvider.otherwise: ';
                     var search, a_path, z_path, i, sessionid, pubkey2, params ;
                     search = window.location.search;
-                    console.log(pgm + 'search = ', search) ;
+                    // console.log(pgm + 'search = ', search) ;
                     params = [] ;
                     // check for sessionid
                     i = search.indexOf('sessionid=');
@@ -42,18 +42,10 @@ angular.module('MoneyNetworkW2')
                         if (i != -1) sessionid = sessionid.substr(0, i);
                         params.push('sessionid=' + sessionid) ;
                     }
-                    // check for pubkey2
-                    i = search.indexOf('pubkey2=');
-                    if (i != -1) {
-                        pubkey2 = search.substr(i + 8);
-                        i = pubkey2.indexOf('&');
-                        if (i != -1) pubkey2 = pubkey2.substr(0, i);
-                        params.push('pubkey2=' + pubkey2) ;
-                    }
                     // redirect
                     if (!params.length) a_path = '/wallet' ; // error or maybe a standalone wallet call
                     else a_path = '/wallet?' + params.join('&') ; // sessionid and/or pubkey2
-                    console.log(pgm + 'a_path = ' + a_path) ;
+                    // console.log(pgm + 'a_path = ' + a_path) ;
                     ZeroFrame.cmd("wrapperReplaceState", [{"scrollY": 100}, "", a_path]);
                     return a_path;
                 }

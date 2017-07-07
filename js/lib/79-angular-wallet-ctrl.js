@@ -38,10 +38,6 @@ angular.module('MoneyNetworkW2')
         self.status = W2Service.get_status() ;
         self.z = ZeroFrame ;
 
-        self.moneynetwork_session = function() {
-            W2Service.get_sessionid() ;
-        };
-
         // 2-6: startup sequence
         // 2: check merger permission
         // 3: check ZeroNet login
@@ -59,7 +55,6 @@ angular.module('MoneyNetworkW2')
             console.log(pgm + 'click');
             ZeroFrame.cmd("certSelect", [["moneynetwork.bit", "nanasi", "zeroid.bit", "kaffie.bit"]], function() {
                 var pgm = controller + '.select_zeronet_cert certSelect callback: ' ;
-                $rootScope.$apply() ;
                 W2Service.initialize(false);
             });
         };

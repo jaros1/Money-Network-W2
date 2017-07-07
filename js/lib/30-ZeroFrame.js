@@ -124,7 +124,7 @@ ZeroFrame = (function() {
         this.cmd("siteInfo", {}, (function(_this) {
             return function(site_info) {
                 _this.site_info = site_info;
-                _this.log("ZeroFrame.prototype.onOpenWebsocket: siteInfo = " + JSON.stringify(site_info));
+                // _this.log("ZeroFrame.prototype.onOpenWebsocket: siteInfo = " + JSON.stringify(site_info));
                 _this.checkCertUserId() ;
             };
         })(this));

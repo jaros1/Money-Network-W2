@@ -33,7 +33,7 @@
                 Send me a <a href="/moneynetwork.bit/?path=/chat2/jro@zeroid.bit" target="_top" rel="noopener noreferrer">PM ✉</a>
                 if your preferred ZeroNet ID povider is not on the list.
                 </p>
-            <p ng-show="w.moneynetwork_session()">
+            <p ng-show="w.status.sessionid">
                 Merger:MoneyNetwork permission: <span ng-bind="w.status.merger_permission"></span><br>
                 MoneyNetwork session handshake: <span ng-bind="w.status.session_handshake"></span>
                 <br><br>
@@ -44,13 +44,13 @@
                 No thank you, I will remember wallet login by myself.<br>
                 <input type="radio" ng-model="w.save_wallet_login" value="1" ng-change="w.save_wallet_login_changed()">
                 Save wallet login in MoneyNetworkW2 (browser/localStorage) encrypted with my ZeroId certificate.
-                <span ng-show="w.moneynetwork_session()">
+                <span ng-show="w.status.sessionid">
                     <br>
                     <input type="radio" ng-model="w.save_wallet_login" value="2" ng-change="w.save_wallet_login_changed()">
                     Save wallet login in MoneyNetwork (browser/localStorage) encrypted with my MoneyNetwork password.
                 </span>
             </p>
-            <p ng-hide="w.moneynetwork_session()">
+            <p ng-hide="w.status.sessionid">
                 Standalone usage. Add this wallet site to <a href="/moneynetwork.bit/?path=/wallet&new_wallet_site=1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1" target="_top" rel="noopener noreferrer">MoneyNetwork</a>?
             </p>
 
