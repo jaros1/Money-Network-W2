@@ -253,7 +253,7 @@ angular.module('MoneyNetworkW2')
             MoneyNetworkAPIDemon.init({debug: true, ZeroFrame: ZeroFrame, cb: process_incoming_message}) ;
 
             // encrypt1. internal wallet encryption
-            var encrypt1 = new MoneyNetworkAPI({ZeroFrame: ZeroFrame, debug: true, optional: OPTIONAL}) ; // encrypt/decrypt data in localStorage ;
+            var encrypt1 = new MoneyNetworkAPI({ZeroFrame: ZeroFrame, debug: 'encrypt1', optional: OPTIONAL}) ; // encrypt/decrypt data in localStorage ;
 
             // get save wallet status: 0, 1 or 2
             // todo: what about 2 and no session? user must connect to MN to get data from MN
@@ -356,24 +356,30 @@ angular.module('MoneyNetworkW2')
                     // encrypt wallet data before sending data to MN
                     data = { wallet_id: wallet_id, wallet_password: wallet_password} ;
                     console.log(pgm + 'data = ' + JSON.stringify(data));
-                    // cryptMessage encrypt data with current ZeroId before sending data to MN
-                    encrypt1.encrypt_json(data, [2],function (encrypted_data) {
-                        var pgm = service + '.save_wallet_login encrypt_json callback 1: ';
-                        var request;
-                        console.log(pgm + 'data (encrypted) = ' + JSON.stringify(encrypted_data));
-                        // send encrypted wallet data to MN and wait for response
-                        request = {
-                            msgtype: 'save_data',
-                            data: [{key: 'login', value: JSON.stringify(encrypted_data)}]
-                        } ;
-                        console.log(pgm + 'json = ' + JSON.stringify(request));
-                        encrypt2.send_message(request, {response: true}, function (response) {
-                            var pgm = service + '.save_wallet_login send_message callback 2: ';
-                            if (!response) cb({error: 'No response'}) ;
-                            else if (response.error) cb({error: response.error}) ;
-                            else cb({}) ;
-                        }); // send_message callback 2
-                    }) ; // encrypt_json callback 1
+                    // cryptMessage encrypt data with current ZeroId before sending data to MN.
+                    // get and add W2 pubkey2 to encryption setup
+                    get_my_pubkey2(function (my_pubkey2) {
+                        encrypt1.setup_encryption({pubkey2: my_pubkey2}) ;
+                        // encrypt data before send save_data message
+                        encrypt1.encrypt_json(data, [2],function (encrypted_data) {
+                            var pgm = service + '.save_wallet_login encrypt_json callback 2: ';
+                            var request;
+                            console.log(pgm + 'data (encrypted) = ' + JSON.stringify(encrypted_data));
+                            // send encrypted wallet data to MN and wait for response
+                            request = {
+                                msgtype: 'save_data',
+                                data: [{key: 'login', value: JSON.stringify(encrypted_data)}]
+                            } ;
+                            console.log(pgm + 'json = ' + JSON.stringify(request));
+                            encrypt2.send_message(request, {response: true}, function (response) {
+                                var pgm = service + '.save_wallet_login send_message callback 3: ';
+                                if (!response) cb({error: 'No response'}) ;
+                                else if (response.error) cb({error: response.error}) ;
+                                else cb({}) ;
+                            }); // send_message callback 3
+                        }) ; // encrypt_json callback 2
+                    }) ; // get_my_pubkey2 callback 1
+
                 }
                 else {
                     // 0 or 1. clear old 2
@@ -776,7 +782,7 @@ angular.module('MoneyNetworkW2')
 
             // encrypt2 - encrypt messages between MN and W2
             // todo: reset encrypt1 and encrypt2 when cert_user_id is set or changed
-            var encrypt2 = new MoneyNetworkAPI({ZeroFrame: ZeroFrame, debug: true, optional: OPTIONAL}) ; // encrypt/decrypt messages
+            var encrypt2 = new MoneyNetworkAPI({ZeroFrame: ZeroFrame, debug: 'encrypt2', optional: OPTIONAL}) ; // encrypt/decrypt messages
             var new_sessionid; // temporary save sessionid received from MN
             var sessionid ; // unique sessionid. also like a password known only by MN and W2 session
             var this_pubkey ;            // W2 JSEncrypt public key used by MN
@@ -901,12 +907,15 @@ angular.module('MoneyNetworkW2')
             // get public key for cryptMessage
             var get_my_pubkey2_cbs = [] ; // callbacks waiting for get_my_pubkey2 request
             function get_my_pubkey2 (cb) {
+                var pgm = service + '.get_my_pubkey2: ' ;
                 if (this_pubkey2 == true) { get_my_pubkey2_cbs.push(cb) ; return } // wait
                 if (this_pubkey2) return cb(this_pubkey2) ; // ready
                 // get pubkey2
                 this_pubkey2 = true ;
                 ZeroFrame.cmd("userPublickey", [0], function (my_pubkey2) {
+                    var pgm = service + '.get_my_pubkey2 userPublickey callback: ' ;
                     this_pubkey2 = my_pubkey2 ;
+                    console.log(pgm + 'encrypt1. setting pubkey2 = ' + my_pubkey2) ;
                     encrypt1.setup_encryption({pubkey2: my_pubkey2}) ;
                     cb(this_pubkey2) ;
                     while (get_my_pubkey2_cbs.length) { cb = get_my_pubkey2_cbs.shift() ; cb(this_pubkey2) }
@@ -1057,7 +1066,7 @@ angular.module('MoneyNetworkW2')
                 }; // request1
                 var request2 = function (cb) {
                     var pgm = service + '.check_merger_permission.request2: ';
-                    W2Service.get_my_user_hub(function (hub) {
+                    get_my_user_hub(function (hub) {
                         ZeroFrame.cmd("mergerSiteAdd", [hub], function (res) {
                             console.log(pgm + 'res = ', JSON.stringify(res));
                             cb((res == 'ok'));
@@ -1145,7 +1154,7 @@ angular.module('MoneyNetworkW2')
                         // request and response is encrypted with cryptMessage only!
                         encrypt2 = new MoneyNetworkAPI({
                             ZeroFrame: ZeroFrame,
-                            debug: true,
+                            debug: 'encrypt2',
                             pubkey2: info.other_pubkey2,
                             user_path: user_path,
                             this_session_filename: array[2],
@@ -1183,7 +1192,7 @@ angular.module('MoneyNetworkW2')
                             status.sessionid = temp_sessionid ;
                             encrypt2 = new MoneyNetworkAPI({
                                 ZeroFrame: ZeroFrame,
-                                debug: true,
+                                debug: 'encrypt2',
                                 sessionid: temp_sessionid,
                                 pubkey: info.other_pubkey,
                                 pubkey2: info.other_pubkey2,
@@ -1239,8 +1248,8 @@ angular.module('MoneyNetworkW2')
                     // reset session variables
                     console.log(pgm + 'changed cert_user_id. reset encrypts and sessionid') ;
                     status.sessionid = null ;
-                    encrypt1 = new MoneyNetworkAPI({ZeroFrame: ZeroFrame, debug: true, optional: OPTIONAL}) ;
-                    encrypt2 = new MoneyNetworkAPI({ZeroFrame: ZeroFrame, debug: true, optional: OPTIONAL}) ;
+                    encrypt1 = new MoneyNetworkAPI({ZeroFrame: ZeroFrame, debug: 'encrypt1', optional: OPTIONAL}) ;
+                    encrypt2 = new MoneyNetworkAPI({ZeroFrame: ZeroFrame, debug: 'encrypt2', optional: OPTIONAL}) ;
                 }
                 // step 2 - check merger permission. session is not possible without merger permission
                 console.log(pgm + 'initialize step 2: check merger permission') ;
@@ -1315,13 +1324,8 @@ angular.module('MoneyNetworkW2')
                 // session functions
                 generate_random_string: generate_random_string,
                 is_sessionid: is_sessionid,
-                check_merger_permission: check_merger_permission,
-                update_wallet_json: update_wallet_json,
-                is_new_session: is_new_session,
                 initialize: initialize,
-                get_status: get_status,
-                get_sessionid: get_sessionid,
-                get_my_user_hub: get_my_user_hub
+                get_status: get_status
             };
 
             // end kW2Service
