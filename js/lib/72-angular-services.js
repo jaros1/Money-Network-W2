@@ -250,7 +250,7 @@ angular.module('MoneyNetworkW2')
                     }) ; // decrypt_json callback 2
                 }); // fileGet callback 1
             } // process_incoming_message
-            MoneyNetworkAPIDemon.init({debug: true, ZeroFrame: ZeroFrame, cb: process_incoming_message}) ;
+            MoneyNetworkAPILib.init({debug: true, ZeroFrame: ZeroFrame, cb: process_incoming_message}) ;
 
             // encrypt1. internal wallet encryption
             var encrypt1 = new MoneyNetworkAPI({ZeroFrame: ZeroFrame, debug: 'encrypt1', optional: OPTIONAL}) ; // encrypt/decrypt data in localStorage ;
@@ -801,92 +801,99 @@ angular.module('MoneyNetworkW2')
             // pubkey used by JSEncrypt (client) and pubkey2 used by cryptMessage (ZeroNet)
             function read_pubkeys (cb) {
                 var pgm = service + '.read_pubkeys: ' ;
-                var prefix, query ;
                 if (!cb) cb = function() {} ;
-                prefix = "Error. MN-W2 session handshake failed. " ;
-                query =
-                    "select " +
-                    "  json.directory," +
-                    "  substr(json.directory, 1, instr(json.directory,'/')-1) as hub," +
-                    "  substr(json.directory, instr(json.directory,'/data/users/')+12) as auth_address," +
-                    "  files_optional.filename, keyvalue.value as modified " +
-                    "from files_optional, json, keyvalue " +
-                    "where files_optional.filename like '" + encrypt2.other_session_filename + ".%' " +
-                    "and json.json_id = files_optional.json_id " +
-                    "and keyvalue.json_id = json.json_id " +
-                    "and keyvalue.key = 'modified' " +
-                    "order by files_optional.filename desc" ;
-                console.log(pgm + 'query = ' + query) ;
-                ZeroFrame.cmd("dbQuery", [query], function (res) {
-                    var pgm = service + '.read_pubkeys dbQuery callback 1: ' ;
-                    var inner_path ;
-                    // console.log(pgm + 'res = ' + JSON.stringify(res)) ;
-                    if (res.error) {
-                        console.log(pgm + prefix + 'cannot read pubkeys message. dbQuery failed with ' + res.error) ;
-                        console.log(pgm + 'query = ' + query) ;
-                        status.sessionid = null ;
-                        return cb(status.sessionid) ;
-                    }
-                    if (res.length == 0) {
-                        console.log(pgm + prefix + 'pubkeys message was not found') ;
-                        console.log(pgm + 'query = ' + query) ;
-                        status.sessionid = null ;
-                        return cb(status.sessionid) ;
-                    }
-                    // mark file as read. generic process_incoming_message should not process this file
-                    MoneyNetworkAPIDemon.wait_for_file({msgtype: 'n/a'}, res[0].filename) ;
-                    // read file
-                    inner_path = 'merged-MoneyNetwork/' + res[0].directory + '/' + res[0].filename ;
-                    // console.log(pgm +  inner_path + ' fileGet start') ;
-                    ZeroFrame.cmd("fileGet", [inner_path, true], function (pubkeys_str) {
-                        var pgm = service + '.read_pubkeys fileGet callback 2: ' ;
-                        var pubkeys, now, content_signed, elapsed, error ;
-                        // console.log(pgm + 'pubkeys_str = ' + pubkeys_str) ;
-                        if (!pubkeys_str) {
-                            console.log(pgm + prefix + 'read pubkeys failed. file + ' + inner_path + ' was not found') ;
-                            status.sessionid = null ;
-                            return cb(status.sessionid) ;
-                        }
-                        // check pubkeys message timestamps. must not be old or > now.
-                        now = Math.floor(new Date().getTime()/1000) ;
-                        content_signed = res[0].modified ;
-                        // file_timestamp = Math.floor(parseInt(res[0].filename.substr(11))/1000) ;
-                        elapsed = now - content_signed ;
-                        if (elapsed < 0) {
-                            console.log(pgm + prefix + 'read pubkeys failed. file + ' + inner_path + ' signed in the future. elapsed = ' + elapsed) ;
-                            status.sessionid = null ;
-                            return cb(status.sessionid) ;
-                        }
-                        if (elapsed > 60) {
-                            console.log(pgm + prefix + 'read pubkeys failed. file + ' + inner_path + ' is too old. elapsed = ' + elapsed) ;
-                            status.sessionid = null ;
-                            return cb(status.sessionid) ;
-                        }
-                        // console.log(pgm + 'timestamps: file_timestamp = ' + file_timestamp + ', content_signed = ' + content_signed + ', now = ' + now) ;
-                        pubkeys = JSON.parse(pubkeys_str) ;
-                        error = encrypt2.validate_json(pgm, pubkeys) ;
-                        if (error) {
-                            console.log(pgm + prefix + 'invalid pubkeys message. error = ' + error) ;
-                            status.sessionid = null ;
-                            return cb(status.sessionid) ;
-                        }
-                        if (pubkeys.msgtype != 'pubkeys') {
-                            console.log(pgm + prefix + 'First message from MN was NOT a pubkeys message. message = ' + JSON.stringify(pubkeys) );
-                            status.sessionid = null ;
-                            return cb(status.sessionid);
-                        }
-                        console.log(pgm + 'OK. received public keys from MN') ;
-                        console.log(pgm + 'MN public keys: pubkey2 = ' + pubkeys.pubkey2 + ', pubkey = ' + pubkeys.pubkey) ;
-                        encrypt2.setup_encryption({pubkey: pubkeys.pubkey, pubkey2: pubkeys.pubkey2}) ;
-                        // mark file as read.
 
-                        // return W2 public keys to MN session for full end2end encryption between the 2 sessions
-                        console.log(pgm + 'Return W2 public keys to MN for full end-2-end encryption') ;
-                        write_pubkeys(cb) ;
+                encrypt2.get_session_filenames(function (this_session_filename, other_session_filename, unlock_pwd2) {
+                    var pgm = service + '.read_pubkeys get_session_filenames callback 1: ' ;
+                    var query ;
+                    console.log(pgm + 'this_session_filename = ' + this_session_filename + ', other_session_filename = ' + other_session_filename) ;
+                    query =
+                        "select " +
+                        "  json.directory," +
+                        "  substr(json.directory, 1, instr(json.directory,'/')-1) as hub," +
+                        "  substr(json.directory, instr(json.directory,'/data/users/')+12) as auth_address," +
+                        "  files_optional.filename, keyvalue.value as modified " +
+                        "from files_optional, json, keyvalue " +
+                        "where files_optional.filename like '" + other_session_filename + ".%' " +
+                        "and json.json_id = files_optional.json_id " +
+                        "and keyvalue.json_id = json.json_id " +
+                        "and keyvalue.key = 'modified' " +
+                        "order by files_optional.filename desc" ;
+                    console.log(pgm + 'query = ' + query) ;
+                    ZeroFrame.cmd("dbQuery", [query], function (res) {
+                        var pgm = service + '.read_pubkeys dbQuery callback 2: ' ;
+                        var prefix, inner_path ;
+                        prefix = "Error. MN-W2 session handshake failed. " ;
+                        // console.log(pgm + 'res = ' + JSON.stringify(res)) ;
+                        if (res.error) {
+                            console.log(pgm + prefix + 'cannot read pubkeys message. dbQuery failed with ' + res.error) ;
+                            console.log(pgm + 'query = ' + query) ;
+                            status.sessionid = null ;
+                            return cb(status.sessionid) ;
+                        }
+                        if (res.length == 0) {
+                            console.log(pgm + prefix + 'pubkeys message was not found') ;
+                            console.log(pgm + 'query = ' + query) ;
+                            status.sessionid = null ;
+                            return cb(status.sessionid) ;
+                        }
+                        // mark file as read. generic process_incoming_message should not process this file
+                        MoneyNetworkAPILib.wait_for_file({msgtype: 'n/a'}, res[0].filename) ;
+                        // read file
+                        inner_path = 'merged-MoneyNetwork/' + res[0].directory + '/' + res[0].filename ;
+                        // console.log(pgm +  inner_path + ' fileGet start') ;
+                        ZeroFrame.cmd("fileGet", [inner_path, true], function (pubkeys_str) {
+                            var pgm = service + '.read_pubkeys fileGet callback 3: ' ;
+                            var pubkeys, now, content_signed, elapsed, error ;
+                            // console.log(pgm + 'pubkeys_str = ' + pubkeys_str) ;
+                            if (!pubkeys_str) {
+                                console.log(pgm + prefix + 'read pubkeys failed. file + ' + inner_path + ' was not found') ;
+                                status.sessionid = null ;
+                                return cb(status.sessionid) ;
+                            }
+                            // check pubkeys message timestamps. must not be old or > now.
+                            now = Math.floor(new Date().getTime()/1000) ;
+                            content_signed = res[0].modified ;
+                            // file_timestamp = Math.floor(parseInt(res[0].filename.substr(11))/1000) ;
+                            elapsed = now - content_signed ;
+                            if (elapsed < 0) {
+                                console.log(pgm + prefix + 'read pubkeys failed. file + ' + inner_path + ' signed in the future. elapsed = ' + elapsed) ;
+                                status.sessionid = null ;
+                                return cb(status.sessionid) ;
+                            }
+                            if (elapsed > 60) {
+                                console.log(pgm + prefix + 'read pubkeys failed. file + ' + inner_path + ' is too old. elapsed = ' + elapsed) ;
+                                status.sessionid = null ;
+                                return cb(status.sessionid) ;
+                            }
+                            // console.log(pgm + 'timestamps: file_timestamp = ' + file_timestamp + ', content_signed = ' + content_signed + ', now = ' + now) ;
+                            pubkeys = JSON.parse(pubkeys_str) ;
+                            error = encrypt2.validate_json(pgm, pubkeys) ;
+                            if (error) {
+                                console.log(pgm + prefix + 'invalid pubkeys message. error = ' + error) ;
+                                status.sessionid = null ;
+                                return cb(status.sessionid) ;
+                            }
+                            if (pubkeys.msgtype != 'pubkeys') {
+                                console.log(pgm + prefix + 'First message from MN was NOT a pubkeys message. message = ' + JSON.stringify(pubkeys) );
+                                status.sessionid = null ;
+                                return cb(status.sessionid);
+                            }
+                            console.log(pgm + 'OK. received public keys from MN') ;
+                            console.log(pgm + 'MN public keys: pubkey2 = ' + pubkeys.pubkey2 + ', pubkey = ' + pubkeys.pubkey) ;
+                            encrypt2.setup_encryption({pubkey: pubkeys.pubkey, pubkey2: pubkeys.pubkey2}) ;
+                            // mark file as read.
 
-                    }) ; // fileGet callback 2
+                            // return W2 public keys to MN session for full end2end encryption between the 2 sessions
+                            console.log(pgm + 'Return W2 public keys to MN for full end-2-end encryption') ;
+                            write_pubkeys(cb) ;
 
-                }) ; // dbQuery callback 1
+                        }) ; // fileGet callback 3
+
+                    }) ; // dbQuery callback 2
+
+
+                }) ; // get_session_filenames callback 1
 
             } // read_pubkeys
 
@@ -938,7 +945,7 @@ angular.module('MoneyNetworkW2')
                             // - pwd2: encrypted with pwd1 and saved in MN.
                             session_pwd1 = generate_random_string(50, true) ;
                             session_pwd2 = generate_random_string(50, true) ;
-                            encrypted_pwd2 = encrypt2.aes_encrypt(session_pwd2, session_pwd1) ;
+                            encrypted_pwd2 = MoneyNetworkAPILib.aes_encrypt(session_pwd2, session_pwd1) ;
                             request = {
                                 msgtype: 'pubkeys',
                                 pubkey: my_pubkey, // for JSEncrypt
@@ -975,59 +982,46 @@ angular.module('MoneyNetworkW2')
             //   - W2 prvkey
             //   - sessionid
 
-            var old_saved_session ;
             function save_session() {
                 var pgm = service + '.save_session: ' ;
                 var array ;
-                // cryptMessage encrypt session_pwd1, this_session_filename and other_session_filename
-                array = [ session_pwd1, encrypt2.unlock_pwd2, encrypt2.this_session_filename, encrypt2.other_session_filename] ;
-                encrypt1.encrypt_2(JSON.stringify(array), function(encrypted_info) {
-                    var pgm = service + '.save_session encrypt_2 callback: ' ;
-                    var cert_user_id, info, prvkey, password ;
-                    if (!ls.sessions) ls.sessions = {} ;
-                    cert_user_id = ZeroFrame.site_info.cert_user_id ;
-                    if (!ls.sessions[cert_user_id]) ls.sessions[cert_user_id] = {} ;
-                    info = ls.sessions[cert_user_id] ;
-                    info.this_pubkey = this_pubkey ; // W2 (clear text)
-                    info.this_pubkey2 = this_pubkey2 ; // W2 (clear text)
-                    info.other_pubkey = encrypt2.other_session_pubkey ; // MN (clear text)
-                    info.other_pubkey2 = encrypt2.other_session_pubkey2 ; // MN (clear text)
-                    info.encrypted_info = encrypted_info ; // W2 (cryptMessage). pwd1, unlock_pwd2, this_session_filename and other_session_filename
-                    prvkey = encrypt2.this_session_prvkey ;
-                    password = session_pwd1 + session_pwd2 ;
+                encrypt2.get_session_filenames(function (this_session_filename, other_session_filename, unlock_pwd2) {
+                    var pgm = service + '.save_session get_session_filenames callback 1: ' ;
 
-                    console.log(pgm + 'encrypting prvkey. prvkey = ' + prvkey + ', password = ' + password) ;
-                    info.prvkey = encrypt1.aes_encrypt(prvkey, password) ; // W2 (symmetric encrypted)
-                    console.log(pgm + 'encrypted prvkey. info.prvkey = ' + info.prvkey) ;
+                    // cryptMessage encrypt session_pwd1, this_session_filename and other_session_filename
+                    array = [ session_pwd1, unlock_pwd2, this_session_filename, other_session_filename] ;
+                    encrypt1.encrypt_2(JSON.stringify(array), function(encrypted_info) {
+                        var pgm = service + '.save_session encrypt_2 callback 2: ' ;
+                        var cert_user_id, info, prvkey, password ;
+                        if (!ls.sessions) ls.sessions = {} ;
+                        cert_user_id = ZeroFrame.site_info.cert_user_id ;
+                        if (!ls.sessions[cert_user_id]) ls.sessions[cert_user_id] = {} ;
 
-                    // debug. two save_session calls with different aes_encrypt output!!!
-                    if (old_saved_session && (old_saved_session.prvkey == prvkey) && (old_saved_session.password == password) && (old_saved_session.encrypted_prvkey != info.prvkey)) {
-                        console.log(pgm + 'error. different old and new aes_encrypt for identical input') ;
-                        console.log(pgm + 'prvkey = ' + prvkey) ;
-                        console.log(pgm + 'password = ' + password) ;
-                        console.log(pgm + 'encrypted prvkey1 = ' + old_saved_session.encrypted_prvkey) ;
-                        console.log(pgm + 'encrypted prvkey2 = ' + info.prvkey) ;
-                        // throw pgm + 'error. different old and new aes_encrypt for identical input' ;
-                    }
-                    old_saved_session = {
-                        prvkey: prvkey,
-                        password: password,
-                        encrypted_prvkey: info.prvkey
-                    };
+                        info = ls.sessions[cert_user_id] ;
+                        info.this_pubkey = this_pubkey ; // W2 (clear text)
+                        info.this_pubkey2 = this_pubkey2 ; // W2 (clear text)
+                        info.other_pubkey = encrypt2.other_session_pubkey ; // MN (clear text)
+                        info.other_pubkey2 = encrypt2.other_session_pubkey2 ; // MN (clear text)
+                        info.encrypted_info = encrypted_info ; // W2 (cryptMessage). pwd1, unlock_pwd2, this_session_filename and other_session_filename
+                        prvkey = encrypt2.this_session_prvkey ;
+                        password = session_pwd1 + session_pwd2 ;
+                        info.prvkey = MoneyNetworkAPILib.aes_encrypt(prvkey, password) ; // W2 (symmetric encrypted)
+                        info.sessionid = MoneyNetworkAPILib.aes_encrypt(status.sessionid, password) // MN+W2 (symmetric encrypted)
+                        console.log(pgm + 'info = ' + JSON.stringify(info)) ;
+                        //info = {
+                        //    "this_pubkey": "-----BEGIN PUBLIC KEY-----\nMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCZ6pQlnMMT/03KRipfc9/poCZl\nWq9nGpRrzfh5xJEuGkRPluTt4m92NJ6zqutZN4cxMPcfSuogoyqcG8ahb9I8VUXS\nslNDMNmpdk6WRI+ows0CtWJ3qGSJbTKMUAyoFE6plMJ6dCXH85vjLCocsUhEcSVb\nitUlnwGRL/sj7d5GyQIDAQAB\n-----END PUBLIC KEY-----",
+                        //    "this_pubkey2": "Ahn94vCUvT+S/nefej83M02n/hP8Jvqc8KbxMtdSsT8R",
+                        //    "other_pubkey": "-----BEGIN PUBLIC KEY-----\nMIIBITANBgkqhkiG9w0BAQEFAAOCAQ4AMIIBCQKCAQBpQDut223gZcYfGTHxqoal\nDFX4PvQY1riWEPVqiO2eXS3E47XJjRUtMSUqzpb011ZxzauTxSXlTL1uunIykTvN\nmsXaNSq/tPIue0zdVSCN4PrJo5FY5P6SYGviZBLzdHZJYqlNk3QPngrBGJl/VBBp\nToPXmN7hog/9rXEGhPyN7GX2AKy3pPFCkXFC9GDlCoEjt0Pq+y5sF/t4iPXyn878\nirWfYbRPisLjnJGqSe23/c6MhP8CTvnbFvpiBcLES7HQk6hqqBBnLe9NLTABbqXK\n6i1LW6+aZRqOX72mMwU+1LTcbQRIW1nG6rtPhaUqiIzeH0g8B743bjmcJagm1foH\nAgMBAAE=\n-----END PUBLIC KEY-----",
+                        //    "other_pubkey2": "A4RQ77ia8qK1b3FW/ERL2HdW33jwCyKqxRwKQLzMw/yu",
+                        //    "pwd1": "[\"n136va4JjXjbYBGapT8FewLKACA5iCNxNFEg6qmUn7/uydqYOqkCKhcSYkpXFpdd3E7rZgAgoSy20bnoNwIruK/JHRapPz24tWrYv516Cl9hC778IWZFTyU0Rhl21axGIgLAvcFkIKq2cT4OgzYuTt4y5YTqw3JKJUzTK9F5CHLtzgJyyOwcx0VNDRGOcZ1usPx8MlSi95f3sMnBcIAtY8IvNSFvsg==\",\"GH2vevBGncKvjRWqNIRp/A==\",\"gWXNAfcHe1VX+viCiOaqSiUMUoWN4GPi///8nEYCMd3ktZwejzoHNJFV+LskTU4Aw/tmYhj1FOZhoNPBxv0jtg==\"]",
+                        //    "prvkey": "U2FsdGVkX195BEgVCqqpVaZ32sZzEBXodkFpz8d436nANHPmCwnyBUAO+t8HLfaNxEtLGBzC5RzQvo8vXwopfz4gO3CoXUdni/0Y1dhXoXKX/OZ5WeDSooJDbOD7XZJQP13qsGdX5cZuR96sMfO546uJ5y8olDW8dZVxrjw6kV0hzbv3rEn3vvLzNwRw5iN+ULtbgRfYzA/3EJ2DDdlzJTVab24th3Qw1DAlEHAoSKKt232OXDOkfSgylFFbWLPrJHOlZ+4broX/w195MkNxAsPvoDKYMr485om7nSifPR2nHMvsMGwueiJTHfcmCwYQ0HFguhViwI/aznw2T+PnqV4nbSKZILoLXlspOoWLBbL1vf6nJa1NE/wfUoWHIZkqccCBiimPc1LbaIy6I539AbRNV9WJSDAdI+TGosFxuvcjZ22jL9nHARCxdW0boQhF+BI5X1mP/LmHwS1d3BSXpLrHlc1kmHqvA5Bl0C2QlpA9b46FyB5yKxPCZKyrLPTMo+KsIAYUPGCo/RV5JlE73s53izY7aSZsXkiLu17p9zFFQXdwIY8ZggY40ZvkJQ3f6gtw1nuU2eT/zhHG+ao62uBziFnVBN/kU4KoIkAeGOKMEgjGvAeliaQ2C2qU0YKOY6gdJGo+bbVepnzBNvcrjkUOQLU7SkQWOe9Nn8TNJ/3VCs+ubGXkL/ItKcHQB3KkILVr///eSXzc1AxJxspv8mQp9Zi0GDk/EcjSIsb61AHTKJXV5SkBmDHDDJHBZ92wUSGnqCQ6dPsvcUt/9YoHjlvlfb++HeYDwixWiQoZssSp4viNrVEhWrHIE3jVGrXKcr4Ojf6HNMaKszHafKSL2weCpApz20l1xu9V9iPXKXk82HNUEaK6BnzjwaCXwFqufEaYkMk+bhu+/FC4trJwIIC//XbH0Aw0ED0QXInghAlW/jv7QBCDKuzhEMFKyQJHAscNLMrVP7cjIrpLeMY1KV2RLNpp0bvCtC7L4q++rkYF5YPqjBMBF0yuOJVk0/1hvzL/d6uClublDAhlR3Tk8gQbcvlVKfXiEUqXt4EnE6N6gv+SyITM9FGVH55CJQcAEcirCLpI7LsUB4xEXYsb3E1jvvEI5OOxsNGEEFiyXoQYIiokH/I/1hiaVXmsBYcjK0eKrRil16EcphoOu+eRpGGurkWEEQI8laIsjKrqUzUm4zesxfzgmBhhlUd3TsIp",
+                        //    "sessionid": "U2FsdGVkX1/0a09r+5JZgesSVAoaN7d/jrGpc4x3mhHfQY83Rewr5yMnU2awz9Emru2y69CPpZyYTQh/G/20TPyqua02waHlzATaChw5xYY="
+                        //};
+                        ls_save() ;
+                    }) ; // encrypt_2 callback 2
 
-                    info.sessionid = encrypt1.aes_encrypt(status.sessionid, password) // MN+W2 (symmetric encrypted)
-                    console.log(pgm + 'info = ' + JSON.stringify(info)) ;
-                    //info = {
-                    //    "this_pubkey": "-----BEGIN PUBLIC KEY-----\nMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCZ6pQlnMMT/03KRipfc9/poCZl\nWq9nGpRrzfh5xJEuGkRPluTt4m92NJ6zqutZN4cxMPcfSuogoyqcG8ahb9I8VUXS\nslNDMNmpdk6WRI+ows0CtWJ3qGSJbTKMUAyoFE6plMJ6dCXH85vjLCocsUhEcSVb\nitUlnwGRL/sj7d5GyQIDAQAB\n-----END PUBLIC KEY-----",
-                    //    "this_pubkey2": "Ahn94vCUvT+S/nefej83M02n/hP8Jvqc8KbxMtdSsT8R",
-                    //    "other_pubkey": "-----BEGIN PUBLIC KEY-----\nMIIBITANBgkqhkiG9w0BAQEFAAOCAQ4AMIIBCQKCAQBpQDut223gZcYfGTHxqoal\nDFX4PvQY1riWEPVqiO2eXS3E47XJjRUtMSUqzpb011ZxzauTxSXlTL1uunIykTvN\nmsXaNSq/tPIue0zdVSCN4PrJo5FY5P6SYGviZBLzdHZJYqlNk3QPngrBGJl/VBBp\nToPXmN7hog/9rXEGhPyN7GX2AKy3pPFCkXFC9GDlCoEjt0Pq+y5sF/t4iPXyn878\nirWfYbRPisLjnJGqSe23/c6MhP8CTvnbFvpiBcLES7HQk6hqqBBnLe9NLTABbqXK\n6i1LW6+aZRqOX72mMwU+1LTcbQRIW1nG6rtPhaUqiIzeH0g8B743bjmcJagm1foH\nAgMBAAE=\n-----END PUBLIC KEY-----",
-                    //    "other_pubkey2": "A4RQ77ia8qK1b3FW/ERL2HdW33jwCyKqxRwKQLzMw/yu",
-                    //    "pwd1": "[\"n136va4JjXjbYBGapT8FewLKACA5iCNxNFEg6qmUn7/uydqYOqkCKhcSYkpXFpdd3E7rZgAgoSy20bnoNwIruK/JHRapPz24tWrYv516Cl9hC778IWZFTyU0Rhl21axGIgLAvcFkIKq2cT4OgzYuTt4y5YTqw3JKJUzTK9F5CHLtzgJyyOwcx0VNDRGOcZ1usPx8MlSi95f3sMnBcIAtY8IvNSFvsg==\",\"GH2vevBGncKvjRWqNIRp/A==\",\"gWXNAfcHe1VX+viCiOaqSiUMUoWN4GPi///8nEYCMd3ktZwejzoHNJFV+LskTU4Aw/tmYhj1FOZhoNPBxv0jtg==\"]",
-                    //    "prvkey": "U2FsdGVkX195BEgVCqqpVaZ32sZzEBXodkFpz8d436nANHPmCwnyBUAO+t8HLfaNxEtLGBzC5RzQvo8vXwopfz4gO3CoXUdni/0Y1dhXoXKX/OZ5WeDSooJDbOD7XZJQP13qsGdX5cZuR96sMfO546uJ5y8olDW8dZVxrjw6kV0hzbv3rEn3vvLzNwRw5iN+ULtbgRfYzA/3EJ2DDdlzJTVab24th3Qw1DAlEHAoSKKt232OXDOkfSgylFFbWLPrJHOlZ+4broX/w195MkNxAsPvoDKYMr485om7nSifPR2nHMvsMGwueiJTHfcmCwYQ0HFguhViwI/aznw2T+PnqV4nbSKZILoLXlspOoWLBbL1vf6nJa1NE/wfUoWHIZkqccCBiimPc1LbaIy6I539AbRNV9WJSDAdI+TGosFxuvcjZ22jL9nHARCxdW0boQhF+BI5X1mP/LmHwS1d3BSXpLrHlc1kmHqvA5Bl0C2QlpA9b46FyB5yKxPCZKyrLPTMo+KsIAYUPGCo/RV5JlE73s53izY7aSZsXkiLu17p9zFFQXdwIY8ZggY40ZvkJQ3f6gtw1nuU2eT/zhHG+ao62uBziFnVBN/kU4KoIkAeGOKMEgjGvAeliaQ2C2qU0YKOY6gdJGo+bbVepnzBNvcrjkUOQLU7SkQWOe9Nn8TNJ/3VCs+ubGXkL/ItKcHQB3KkILVr///eSXzc1AxJxspv8mQp9Zi0GDk/EcjSIsb61AHTKJXV5SkBmDHDDJHBZ92wUSGnqCQ6dPsvcUt/9YoHjlvlfb++HeYDwixWiQoZssSp4viNrVEhWrHIE3jVGrXKcr4Ojf6HNMaKszHafKSL2weCpApz20l1xu9V9iPXKXk82HNUEaK6BnzjwaCXwFqufEaYkMk+bhu+/FC4trJwIIC//XbH0Aw0ED0QXInghAlW/jv7QBCDKuzhEMFKyQJHAscNLMrVP7cjIrpLeMY1KV2RLNpp0bvCtC7L4q++rkYF5YPqjBMBF0yuOJVk0/1hvzL/d6uClublDAhlR3Tk8gQbcvlVKfXiEUqXt4EnE6N6gv+SyITM9FGVH55CJQcAEcirCLpI7LsUB4xEXYsb3E1jvvEI5OOxsNGEEFiyXoQYIiokH/I/1hiaVXmsBYcjK0eKrRil16EcphoOu+eRpGGurkWEEQI8laIsjKrqUzUm4zesxfzgmBhhlUd3TsIp",
-                    //    "sessionid": "U2FsdGVkX1/0a09r+5JZgesSVAoaN7d/jrGpc4x3mhHfQY83Rewr5yMnU2awz9Emru2y69CPpZyYTQh/G/20TPyqua02waHlzATaChw5xYY="
-                    //};
-                    ls_save() ;
-                }) ; // encrypt_2 callback
+                }) ; // get_session_filenames callback 1
+
             } // save_session
 
             // w2 startup 1: check and save any sessionid param and redirect without sessionid in URL
@@ -1141,13 +1135,22 @@ angular.module('MoneyNetworkW2')
                     console.log(pgm + 'found old session. cryptMessage decrypting "info.encrypted_info"') ;
                     encrypt1.decrypt_2(info.encrypted_info, function(decrypted_info) {
                         var pgm = service + '.is_old_session decrypt_2 callback 2: ' ;
-                        var array, temp_pwd1, request ;
-                        array = JSON.parse(decrypted_info) ;
-                        if (array.length != 4) {
-                            console.log(pgm + 'error in saved session for ' + cert_user_id + '. Expected encrypted_info array.length = 4. Found length = ' + array.length) ;
+                        var array_names, array, i, temp_pwd1, request ;
+                        array_names = ['session_pwd1', 'unlock_pwd2', 'this_session_filename', 'other_session_filename'] ;
+                        array = JSON.parse(decrypted_info) ; // [ session_pwd1, unlock_pwd2, this_session_filename, other_session_filename]
+                        if (array.length != array_names.length) {
+                            console.log(pgm + 'error in saved session for ' + cert_user_id + '. Expected encrypted_info array.length = ' + array_names.length + '. Found length = ' + array.length) ;
                             delete ls.sessions[cert_user_id] ;
                             ls_save() ;
                             return cb() ;
+                        }
+                        for (i=0; i<array_names.length ; i++) {
+                            if (typeof array[i] != 'string') {
+                                console.log(pgm + 'error in saved session for ' + cert_user_id + '. Expected ' + array_names[i] + ' to be a string. array[' + i + '] = "' + JSON.stringify(array[i]) + '"') ;
+                                delete ls.sessions[cert_user_id] ;
+                                ls_save() ;
+                                return cb() ;
+                            }
                         }
                         temp_pwd1 = array[0] ;
                         // setup temporary encryption for get_password message.
@@ -1168,7 +1171,7 @@ angular.module('MoneyNetworkW2')
                             pubkey2: info.this_pubkey2,
                             unlock_pwd2: array[1]
                         } ;
-                        console.log(pgm + 'fould old session. sending get_password request to MN. request = ' + JSON.stringify(request)) ;
+                        console.log(pgm + 'found old session. sending get_password request to MN. request = ' + JSON.stringify(request)) ;
                         encrypt2.send_message(request, {encryptions:2, response:5000}, function (response) {
                             var pgm = service + '.is_old_session send_message callback 3: ' ;
                             var temp_pwd2, temp_pwd, temp_prvkey, temp_sessionid, encrypted_pwd2 ;
@@ -1180,14 +1183,14 @@ angular.module('MoneyNetworkW2')
                             console.log(pgm + 'got get_password response from MN. response = ' + JSON.stringify(response));
                             // got cryptMessage encrypted pwd2 from MN
                             encrypted_pwd2 = response.password ;
-                            temp_pwd2 = encrypt2.aes_decrypt(encrypted_pwd2, temp_pwd1) ;
+                            temp_pwd2 = MoneyNetworkAPILib.aes_decrypt(encrypted_pwd2, temp_pwd1) ;
                             temp_pwd = temp_pwd1 + temp_pwd2 ;
                             // console.log(pgm + 'got encrypted pwd2 from MN. encrypted_pwd2 = ' + encrypted_pwd2 + ', temp_pwd2 = ' + temp_pwd2) ;
                             // console.log(pgm + 'decrypting prvkey. info.prevkey = ' + info.prvkey + ', temp_pwd = ' + temp_pwd) ;
-                            temp_prvkey = encrypt1.aes_decrypt(info.prvkey, temp_pwd) ;
+                            temp_prvkey = MoneyNetworkAPILib.aes_decrypt(info.prvkey, temp_pwd) ;
                             // console.log(pgm + 'decrypted prvkey. prvkey = ' + temp_prvkey) ;
 
-                            temp_sessionid = encrypt1.aes_decrypt(info.sessionid, temp_pwd) ;
+                            temp_sessionid = MoneyNetworkAPILib.aes_decrypt(info.sessionid, temp_pwd) ;
                             status.session_handshake = 'Old session with sessionid ' + temp_sessionid + ' was restored from localStorage' ;
                             status.sessionid = temp_sessionid ;
                             encrypt2 = new MoneyNetworkAPI({
@@ -1225,7 +1228,7 @@ angular.module('MoneyNetworkW2')
                     return false ;
                 }
                 status.sessionid = new_sessionid ;
-                MoneyNetworkAPIDemon.add_session(status.sessionid); // monitor incoming messages for this sessionid
+                MoneyNetworkAPILib.add_session(status.sessionid); // monitor incoming messages for this sessionid
                 encrypt2.setup_encryption({sessionid: status.sessionid, debug: true}) ;
                 console.log(pgm + 'encrypt2.other_session_filename = ' + encrypt2.other_session_filename) ;
                 console.log(pgm + 'sessionid              = ' + status.sessionid) ;
