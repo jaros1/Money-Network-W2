@@ -225,35 +225,11 @@ angular.module('MoneyNetworkW2')
                 ZeroFrame.cmd("wrapperSetLocalStorage", [ls], function () {}) ;
             } // ls_save
 
-            var OPTIONAL = "^[0-9a-f]{10}.[0-9]{13}$";
-            //var OPTIONAL = null;
 
-            // start demon. listen for incoming messages from MN
-            function process_incoming_message (inner_path) {
-                var pgm = service + '.process_incoming_message: ';
-                console.log(pgm + 'inner_path = ' + inner_path);
-                ZeroFrame.cmd("fileGet", {inner_path: inner_path, required: false}, function (json_str) {
-                    var pgm = service + '.process_incoming_message fileGet callback 1: ';
-                    var encrypted_json ;
-                    if (!json_str) {
-                        console.log(pgm + 'fileGet ' + filename + ' failed') ;
-                        return ;
-                    }
-                    encrypted_json = JSON.parse(json_str) ;
-                    // decrypt json
-                    encrypt2.decrypt_json(encrypted_json, function (json) {
-                        var pgm = service + '.process_incoming_message decrypt_json callback 2: ';
-                        var error ;
-                        console.log(pgm + 'json = ' + JSON.stringify(json)) ;
-                        console.log(pgm + 'todo: not implemented') ;
+            // setup MoneyNetworkAPI
+            MoneyNetworkAPILib.config({debug: true, ZeroFrame: ZeroFrame, optional: "^[0-9a-f]{10}.[0-9]{13}$"}) ; // global options
 
-                    }) ; // decrypt_json callback 2
-                }); // fileGet callback 1
-            } // process_incoming_message
-            MoneyNetworkAPILib.init({debug: true, ZeroFrame: ZeroFrame, cb: process_incoming_message}) ;
-
-            // encrypt1. internal wallet encryption
-            var encrypt1 = new MoneyNetworkAPI({ZeroFrame: ZeroFrame, debug: 'encrypt1', optional: OPTIONAL}) ; // encrypt/decrypt data in localStorage ;
+            var encrypt1 = new MoneyNetworkAPI({debug: 'encrypt1'}) ; // encrypt1. no sessionid. self encrypt/decrypt data in W2 localStorage ;
 
             // get save wallet status: 0, 1 or 2
             // todo: what about 2 and no session? user must connect to MN to get data from MN
@@ -508,7 +484,7 @@ angular.module('MoneyNetworkW2')
                 z_cache.user_path = true ;
                 get_my_user_hub(function (my_hub) {
                     z_cache.user_path = 'merged-MoneyNetwork/' + my_hub + '/data/users/' + ZeroFrame.site_info.auth_address + '/' ;
-                    encrypt2.setup_encryption({user_path: z_cache.user_path});
+                    MoneyNetworkAPILib.config({user_path: z_cache.user_path}) ;
                     cb(z_cache.user_path);
                     while (get_user_path_cbs.length) { cb = get_user_path_cbs.shift() ; cb(z_cache.user_path)}
                 }) ;
@@ -557,115 +533,6 @@ angular.module('MoneyNetworkW2')
                 }) ; // get_user_path callback 1
 
             } // z_publish
-
-            // optional file pattern must be added to content.json BEFORE any optional files are written to user directory
-            var optional_files_support_ok = null ;
-            var add_optional_files_support_cbs = [] ; // pending callbacks (first call)
-            function add_optional_files_support (cb) {
-                var pgm = service + '.add_optional_files_support: ' ;
-                if (optional_files_support_ok == true) return cb() ;
-                if (optional_files_support_ok == false) return add_optional_files_support_cbs.push(cb) ;
-                optional_files_support_ok = false ; // start callback queue
-                get_user_path(function (user_path) {
-                    var pgm = service + '.add_optional_files_support get_user_path callback 1: ' ;
-                    get_content_json(function (content) {
-                        var pgm = service + '.add_optional_files_support get_content_json callback 2: ' ;
-                        var optional, json_raw, execute_callbacks, inner_path ;
-                        optional = OPTIONAL ;
-                        // console.log(pgm + 'content = ' + JSON.stringify(content)) ;
-                        // console.log(pgm + 'optional = ' + optional) ;
-                        execute_callbacks = function() {
-                            optional_files_support_ok = true ;
-                            cb() ;
-                            while (add_optional_files_support_cbs.length) { cb = add_optional_files_support_cbs.shift() ; cb() }
-                        } ;
-                        if (content.optional == optional) return execute_callbacks() ; // optional files support already OK
-                        inner_path = user_path + 'content.json' ;
-                        if (JSON.stringify(content).length == 2) {
-                            // empty content.json file. write wallet + sign + add optional to content.json file
-                            write_wallet_json(function (res) {
-                                var pgm = service + '.add_optional_files_support write_wallet_json callback 3a: ' ;
-                                // console.log(pgm + 'res = ' + JSON.stringify(res)) ;
-                                if (res != "ok") {
-                                    console.log(pgm + user_path + 'wallet.json fileWrite failed. error = ' + JSON.stringify(res));
-                                    return ;
-                                }
-                                console.log(pgm + 'sign content.json without optional files support') ;
-                                console.log(pgm + inner_path + ' siteSign start');
-                                ZeroFrame.cmd("siteSign", {inner_path: inner_path}, function (res) {
-                                    var pgm = service + '.add_optional_files_support write_wallet_json callback 4a: ' ;
-                                    // console.log(pgm + 'res = ' + JSON.stringify(res)) ;
-                                    if (res != "ok") {
-                                        console.log(pgm + inner_path + ' siteSign failed. error = ' + JSON.stringify(res) + '. maybe already optional files in user directory?') ;
-                                        return ;
-                                    }
-                                    console.log(pgm + 'adding optional to new content.json file');
-                                    // read signed content.json file (disable z_cache)
-                                    delete z_cache.content_json ;
-                                    get_content_json(function (content) {
-                                        var pgm = service + '.add_optional_files_support get_content_json callback 5a: ' ;
-                                        if (JSON.stringify(content).length == 2) {
-                                            console.log(pgm + inner_path + ' fileGet failed. content = ' + JSON.stringify(content)) ;
-                                            return ;
-                                        }
-                                        // add optional files support
-                                        content.optional = optional ;
-                                        console.log(pgm + 'content = ' + JSON.stringify(content)) ;
-                                        write_content_json(function (res) {
-                                            var pgm = service + '.add_optional_files_support write_content_json callback 6a: ' ;
-                                            // console.log(pgm + 'res = ' + JSON.stringify(res)) ;
-                                            if (res != 'ok') {
-                                                console.log(pgm + 'content.json write failed. error = ' + JSON.stringify(res)) ;
-                                                return ;
-                                            }
-                                            // sign updated content.json with optional files support
-                                            console.log(pgm + inner_path + ' siteSign start');
-                                            ZeroFrame.cmd("siteSign", {inner_path: inner_path}, function (res) {
-                                                var pgm = service + '.add_optional_files_support siteSign callback 7a: ' ;
-                                                // console.log(pgm + 'res = ' + JSON.stringify(res)) ;
-                                                if (res != "ok") {
-                                                    console.log(pgm + inner_path + ' siteSign failed. error = ' + JSON.stringify(res) + '. maybe already optional files in user directory?') ;
-                                                    return ;
-                                                }
-                                                // OK. optional files support added to content.json
-                                                execute_callbacks() ;
-                                            }) ; // siteSign callback 7
-
-                                        }) ; // write_content_json callback 6
-
-                                    }) ; // get_content_json callback 5
-
-                                }) ; // siteSign callback 4
-
-                            }) ; // write_wallet_json callback 3
-                            return ;
-                        }
-                        console.log(pgm + 'adding optional to existing content.json file. will fail if there are existing optional files');
-                        content.optional = optional ;
-                        // write content.json
-                        write_content_json(function (res) {
-                            var pgm = service + '.add_optional_files_support write_content_json callback 3b: ' ;
-                            console.log(pgm + 'res = ' + JSON.stringify(res)) ;
-                            if (res != 'ok') {
-                                console.log(pgm + 'content.json write failed.') ;
-                                return ;
-                            }
-                            // sign updated content.json
-                            console.log(pgm + inner_path + ' siteSign start');
-                            ZeroFrame.cmd("siteSign", {inner_path: inner_path}, function (res) {
-                                var pgm = service + '.add_optional_files_support siteSign callback 4b: ' ;
-                                console.log(pgm + 'res = ' + JSON.stringify(res)) ;
-                                execute_callbacks() ;
-                            }) ; // siteSign callback 5
-
-                        }) ;
-
-                    }) ; // get_content_json callback 2
-
-                }) ; // get_user_path callback 1
-
-            } // add_optional_files_support
-
 
             var get_content_json_cbs = [] ; // callbacks waiting for first get_content_json request to finish
             function get_content_json (cb) {
@@ -780,9 +647,38 @@ angular.module('MoneyNetworkW2')
             } ;
             function get_status () { return status }
 
+            // listen for incoming messages from MN. called from MoneyNetworkAPILib.demon
+            // params:
+            // - inner_path: inner_path to new incoming message
+            // - encrypt2: instance of MoneyNetworkAPI class created with new MoneyNetworkAPI request
+            function process_incoming_message (inner_path, encrypt2) {
+                var pgm = service + '.process_incoming_message: ';
+                console.log(pgm + 'inner_path = ' + inner_path);
+                ZeroFrame.cmd("fileGet", {inner_path: inner_path, required: false}, function (json_str) {
+                    var pgm = service + '.process_incoming_message fileGet callback 1: ';
+                    var encrypted_json ;
+                    if (!json_str) {
+                        console.log(pgm + 'fileGet ' + filename + ' failed') ;
+                        return ;
+                    }
+                    encrypted_json = JSON.parse(json_str) ;
+                    // decrypt json
+                    encrypt2.decrypt_json(encrypted_json, function (json) {
+                        var pgm = service + '.process_incoming_message decrypt_json callback 2: ';
+                        var error ;
+                        console.log(pgm + 'json = ' + JSON.stringify(json)) ;
+                        console.log(pgm + 'todo: not implemented') ;
+
+                    }) ; // decrypt_json callback 2
+                }); // fileGet callback 1
+            } // process_incoming_message
+
             // encrypt2 - encrypt messages between MN and W2
             // todo: reset encrypt1 and encrypt2 when cert_user_id is set or changed
-            var encrypt2 = new MoneyNetworkAPI({ZeroFrame: ZeroFrame, debug: 'encrypt2', optional: OPTIONAL}) ; // encrypt/decrypt messages
+            var encrypt2 = new MoneyNetworkAPI({
+                debug: 'encrypt2',
+                cb: process_incoming_message
+            }) ;
             var new_sessionid; // temporary save sessionid received from MN
             var sessionid ; // unique sessionid. also like a password known only by MN and W2 session
             var this_pubkey ;            // W2 JSEncrypt public key used by MN
@@ -837,8 +733,10 @@ angular.module('MoneyNetworkW2')
                             status.sessionid = null ;
                             return cb(status.sessionid) ;
                         }
-                        // mark file as read. generic process_incoming_message should not process this file
+
+                        // mark file as read. generic process_incoming_message will not process this file
                         MoneyNetworkAPILib.wait_for_file({msgtype: 'n/a'}, res[0].filename) ;
+
                         // read file
                         inner_path = 'merged-MoneyNetwork/' + res[0].directory + '/' + res[0].filename ;
                         // console.log(pgm +  inner_path + ' fileGet start') ;
@@ -937,7 +835,7 @@ angular.module('MoneyNetworkW2')
                 get_user_path(function (user_path) {
                     var my_pubkey = get_my_pubkey() ;
                     get_my_pubkey2(function (my_pubkey2) {
-                        add_optional_files_support(function() {
+                        encrypt2.add_optional_files_support(function() {
                             var pgm = service + '.write_pubkeys get_my_pubkey2 callback 3: ' ;
                             var request, encrypted_pwd2 ;
                             // W2 password
@@ -1154,17 +1052,19 @@ angular.module('MoneyNetworkW2')
                         }
                         temp_pwd1 = array[0] ;
                         // setup temporary encryption for get_password message.
-                        // request and response is encrypted with cryptMessage only!
+                        // special encryption for get_password request! No sessionid and no JSEncrypt prvkey (normally 3 layers encryption)
+                        // request is encrypted with JSEncrypt and cryptMessage (encryptions=[1,2]) using MN public keys
+                        // response is encrypted with cryptMessage only (encryptions=[2]) using W2 cryptMessage public key
                         encrypt2 = new MoneyNetworkAPI({
-                            ZeroFrame: ZeroFrame,
                             debug: 'encrypt2',
+                            pubkey: info.other_pubkey,
                             pubkey2: info.other_pubkey2,
                             user_path: user_path,
                             this_session_filename: array[2],
                             other_session_filename: array[3],
-                            optional: OPTIONAL
+                            cb: process_incoming_message
                         }) ;
-                        // send get_password message. wait for max 5 seconds for response. MN session must be running and logged in with correct account
+                        // send get_password request. wait for max 5 seconds for response. MN session must be running and user must be logged in with correct account
                         request = {
                             msgtype: 'get_password',
                             pubkey: info.this_pubkey,
@@ -1172,9 +1072,16 @@ angular.module('MoneyNetworkW2')
                             unlock_pwd2: array[1]
                         } ;
                         console.log(pgm + 'found old session. sending get_password request to MN. request = ' + JSON.stringify(request)) ;
-                        encrypt2.send_message(request, {encryptions:2, response:5000}, function (response) {
+                        encrypt2.send_message(request, {encryptions:[1,2], response:5000}, function (response) {
                             var pgm = service + '.is_old_session send_message callback 3: ' ;
                             var temp_pwd2, temp_pwd, temp_prvkey, temp_sessionid, encrypted_pwd2 ;
+                            if (response && response.error && response.error.match(/^Timeout /)) {
+                                // OK. timeout after 5 seconds. MN session not running or not logged in
+                                // error = "Timeout while waiting for response. Request was {\"msgtype\":\"get_password\",\"pubkey\":\"-----BEGIN PUBLIC KEY-----\\nMIGeMA0GCSqGSIb3DQEBAQUAA4GMADCBiAKBgHkYQzcBcq7nc8ktXslYyhkZrlja\\n7fGxu5cxqGVhp/w+905YT4jriF0IosiBeDyPGCJdQCS0IfJ9wMHP1rSIJ7KvLI5R\\nzfFcdqOMliMzEeTva29rkCmZSNw++2x7aIJQO9aExp03bm/l49zh/MbwFnZmrmS7\\nAOGgDzFPapIUQXenAgMBAAE=\\n-----END PUBLIC KEY-----\",\"pubkey2\":\"Ahn94vCUvT+S/nefej83M02n/hP8Jvqc8KbxMtdSsT8R\",\"unlock_pwd2\":\"280eab8147\",\"response\":1469138736361}. Expected response filename was 3253c3b046.1469138736361"
+                                console.log(pgm + 'OK. Timeout for get_password request. MN session is not running or MN session is not logged in. Cannot restore old session from localStorage');
+                                status.session_handshake = 'n/a' ;
+                                return cb() ;
+                            }
                             if (!response || response.error) {
                                 console.log(pgm + 'get_password request failed. response = ' + JSON.stringify(response)) ;
                                 status.session_handshake = 'n/a' ;
@@ -1194,14 +1101,13 @@ angular.module('MoneyNetworkW2')
                             status.session_handshake = 'Old session with sessionid ' + temp_sessionid + ' was restored from localStorage' ;
                             status.sessionid = temp_sessionid ;
                             encrypt2 = new MoneyNetworkAPI({
-                                ZeroFrame: ZeroFrame,
                                 debug: 'encrypt2',
                                 sessionid: temp_sessionid,
                                 pubkey: info.other_pubkey,
                                 pubkey2: info.other_pubkey2,
                                 prvkey: temp_prvkey,
                                 user_path: user_path,
-                                optional: OPTIONAL
+                                cb: process_incoming_message
                             }) ;
                             cb(status.sessionid) ;
                         }) ; // send_message callback 3
@@ -1251,8 +1157,8 @@ angular.module('MoneyNetworkW2')
                     // reset session variables
                     console.log(pgm + 'changed cert_user_id. reset encrypts and sessionid') ;
                     status.sessionid = null ;
-                    encrypt1 = new MoneyNetworkAPI({ZeroFrame: ZeroFrame, debug: 'encrypt1', optional: OPTIONAL}) ;
-                    encrypt2 = new MoneyNetworkAPI({ZeroFrame: ZeroFrame, debug: 'encrypt2', optional: OPTIONAL}) ;
+                    encrypt1 = new MoneyNetworkAPI({debug: 'encrypt1'}) ;
+                    encrypt2 = new MoneyNetworkAPI({debug: 'encrypt2', cb: process_incoming_message}) ;
                 }
                 // step 2 - check merger permission. session is not possible without merger permission
                 console.log(pgm + 'initialize step 2: check merger permission') ;
