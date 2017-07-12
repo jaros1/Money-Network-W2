@@ -234,10 +234,14 @@ angular.module('MoneyNetworkW2')
             // get save wallet status: 0, 1 or 2
             // todo: what about 2 and no session? user must connect to MN to get data from MN
             function get_save_wallet_login() {
+                var pgm = service + '.get_save_wallet_login: ' ;
+                var save_wallet_login ;
                 if (!ZeroFrame.site_info.cert_user_id) return null ; // error - ZeroId is missing
                 if (!ls.save_wallet_login) ls.save_wallet_login = {} ;
                 if (!ls.save_wallet_login[ZeroFrame.site_info.cert_user_id]) ls.save_wallet_login[ZeroFrame.site_info.cert_user_id] = '0' ;
-                return ls.save_wallet_login[ZeroFrame.site_info.cert_user_id] ;
+                save_wallet_login = ls.save_wallet_login[ZeroFrame.site_info.cert_user_id] ;
+                console.log(pgm + 'save_wallet_login = ' + save_wallet_login);
+                return save_wallet_login ;
             } // get_save_wallet_login
 
             // save_wallet_login:
@@ -304,6 +308,10 @@ angular.module('MoneyNetworkW2')
                 cert_user_id = ZeroFrame.site_info.cert_user_id ;
                 if (save_wallet_login == '1') {
                     // save as 1
+
+                    if (!ls.save_wallet_login) ls.save_wallet_login = {} ;
+                    ls.save_wallet_login[cert_user_id] = save_wallet_login ;
+
                     if (!ls.wallet_login) ls.wallet_login = {} ;
                     if (!ls.wallet_login[cert_user_id]) ls.wallet_login[cert_user_id] = {} ;
                     ls.wallet_login[cert_user_id].wallet_id = wallet_id ;
@@ -351,7 +359,13 @@ angular.module('MoneyNetworkW2')
                                 var pgm = service + '.save_wallet_login send_message callback 3: ';
                                 if (!response) cb({error: 'No response'}) ;
                                 else if (response.error) cb({error: response.error}) ;
-                                else cb({}) ;
+                                else {
+                                    // OK. saved
+                                    if (!ls.save_wallet_login) ls.save_wallet_login = {} ;
+                                    ls.save_wallet_login[cert_user_id] = save_wallet_login ;
+                                    ls_save() ;
+                                    cb({}) ;
+                                }
                             }); // send_message callback 3
                         }) ; // encrypt_json callback 2
                     }) ; // get_my_pubkey2 callback 1
@@ -1157,7 +1171,7 @@ angular.module('MoneyNetworkW2')
             // params:
             // - startup: true: startup, false: changed cert_user_id
             var old_cert_user_id ;
-            function initialize (startup) {
+            function initialize (startup, cb) {
                 var pgm = service + '.initialize: ' ;
                 if (!startup && old_cert_user_id && ZeroFrame.site_info && old_cert_user_id != ZeroFrame.site_info.cert_user_id) {
                     // reset session variables
@@ -1170,10 +1184,10 @@ angular.module('MoneyNetworkW2')
                 console.log(pgm + 'initialize step 2: check merger permission') ;
                 check_merger_permission(function(ok) {
                     var pgm = service + '.initialize step 2 check_merger_permission callback 1: ' ;
-                    if (!ok) return ; // no merger permission
+                    if (!ok) return cb(false) ; // no merger permission
                     // step 3 - check zeroNet login
                     console.log(pgm + 'initialize step 3: check ZeroNet login') ;
-                    if (!ZeroFrame.site_info.cert_user_id) return ; // not logged in
+                    if (!ZeroFrame.site_info.cert_user_id) return cb(false); // not logged in
                     old_cert_user_id = ZeroFrame.site_info.cert_user_id ;
                     // step 4 - update wallet.json
                     console.log(pgm + 'initialize step 4: update wallet.json') ;
@@ -1187,16 +1201,18 @@ angular.module('MoneyNetworkW2')
                             console.log(pgm + 'sessionid = ' + JSON.stringify(sessionid)) ;
                             if (sessionid) {
                                 $rootScope.$apply() ;
-                                return ;
+                                return cb(true);
                             } // session was restored from localStorage
                             // step 6 - check new session
                             console.log(pgm + 'initialize step 6: check new session')
                             is_new_session(function(sessionid) {
                                 var pgm = service + '.initialize is_new_session callback 4: ' ;
                                 console.log(pgm + 'sessionid = ' + JSON.stringify(sessionid)) ;
-                                if (!sessionid) return ;
+                                if (!sessionid) return cb(false);
                                 $rootScope.$apply() ;
                                 save_session() ;
+                                console.log(pgm + 'cb should run as a callback after save_session');
+                                $timeout(cb, 500) ;
                             }) ; // is_new_session callback 4
 
                         }) ; // is_old_session callback 3

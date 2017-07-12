@@ -45,7 +45,32 @@ angular.module('MoneyNetworkW2')
         // 5: check old session (restore from localStorage)
         // 6: check new session (sessionid just received from MN)
         W2Service.ls_bind(function() {
-            W2Service.initialize(true) ;
+            W2Service.initialize(true, function (ok) {
+                var pgm = controller + ' ls_bind/initialize: ' ;
+                console.log(pgm + 'ok = ' + ok) ;
+
+                // startup. check if wallet login is saved in:
+                // - 1: wallet login is saved encrypted (cryptMessage) in MoneyNetworkW2 localStorage
+                // - 2: wallet login is saved encrypted (symmetric) in MoneyNetwork localStorage (session is required)
+                // localStorage: save_wallet_login: '0', '1' or '2'
+                self.save_wallet_login = W2Service.get_save_wallet_login() ;
+                console.log(pgm + 'self.save_wallet_login = ' + self.save_wallet_login) ;
+                if (self.save_wallet_login == null) return ; // error
+                if (self.save_wallet_login == '0') return ; // wallet login is not saved for this cert_user_id in this browser
+                // '1': wallet login is saved encrypted (cryptMessage) in MoneyNetworkW2 localStorage
+                // '2': wallet login is saved encrypted (symmetric) in MoneyNetwork localStorage (session is required)
+                W2Service.get_wallet_login(self.save_wallet_login, function(wallet_id, wallet_password, error) {
+                    var pgm = controller + ' get_wallet_login callback: ' ;
+                    console.log(pgm + 'wallet_id = ' + wallet_id + ', wallet_password = ' + wallet_password + ', error = ' + error) ;
+                    if (error) ZeroFrame.cmd("wrapperNotification", ['error', error, 10000]) ;
+                    else {
+                        self.wallet_id = wallet_id ;
+                        self.wallet_password = wallet_password ;
+                        $rootScope.$apply() ;
+                    }
+                }) ; // get_wallet_login callback
+
+            }) ;
         }) ;
 
         var old_cert_user_id = -1 ;
@@ -82,40 +107,8 @@ angular.module('MoneyNetworkW2')
         self.save_wallet_login = '0' ;
         var old_save_wallet_login = null ; // null: not yet checked
 
-        // startup. check if wallet login is saved in:
-        // - 1: wallet login is saved encrypted (cryptMessage) in MoneyNetworkW2 localStorage
-        // - 2: wallet login is saved encrypted (symmetric) in MoneyNetwork localStorage (session is required)
-        // use ls_bind. localStorage may still be loading
-        W2Service.ls_bind(function() {
-            var pgm = controller + ' ls_bind callback: ' ;
-            var ls ;
-            if (!ZeroFrame.site_info.cert_user_id) {
-                // cannot save and encrypt wallet info without a ZeroNet cert
-                self.save_wallet_login = '0' ;
-                return ;
-            }
-            // localStorage: save_wallet_login: '0', '1' or '2'
-            self.save_wallet_login = W2Service.get_save_wallet_login() ;
-            console.log(pgm + 'self.save_wallet_login = ' + self.save_wallet_login) ;
-            if (self.save_wallet_login == null) return ; // error
-            if (self.save_wallet_login == '0') return ; // wallet login is not saved for this cert_user_id in this browser
-            // '1': wallet login is saved encrypted (cryptMessage) in MoneyNetworkW2 localStorage
-            // '2': wallet login is saved encrypted (symmetric) in MoneyNetwork localStorage (session is required)
-            W2Service.get_wallet_login(self.save_wallet_login, function(wallet_id, wallet_password, error) {
-                var pgm = controller + ' get_wallet_login callback: ' ;
-                console.log(pgm + 'wallet_id = ' + wallet_id + ', wallet_password = ' + wallet_password + ', error = ' + error) ;
-                if (error) ZeroFrame.cmd("wrapperNotification", ['error', error, 10000]) ;
-                else {
-                    self.wallet_id = wallet_id ;
-                    self.wallet_password = wallet_password ;
-                    $rootScope.$apply() ;
-                }
-            }) ; // get_wallet_login callback
-
-        }) ; // ls_bind callback
-
         self.save_wallet_login_changed = function() {
-            var pgm = controller + '.save_session: ' ;
+            var pgm = controller + '.save_wallet_login_changed: ' ;
             if (!ZeroFrame.site_info.cert_user_id) {
                 ZeroFrame.cmd("wrapperNodification", ['info', 'Not logged in', 5000]) ;
                 self.save_wallet_login = old_save_wallet_login;
@@ -123,6 +116,7 @@ angular.module('MoneyNetworkW2')
             }
             W2Service.save_wallet_login(self.save_wallet_login, self.wallet_id, self.wallet_password, function(res) {
                 console.log(pgm + 'res = ' + JSON.stringify(res)) ;
+
             }) ;
         }; // save_session_changed
 
