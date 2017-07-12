@@ -693,7 +693,7 @@ angular.module('MoneyNetworkW2')
             // session can be restored with ZeroNet cert + MN login
             var session_pwd1, session_pwd2 ;
 
-            // read "pubkeys" message from MN session
+            // read first "pubkeys" message from MN session
             // optional file with file format <other_session_filename>.<timestamp>
             // pubkey used by JSEncrypt (client) and pubkey2 used by cryptMessage (ZeroNet)
             function read_pubkeys (cb) {
@@ -719,7 +719,7 @@ angular.module('MoneyNetworkW2')
                     console.log(pgm + 'query = ' + query) ;
                     ZeroFrame.cmd("dbQuery", [query], function (res) {
                         var pgm = service + '.read_pubkeys dbQuery callback 2: ' ;
-                        var prefix, inner_path ;
+                        var prefix, other_user_path, inner_path ;
                         prefix = "Error. MN-W2 session handshake failed. " ;
                         // console.log(pgm + 'res = ' + JSON.stringify(res)) ;
                         if (res.error) {
@@ -738,8 +738,12 @@ angular.module('MoneyNetworkW2')
                         // mark file as read. generic process_incoming_message will not process this file
                         MoneyNetworkAPILib.wait_for_file({msgtype: 'n/a'}, res[0].filename) ;
 
+                        // first message. remember path to other session user directory. all following messages must come from same user directory
+                        other_user_path = 'merged-MoneyNetwork/' + res[0].directory + '/' ;
+                        encrypt2.setup_encryption({other_user_path: other_user_path}) ;
+
                         // read file
-                        inner_path = 'merged-MoneyNetwork/' + res[0].directory + '/' + res[0].filename ;
+                        inner_path = other_user_path + res[0].filename ;
                         // console.log(pgm +  inner_path + ' fileGet start') ;
                         ZeroFrame.cmd("fileGet", [inner_path, true], function (pubkeys_str) {
                             var pgm = service + '.read_pubkeys fileGet callback 3: ' ;
