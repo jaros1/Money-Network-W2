@@ -484,7 +484,7 @@ angular.module('MoneyNetworkW2')
                 z_cache.user_path = true ;
                 get_my_user_hub(function (my_hub) {
                     z_cache.user_path = 'merged-MoneyNetwork/' + my_hub + '/data/users/' + ZeroFrame.site_info.auth_address + '/' ;
-                    MoneyNetworkAPILib.config({user_path: z_cache.user_path}) ;
+                    MoneyNetworkAPILib.config({this_user_path: z_cache.user_path}) ;
                     cb(z_cache.user_path);
                     while (get_user_path_cbs.length) { cb = get_user_path_cbs.shift() ; cb(z_cache.user_path)}
                 }) ;
@@ -623,6 +623,7 @@ angular.module('MoneyNetworkW2')
                     var pgm = service + '.create_session get_wallet_json callback 1: ';
                     console.log(pgm + 'wallet = ' + JSON.stringify(wallet));
                     var old_wallet_str = JSON.stringify(wallet) ;
+                    // todo: add hub = random other W2 user data hub. For list of available W2 user data hubs. See https://github.com/jaros1/Money-Network-W2/issues/2
                     wallet.wallet_address = ZeroFrame.site_info.address;
                     wallet.wallet_title = ZeroFrame.site_info.content.title;
                     wallet.wallet_description = ZeroFrame.site_info.content.description;
@@ -658,7 +659,7 @@ angular.module('MoneyNetworkW2')
                     var pgm = service + '.process_incoming_message fileGet callback 1: ';
                     var encrypted_json ;
                     if (!json_str) {
-                        console.log(pgm + 'fileGet ' + filename + ' failed') ;
+                        console.log(pgm + 'fileGet ' + inner_path + ' failed') ;
                         return ;
                     }
                     encrypted_json = JSON.parse(json_str) ;
@@ -779,6 +780,7 @@ angular.module('MoneyNetworkW2')
                             }
                             console.log(pgm + 'OK. received public keys from MN') ;
                             console.log(pgm + 'MN public keys: pubkey2 = ' + pubkeys.pubkey2 + ', pubkey = ' + pubkeys.pubkey) ;
+                            console.log(pgm + 'todo: remember MN user_path. following messages must come from same MN user_path') ;
                             encrypt2.setup_encryption({pubkey: pubkeys.pubkey, pubkey2: pubkeys.pubkey2}) ;
                             // mark file as read.
 
