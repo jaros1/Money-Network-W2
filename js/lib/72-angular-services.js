@@ -278,19 +278,48 @@ angular.module('MoneyNetworkW2')
                     request = { msgtype: 'get_data', keys: ['login'] } ;
                     console.log(pgm + 'sending get_data request to MN. request = ' + JSON.stringify(request)) ;
                     encrypt2.send_message(request, {response: true}, function (response) {
-                        var encrypted_data ;
-                        if (response.error) return cb({error: response.error}) ;
+                        var pgm = service + '.get_wallet_login send_message callback: ' ;
+                        var encrypted_data, data, decrypt_row ;
+                        if (response.error) return cb(null, null, response.error) ;
+                        console.log(pgm + 'response = ' + JSON.stringify(response));
+                        // response.data - array with 0-n rows with encrypted data. decrypt 0-n data rows
                         encrypted_data = response.data ;
-                        console.log(pgm + 'todo: 1: response.data is an array') ;
-                        console.log(pgm + 'todo: 2: each row must be decrypted') ;
+                        data = [] ;
+                        decrypt_row = function(cb2) {
+                            var pgm = service + '.get_wallet_login.decrypt_row: ' ;
+                            var encrypted_row, encrypted_json ;
+                            if (encrypted_data.length == 0) return cb2() ;
+                            encrypted_row = encrypted_data.shift() ;
+                            console.log(pgm + 'encrypted_row = ' + JSON.stringify(encrypted_row)) ;
+                            encrypted_json = JSON.parse(encrypted_row.value) ;
+                            encrypt1.decrypt_json(encrypted_json, function (decrypted_json) {
+                                var pgm = service + '.get_wallet_login.decrypt_row decrypt_json callback: ' ;
+                                var decrypted_row ;
+                                decrypted_row = {key: encrypted_row.key, value: decrypted_json} ;
+                                console.log(pgm + 'decrypted_row = ' + JSON.stringify(decrypted_row));
+                                data.push(decrypted_row) ;
+                                decrypt_row(cb2) ;
+                            }) ; // decrypt_json callback 1
+                        };
+                        decrypt_row(function() {
+                            var pgm = service + '.get_wallet_login decrypt_row callback: ' ;
+                            response.data = data ;
+                            if ((response.data.length != 1) || (response.data[0].key != 'login')) {
+                                console.log(pgm + 'error. expected one row with login info to be returned in data array. response to get_data message was ' + JSON.stringify(response));
+                                return cb(null, null, 'Error. Wallet login info was not returned from MN') ;
+                            }
+                            // OK. received wallet login from MN
+                            console.log(pgm + 'data[0] = ' + JSON.stringify(data[0])) ;
+                            // data[0] = {"key":"login","value":{"wallet_id":"UZGToFfXOz7GKCogsOOuxJYndjcmt2","wallet_password":"bGaGK/+w(Qm4Wi}fAyz:CcgxWuen)F"}}
+                            cb(data[0].value.wallet_id, data[0].value.wallet_password, null);
+                        }) ;
 
+                        //encrypt1.decrypt(encrypted_data, function (data) {
+                        //    if (!data) cb({error: 'decrypt get_data response failed'}) ;
+                        //    else if (data.error) cb({error: 'get_data request failed. ' + data.error}) ;
+                        //    else cb({wallet_id: data.wallet_id, wallet_password: data.wallet_password}) ;
+                        //}) ; // decrypt callback
 
-
-                        encrypt1.decrypt(encrypted_data, function (data) {
-                            if (!data) cb({error: 'decrypt get_data response failed'}) ;
-                            else if (data.error) cb({error: 'get_data request failed. ' + data.error}) ;
-                            else cb({wallet_id: data.wallet_id, wallet_password: data.wallet_password}) ;
-                        }) ; // decrypt callback
                     }) ; // send_message callback
                 }
             } // get_wallet_login
