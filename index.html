@@ -40,13 +40,13 @@
             </p>
             <p>
                 Save wallet login?<br>
-                <input type="radio" ng-model="w.save_wallet_login" value="0" ng-change="w.save_wallet_login_changed()">
+                <input type="radio" ng-model="w.status.save_login" value="0" ng-change="w.save_login_changed()" ng-disabled="w.status.save_login_disabled">
                 No thank you, I will remember wallet login by myself.<br>
-                <input type="radio" ng-model="w.save_wallet_login" value="1" ng-change="w.save_wallet_login_changed()">
+                <input type="radio" ng-model="w.status.save_login" value="1" ng-change="w.save_login_changed()" ng-disabled="w.status.save_login_disabled">
                 Save wallet login in MoneyNetworkW2 (browser/localStorage) encrypted with my ZeroId certificate.
                 <span ng-show="w.status.sessionid">
                     <br>
-                    <input type="radio" ng-model="w.save_wallet_login" value="2" ng-change="w.save_wallet_login_changed()">
+                    <input type="radio" ng-model="w.status.save_login" value="2" ng-change="w.save_login_changed()" ng-disabled="w.status.save_login_disabled">
                     Save wallet login in MoneyNetwork (browser/localStorage) encrypted with my MoneyNetwork password.
                 </span>
             </p>
@@ -172,9 +172,9 @@
 
 <script type="text/javascript" src="/moneynetwork.bit/js-api/MoneyNetworkAPI.js"></script>
 
-<!--script type="text/javascript" src="js/all.js"></script>
+<script type="text/javascript" src="js/all.js"></script>
 <!-- -->
-<script type="text/javascript" src="js/all.js.zip/all.js"></script>
+<!--script type="text/javascript" src="js/all.js.zip/all.js"></script>
 <!-- -->
 
 </body>
