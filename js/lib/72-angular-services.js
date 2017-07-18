@@ -227,7 +227,8 @@ angular.module('MoneyNetworkW2')
 
 
             // setup MoneyNetworkAPI
-            MoneyNetworkAPILib.config({debug: true, ZeroFrame: ZeroFrame, optional: "^[0-9a-f]{10}.[0-9]{13}$"}) ; // global options
+            // MoneyNetworkAPILib.config({debug: true, ZeroFrame: ZeroFrame, optional: "^[0-9a-f]{10}.[0-9]{13}$"}) ; // global options
+            MoneyNetworkAPILib.config({debug: true, ZeroFrame: ZeroFrame, optional: "^[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]$"}) ; // global options
 
             var encrypt1 = new MoneyNetworkAPI({debug: 'encrypt1'}) ; // encrypt1. no sessionid. self encrypt/decrypt data in W2 localStorage ;
 
@@ -246,7 +247,7 @@ angular.module('MoneyNetworkW2')
                         ls.wallet_login = {} ;
                         return cb(null, null, error) ;
                     }
-                    cert_user_id = ZeroFrame.site_info.cert_user_id ;
+                    cert_user_id = ZeroFrame.site_info.cert_user_id || 'n/a' ;
                     encrypted_json = ls.wallet_login[cert_user_id] ;
                     if (!encrypted_json) return cb(null, null, 'Wallet login for ' + cert_user_id + ' was not found') ;
                     console.log(pgm + 'encrypted_json = ' + JSON.stringify(encrypted_json));
@@ -317,94 +318,109 @@ angular.module('MoneyNetworkW2')
             // - '1': wallet login is saved encrypted (cryptMessage) in W2 localStorage
             // - '2': wallet login is saved encrypted (symmetric) in MN localStorage (session is required)
             function save_wallet_login(save_wallet_login, wallet_id, wallet_password, cb) {
-                var pgm = service + '.save_wallet_login: ' ;
-                var cert_user_id, ls_updated, data, request ;
-                if (['0', '1','2'].indexOf(save_wallet_login) == -1) return cb(null, null, "Invalid call. save_wallet_login must be equal '0', '1' or '2'") ;
-                // 1 - wallet login is saved encrypted (cryptMessage) in W2 localStorage
-                cert_user_id = ZeroFrame.site_info.cert_user_id ;
-                if (save_wallet_login == '0') {
-                    // save as 0
-                    if (!ls.save_wallet_login) ls.save_wallet_login = {} ;
-                    ls.save_wallet_login[cert_user_id] = save_wallet_login ;
-                    ls_save() ;
-                }
-                if (save_wallet_login == '1') {
-                    // save as 1
-                    if (!ls.save_wallet_login) ls.save_wallet_login = {} ;
-                    ls.save_wallet_login[cert_user_id] = save_wallet_login ;
+                var pgm = service + '.save_wallet_login: ';
+                var cert_user_id, data, request, old_login, save_w2;
+                if (['0', '1', '2'].indexOf(save_wallet_login) == -1) return cb({error: "Invalid call. save_wallet_login must be equal '0', '1' or '2'"});
 
-                    if (!ls.wallet_login) ls.wallet_login = {} ;
-                    if (!ls.wallet_login[cert_user_id]) ls.wallet_login[cert_user_id] = {} ;
-                    ls.wallet_login[cert_user_id].wallet_id = wallet_id ;
-                    ls.wallet_login[cert_user_id].wallet_password = wallet_password ;
-                    console.log(pgm + 'ls.wallet_login = ' + JSON.stringify(ls.wallet_login)) ;
-                    ls_save() ;
-                }
-                else {
-                    // 0 or 2. clear old 1
-                    if (ls.wallet_login) {
-                        ls_updated = false ;
-                        if (ls.wallet_login[cert_user_id]) {
-                            delete ls.wallet_login[cert_user_id] ;
-                            ls_updated = true ;
+                // update W2 localStorage
+                cert_user_id = ZeroFrame.site_info.cert_user_id || 'n/a';
+                if (!ls.save_login) ls.save_login = {};
+                if (!ls.save_login[cert_user_id]) ls.save_login[cert_user_id] = {};
+                old_login = JSON.parse(JSON.stringify(ls.save_login[cert_user_id]));
+                ls.save_login[cert_user_id].choice = save_wallet_login;
+
+                // get and add W2 pubkey2 to encryption setup (self encrypt using ZeroNet certificate)
+                get_my_pubkey2(function (my_pubkey2) {
+                    var pgm = service + '.save_wallet_login get_my_pubkey2 callback 1: ';
+                    var save_w2;
+                    encrypt1.setup_encryption({pubkey2: my_pubkey2});
+
+                    // save in W2 localStorage (choice '0' and '1')
+                    save_w2 = function (cb) {
+                        var pgm = service + '.save_wallet_login.save_w2: ';
+                        var unencrypted_login;
+                        if (save_wallet_login != '1') {
+                            // delete any old login info from W2 localStorage
+                            delete ls.save_login[cert_user_id].login;
+                            ls_save();
+                            return cb();
                         }
-                        if (!Object.keys(ls.wallet_login).length) {
-                            delete ls.wallet_login ;
-                            ls_updated = true ;
+                        // save login info in W2 localStorage
+                        if (cert_user_id == 'n/a') {
+                            // no cert_user_id. not encrypted
+                            ls.save_login[cert_user_id].login = {
+                                wallet_id: wallet_id,
+                                wallet_password: wallet_password
+                            };
+                            ls_save();
+                            return cb();
                         }
-                        if (ls_updated) ls_save() ;
-                    }
-                }
-                // 2 - wallet login is saved encrypted (symmetric) in MN localStorage (session is required)
-                if (save_wallet_login == '2') {
-                    if (!status.sessionid) return cb('Cannot save wallet information. MN session was not found');
-                    // encrypt wallet data before sending data to MN
-                    data = { wallet_id: wallet_id, wallet_password: wallet_password} ;
-                    console.log(pgm + 'data = ' + JSON.stringify(data));
-                    // cryptMessage encrypt data with current ZeroId before sending data to MN.
-                    // get and add W2 pubkey2 to encryption setup
-                    get_my_pubkey2(function (my_pubkey2) {
-                        encrypt1.setup_encryption({pubkey2: my_pubkey2}) ;
-                        // encrypt data before send save_data message
-                        encrypt1.encrypt_json(data, [2],function (encrypted_data) {
-                            var pgm = service + '.save_wallet_login encrypt_json callback 2: ';
-                            var request;
-                            console.log(pgm + 'data (encrypted) = ' + JSON.stringify(encrypted_data));
-                            // send encrypted wallet data to MN and wait for response
-                            request = {
-                                msgtype: 'save_data',
-                                data: [{key: 'login', value: JSON.stringify(encrypted_data)}]
-                            } ;
+                        // cert_user_id: encrypt login
+                        unencrypted_login = {wallet_id: wallet_id, wallet_password: wallet_password};
+                        console.log(pgm + 'encrypt1.other_pubkey2 = ' + encrypt1.other_session_pubkey2);
+                        encrypt1.encrypt_json(unencrypted_login, [2], function (encrypted_login) {
+                            ls.save_login[cert_user_id].login = encrypted_login;
+                            ls_save();
+                            return cb();
+                        });
+                    }; // save_w2
+
+                    save_w2(function () {
+                        var pgm = service + '.save_wallet_login save_w2 callback 2: ';
+                        // update MN localStorage (choice '2')
+                        if (save_wallet_login == '2') {
+                            if (!status.sessionid) {
+                                ls.save_login[cert_user_id] = old_login;
+                                return cb({error: 'Error. Cannot save wallet information in MN. MN session was not found'});
+                            }
+                            // encrypt wallet data before sending data to MN
+                            data = {wallet_id: wallet_id, wallet_password: wallet_password};
+                            console.log(pgm + 'data = ' + JSON.stringify(data));
+                            // cryptMessage encrypt data with current ZeroId before sending data to MN.
+                            // encrypt data before send save_data message
+                            encrypt1.encrypt_json(data, [2], function (encrypted_data) {
+                                var pgm = service + '.save_wallet_login encrypt_json callback 3: ';
+                                var request;
+                                console.log(pgm + 'data (encrypted) = ' + JSON.stringify(encrypted_data));
+                                // send encrypted wallet data to MN and wait for response
+                                request = {
+                                    msgtype: 'save_data',
+                                    data: [{key: 'login', value: JSON.stringify(encrypted_data)}]
+                                };
+                                console.log(pgm + 'json = ' + JSON.stringify(request));
+                                encrypt2.send_message(request, {response: true}, function (response) {
+                                    var pgm = service + '.save_wallet_login send_message callback 4: ';
+                                    if (!response) cb({error: 'No response'});
+                                    else if (response.error) cb({error: response.error});
+                                    else {
+                                        // OK. saved
+                                        if (!ls.save_login) ls.save_login = {};
+                                        ls.save_login[cert_user_id] = save_wallet_login;
+                                        ls_save();
+                                        cb({});
+                                    }
+                                }); // send_message callback 4
+                            }); // encrypt_json callback 3
+
+                        }
+                        else {
+                            // 0 or 1. clear old 2
+                            if (!status.sessionid) return cb({error: 'Cannot clear wallet information. MN session was not found'});
+                            // send data_delete to MN session
+                            request = {msgtype: 'delete_data'}; // no keys array. delete all data for session
                             console.log(pgm + 'json = ' + JSON.stringify(request));
                             encrypt2.send_message(request, {response: true}, function (response) {
-                                var pgm = service + '.save_wallet_login send_message callback 3: ';
-                                if (!response) cb({error: 'No response'}) ;
-                                else if (response.error) cb({error: response.error}) ;
-                                else {
-                                    // OK. saved
-                                    if (!ls.save_wallet_login) ls.save_wallet_login = {} ;
-                                    ls.save_wallet_login[cert_user_id] = save_wallet_login ;
-                                    ls_save() ;
-                                    cb({}) ;
-                                }
-                            }); // send_message callback 3
-                        }) ; // encrypt_json callback 2
-                    }) ; // get_my_pubkey2 callback 1
+                                var pgm = service + '.save_wallet_login send_message callback 1: ';
+                                if (!response) cb({error: 'No response'});
+                                else if (response.error) cb({error: response.error});
+                                else cb({});
+                            }); // send_message callback 1
+                        }
 
-                }
-                else {
-                    // 0 or 1. clear old 2
-                    if (!status.sessionid) return cb('Cannot clear wallet information. MN session was not found') ;
-                    // send data_delete to MN session
-                    request = {msgtype: 'delete_data'}; // no keys array. delete all data for session
-                    console.log(pgm + 'json = ' + JSON.stringify(request));
-                    encrypt2.send_message(request, {response: true}, function (response) {
-                        var pgm = service + '.save_wallet_login send_message callback 1: ';
-                        if (!response) cb({error: 'No response'}) ;
-                        else if (response.error) cb({error: response.error}) ;
-                        else cb({}) ;
-                    }); // send_message callback 1
-                }
+                    }); // save_w2 callback 2
+
+                }); // get_my_pubkey2 callback 1
+
             } // save_wallet_login
 
             // todo: changed ZeroId. clear z_cache.
@@ -536,7 +552,7 @@ angular.module('MoneyNetworkW2')
                     inner_path = user_path + 'content.json' ;
                     console.log(pgm + 'publishing ' + inner_path) ;
                     // content.json file must have optional files support
-                    add_optional_files_support(function() {
+                    encrypt1.add_optional_files_support(function() {
                         // sitePublish
                         console.log(pgm + inner_path + ' siteSign start') ;
                         ZeroFrame.cmd("sitePublish", {inner_path: inner_path}, function (res) {
@@ -1227,9 +1243,9 @@ angular.module('MoneyNetworkW2')
                             var save_wallet_login ;
                             if (sessionid) {
                                 // session found. check save_wallet_login
-                                if (!ls.save_wallet_login) ls.save_wallet_login = {} ;
-                                if (!ls.save_wallet_login[old_cert_user_id]) ls.save_wallet_login[old_cert_user_id] = '0' ;
-                                save_wallet_login = ls.save_wallet_login[old_cert_user_id] ;
+                                if (!ls.save_login) ls.save_login = {} ;
+                                if (!ls.save_login[old_cert_user_id]) ls.save_login[old_cert_user_id] = '0' ;
+                                save_wallet_login = ls.save_login[old_cert_user_id] ;
                                 ls_save() ;
                             }
                             cb(sessionid, save_wallet_login) ;
