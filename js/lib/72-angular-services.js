@@ -1122,7 +1122,7 @@ angular.module('MoneyNetworkW2')
                             other_session_filename: array[3],
                             cb: process_incoming_message
                         }) ;
-                        // send get_password request. wait for max 5 seconds for response. MN session must be running and user must be logged in with correct account
+                        // send get_password request. wait for max 10 seconds for response. MN session must be running and user must be logged in with correct account
                         request = {
                             msgtype: 'get_password',
                             pubkey: info.this_pubkey,
@@ -1130,7 +1130,7 @@ angular.module('MoneyNetworkW2')
                             unlock_pwd2: array[1]
                         } ;
                         console.log(pgm + 'found old session. sending get_password request to MN. request = ' + JSON.stringify(request)) ;
-                        encrypt2.send_message(request, {encryptions:[1,2], response:5000}, function (response) {
+                        encrypt2.send_message(request, {encryptions:[1,2], response:10000}, function (response) {
                             var pgm = service + '.is_old_session send_message callback 3: ' ;
                             var temp_pwd2, temp_pwd, temp_prvkey, temp_sessionid, encrypted_pwd2 ;
                             if (response && response.error && response.error.match(/^Timeout /)) {
