@@ -11,15 +11,11 @@
 // - timeout in request = logout for other session = close session.
 //   timeout can also be a "server" fault (error in other session). can be verified with a simple ping
 //   timeout in simple ping = closed session. OK simple ping = server fault in previous response
-// - add request timestamp to response. for offline transactions. cleanup request when response is received
+// - offline transactions. cleanup request when response is received
 // - add done message. send list of done but not removed messages to other session
-// - n-n relation between MoneyNetwork and wallets? MoneyNetwork can have many wallets. A wallet can be used of many MoneyNetwork clones?
-// - normally demon process should not read old messages (timestamp older that x seconds/minutes/hours/days).
-//   messages with timestamp about one year ago is always response to a previous sent request. app should keep a list of send and unanswered requests and check for response
-//   an exception is offline transactions. request send to an offline session (MN or wallet) and read by other session after next login
-//   how and where to save a list of offline transactions? other session should check for offline transactions after session restore
-//   for example a money transaction, send, receive, donate, pay, receive payment. W2W transactions. Started by one MN user. Must by received by an other MN user
-//   offline transactions in <session_filename>.0000000000000
+// - n-n session relations between MoneyNetwork and wallets? MoneyNetwork can have many wallets. A wallet can be used of many MoneyNetwork clones?
+// - test offline transactions. for example a money transaction, send, receive, donate, pay, receive payment.
+//   W2W transactions. Started by one MN user. Must by received by an other MN user
 
 // MoneyNetworkAPILib. Demon. Monitor and process incoming messages from other session(s)
 var MoneyNetworkAPILib = (function () {
@@ -166,10 +162,13 @@ var MoneyNetworkAPILib = (function () {
     // 2: OK to change in MoneyNetworkAPILib but any instance using old prvkey must be destroyed
     var this_session_userid2 = null ;
     function set_this_session_userid2 (userid2) {
+        var pgm = module + '.set_this_session_userid2: ' ;
         var delete_sessions, other_session_filename, i, encrypt ;
-        if (!userid2) userid2 = 0 ;
+        if (userid2 == null) userid2 = 0 ;
+        if (typeof userid2 == 'undefined') userid2 = 0 ;
         if ((this_session_userid2 != null) && (userid2 != this_session_userid2)) {
             // 2: OK to change in MoneyNetworkAPILib but any instance using old prvkey must be destroyed
+            if (debug) console.log(pgm + 'userid2 changed. destroy old MoneyNetworkAPI instances with userid2 = ' + this_session_userid2) ;
             delete_sessions = [] ;
             for (other_session_filename in sessions) {
                 if (!sessions[other_session_filename].encrypt) continue ;
@@ -189,8 +188,8 @@ var MoneyNetworkAPILib = (function () {
             }
         }
         this_session_userid2 = userid2 ;
+        // console.log(pgm + 'this_session_userid2 = ' + this_session_userid2) ;
     } // set_this_session_userid2
-
 
     var debug, ZeroFrame, process_message_cb, interval, optional;
     function config(options) {
@@ -223,7 +222,7 @@ var MoneyNetworkAPILib = (function () {
         }
         if (options.this_user_path) set_this_user_path(options.this_user_path, {throw: true}) ;
         if (options.this_session_prvkey) set_this_session_prvkey(options.this_session_prvkey) ;
-        if (options.this_session_userid2) set_this_session_prvkey(options.this_session_userid2) ;
+        if (options.hasOwnProperty('this_session_userid2')) set_this_session_userid2(options.this_session_userid2) ;
     } // config
 
     // check if ZeroFrame has been injected into this library
@@ -243,6 +242,8 @@ var MoneyNetworkAPILib = (function () {
         return this_session_prvkey ;
     }
     function get_this_session_userid2() {
+        var pgm = module + '.get_this_session_userid2: ' ;
+        // console.log(pgm + 'this_session_userid2 = ' + this_session_userid2) ;
         return this_session_userid2 ;
     }
 
@@ -290,7 +291,7 @@ var MoneyNetworkAPILib = (function () {
     // - constructor: called from MoneyNetworkAPI constructor. error message is not reported back in catch (e) { e.message }
     function add_session(sessionid, options) {
         var pgm = module + '.add_session: ';
-        var cb, encrypt, sha256, other_session_filename, start_demon, constructor, error ;
+        var cb, encrypt, sha256, other_session_filename, start_demon, constructor, error, session_at ;
         if (typeof options == 'object') constructor = options.constructor ;
         error = function (text) {
             if (constructor) console.log(pgm + text) ; // new MoneyNetworkAPI. no error.message in catch
@@ -304,7 +305,13 @@ var MoneyNetworkAPILib = (function () {
         encrypt = options.encrypt ;
         if (cb && (typeof cb != 'function')) error('invalid call. param 2 options.cb must be null or a callback function to handle incoming messages') ;
         if (encrypt && !is_MoneyNetworkAPI(encrypt)) error('invalid call. param 2 options.encrypt must be null or an instance of MoneyNetworkAPI') ;
+        session_at = new Date().getTime() ;
+        if (encrypt) encrypt.session_at = session_at ;
         sha256 = CryptoJS.SHA256(sessionid).toString();
+        if (typeof wallet == 'undefined') {
+            console.log(pgm + 'first get_wallet request. get_sessions request must wait for get_wallet request to finish') ;
+            get_wallet_cbs.push(function() {}) ;
+        }
         get_wallet(function (wallet) {
             other_session_filename = wallet ? sha256.substr(0, 10) : sha256.substr(sha256.length - 10);
             // if (debug) console.log(pgm + 'sessionid = ' + sessionid + ', sha256 = ' + sha256 + ', wallet = ' + wallet + ', other_session_filename = ' + other_session_filename);
@@ -312,10 +319,9 @@ var MoneyNetworkAPILib = (function () {
             start_demon = (Object.keys(sessions).length == 0);
             if (!sessions[other_session_filename]) {
                 console.log(pgm + 'monitoring other_session_filename ' + other_session_filename + ', sessionid = ' + sessionid);
-                sessions[other_session_filename] = {sessionid: sessionid, session_at: new Date().getTime()};
+                sessions[other_session_filename] = {sessionid: sessionid, session_at: session_at};
             }
             if (cb) sessions[other_session_filename].cb = cb ;
-            // todo: encrypt. pubkey+pubkey2 combinations should be unique. last used sessionid is the correct session
             if (encrypt) sessions[other_session_filename].encrypt = encrypt ;
             if (start_demon) {
                 demon_id = setInterval(demon, (interval || 500));
@@ -411,7 +417,7 @@ var MoneyNetworkAPILib = (function () {
 
     // register callback to handle incoming message with this filename
     function wait_for_file(request, response_filename, timeout_at, cb) {
-        var pgm = module + '.wait_for_message: ';
+        var pgm = module + '.wait_for_file: ';
         var session_filename ;
         // check parameters
         if (typeof request != 'object') throw pgm + 'invalid call. expected param 1 request to be an object (json). request = ' + JSON.stringify(request);
@@ -426,7 +432,7 @@ var MoneyNetworkAPILib = (function () {
         if (!timeout_at) timeout_at = (new Date().getTime()) + 30000;
         if (!cb) cb = function () {}; // ignored message (read by an other process)
         done[response_filename] = {request: request, timeout_at: timeout_at, cb: cb};
-        if (debug) console.log(pgm + 'added a callback function for ' + response_filename + '. waiting request is ' + JSON.stringify(request));
+        if (debug) console.log(pgm + 'added a callback function for ' + response_filename + '. request = ' + JSON.stringify(request) + ', done[' + response_filename + '] = ' + JSON.stringify(done[response_filename]));
         return null;
     } // wait_for_file
 
@@ -439,6 +445,7 @@ var MoneyNetworkAPILib = (function () {
         now = new Date().getTime();
         for (filename in done) {
             if (done[filename] == true) continue;
+            console.log(pgm + 'done[' + filename + ']=' + JSON.stringify(done[filename]) + ', now = ' + now) ;
             if (done[filename].timeout_at > now) continue;
             console.log(pgm + 'timeout. running callback for ' + filename);
             try {
@@ -492,7 +499,7 @@ var MoneyNetworkAPILib = (function () {
                 // check file timestamp. note special timestamp 0 for array with old offline transactions
                 file_timestamp = filename.substr(11) ;
                 if (!file_timestamp.match(timestamp_re)) {
-                    // invalid filename. must end with a 13 digits timestamp
+                    console.log(pgm + 'invalid filename ' + filename + '. must end with a 13 digits timestamp') ;
                     done[filename] = true;
                     continue;
                 }
@@ -518,8 +525,9 @@ var MoneyNetworkAPILib = (function () {
                 if (!offline[session_filename]) {
                     // first demon call for this session. no <session_filename>.0000000000000 file. no offline transactions.
                     // all old messages for this session must be marked as done
-                    if (file_timestamp < sessions[session_filename].session_at - 60000) {
-                        // first demon call for this session. collect timestamps for files that should not be processed
+                    if ((file_timestamp < sessions[session_filename].session_at - 60000) && !done[filename]) {
+                        // first demon call for this session. collect timestamps for old messages that should not be processed
+                        console.log(pgm + 'first demon call for this session. session_filename = ' + session_filename + ', file_timestamp = ' + file_timestamp + ', session_at = ' + sessions[session_filename].session_at) ;
                         if (!old_timestamps[session_filename]) old_timestamps[session_filename] = [] ;
                         old_timestamps[session_filename].push(file_timestamp) ;
                         continue ;
@@ -555,7 +563,8 @@ var MoneyNetworkAPILib = (function () {
             } // for i
             if (!Object.keys(old_timestamps).length) return ;
 
-            // first demon call for one or more sessions. make old not offline transactions as done
+            // first demon call for one or more sessions. mark old not offline transactions as done
+            console.log(pgm + 'old_timestamps = ' + JSON.stringify(old_timestamps)) ;
             for (session_filename in old_timestamps) {
                 // mark as done
                 file_timestamps =  old_timestamps[session_filename] ;
@@ -704,8 +713,10 @@ var MoneyNetworkAPI = function (options) {
     // this.this_session_prvkey = options.prvkey || null;    // JSEncrypt private key for this session (decrypt ingoing messages)
     if (options.prvkey) MoneyNetworkAPILib.set_this_session_prvkey(options.prvkey);
     this.this_session_prvkey = MoneyNetworkAPILib.get_this_session_prvkey() ;
-    if (options.userid2) MoneyNetworkAPILib.set_this_session_userid2(options.userid2);
+
+    if (options.hasOwnProperty('userid2')) MoneyNetworkAPILib.set_this_session_userid2(options.userid2);
     this.this_session_userid2 = MoneyNetworkAPILib.get_this_session_userid2() || 0 ;
+    // this.log(pgm, 'this_session_userid2 = ' + this.this_session_userid2) ;
 
     // user paths
     if (options.this_user_path) MoneyNetworkAPILib.config({this_user_path: options.this_user_path});
@@ -742,11 +753,13 @@ var MoneyNetworkAPI = function (options) {
     else console.log(pgm + prefix + 'Encryption setup: waiting for ' + missing_keys.join(', '));
 }; // MoneyNetworkAPI
 
-MoneyNetworkAPI.prototype.log = function (pgm, text) {
+MoneyNetworkAPI.prototype.log = function (calling_pgm, text) {
+    var pgm = this.module + '.log: ' ;
     var prefix;
     if (!this.debug) return;
+    if (arguments.length != 2) throw pgm + 'invalid call. two arguments pgm and text expected' ;
     prefix = this.debug == true ? '' : this.debug + ': ';
-    console.log(pgm + prefix + text);
+    console.log(calling_pgm + prefix + text);
 }; // log
 
 // map external and internal property names
@@ -816,6 +829,7 @@ MoneyNetworkAPI.prototype.setup_encryption = function (options) {
         MoneyNetworkAPILib.set_this_session_userid2(options.userid2);
     }
     this.this_session_userid2 = MoneyNetworkAPILib.get_this_session_userid2() || 0 ;
+    // this.log(pgm, 'this_session_userid2 = ' + this.this_session_userid2) ;
 
     if (options.hasOwnProperty('userid2')) {
         self.readonly(options,'userid2') ;
@@ -950,6 +964,7 @@ MoneyNetworkAPI.prototype.decrypt_1 = function (encrypted_text_1, cb) {
     encrypt = new JSEncrypt();
     encrypt.setPrivateKey(this.this_session_prvkey);
     password = encrypt.decrypt(key);
+    if (!password) this.log(pgm, 'error. password is null. key = ' + key + ', this_session_prvkey = ' + this.this_session_prvkey) ;
     output_wa = CryptoJS.AES.decrypt(encrypted_text, password, {format: CryptoJS.format.OpenSSL}); // , { mode: CryptoJS.mode.CTR, padding: CryptoJS.pad.AnsiX923, format: CryptoJS.format.OpenSSL });
     clear_text = output_wa.toString(CryptoJS.enc.Utf8);
     cb(clear_text)
@@ -965,20 +980,20 @@ MoneyNetworkAPI.prototype.encrypt_2 = function (encrypted_text_1, cb) {
     // 1a. get random password
     this.log(pgm, 'encrypted_text_1 = ' + encrypted_text_1 + '. calling aesEncrypt');
     this.ZeroFrame.cmd("aesEncrypt", [""], function (res1) {
-        var pgm = this.module + '.encrypt_2 aesEncrypt callback 1: ';
+        var pgm = self.module + '.encrypt_2 aesEncrypt callback 1: ';
         var password;
         password = res1[0];
         self.check_destroyed(pgm) ;
         self.log(pgm, 'aesEncrypt OK. password = ' + password + '. calling eciesEncrypt');
         // 1b. encrypt password
         self.ZeroFrame.cmd("eciesEncrypt", [password, self.other_session_pubkey2], function (key) {
-            var pgm = this.module + '.encrypt_2 eciesEncrypt callback 2: ';
+            var pgm = self.module + '.encrypt_2 eciesEncrypt callback 2: ';
             self.log(pgm, 'self.other_session_pubkey2 = ' + self.other_session_pubkey2 + ', key = ' + key);
             // 1c. encrypt text
             self.check_destroyed(pgm) ;
             self.log(pgm, 'eciesEncrypt OK. calling aesEncrypt');
             self.ZeroFrame.cmd("aesEncrypt", [encrypted_text_1, password], function (res3) {
-                var pgm = this.module + '.encrypt_2 aesEncrypt callback 3: ';
+                var pgm = self.module + '.encrypt_2 aesEncrypt callback 3: ';
                 var iv, encrypted_text, encrypted_array, encrypted_text_2;
                 self.log(pgm, 'aesEncrypt OK');
                 // forward encrypted result to next function in encryption chain
@@ -1006,10 +1021,12 @@ MoneyNetworkAPI.prototype.decrypt_2 = function (encrypted_text_2, cb) {
     // 1a. decrypt key = password
     this.log(pgm, 'calling eciesDecrypt');
     this.ZeroFrame.cmd("eciesDecrypt", [key, this.this_session_userid2], function (password) {
-        if (!password) throw pgm + 'key eciesDecrypt failed. key = ' + key + ', userid2 = ' + JSON.stringify(self.this_session_userid2);
+        var pgm = self.module + '.decrypt_2 eciesDecrypt callback 1: ';
+        if (!password) throw pgm + 'key eciesDecrypt failed. key = ' + key + ', userid2 = ' + JSON.stringify(self.this_session_userid2 + ', MoneyNetworkAPILib.get_this_session_userid2 = ' + MoneyNetworkAPILib.get_this_session_userid2());
         // 1b. decrypt encrypted_text
         self.log(pgm, 'eciesDecrypt OK. password = ' + password + ', calling aesDecrypt');
         self.ZeroFrame.cmd("aesDecrypt", [iv, encrypted_text, password], function (encrypted_text_1) {
+            var pgm = self.module + '.decrypt_2 aesDecrypt callback 2: ';
             self.log(pgm, 'aesDecrypt OK. encrypted_text_1 = ' + encrypted_text_1);
             cb(encrypted_text_1);
         }); // aesDecrypt callback 2
