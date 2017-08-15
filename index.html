@@ -24,7 +24,7 @@
                 Optional ZeroNet ID
                 <a href="" ng-bind="w.z.site_info.cert_user_id|shortCertId"
                    ng-click="w.select_zeronet_cert()"
-                   title="{{w.site_info.cert_user_id}}">select ...
+                   title="{{w.z.site_info.cert_user_id}}">select ...
                 </a>.
                 <a href="" id="zeronet_cert_changed_link" ng-click="w.zeronet_cert_changed()" style="display: none"></a>
                 Can be used for wallet login storage and/or MoneyNetwork integration.<br>
@@ -33,13 +33,14 @@
                 Send me a <a href="/moneynetwork.bit/?path=/chat2/jro@zeroid.bit" target="_top" rel="noopener noreferrer">PM ✉</a>
                 if your preferred ZeroNet ID povider is not on the list.
                 </p>
-            <p ng-show="w.status.sessionid">
+            <p>
+                Status:<br>
                 Merger:MoneyNetwork permission: <span ng-bind="w.status.merger_permission"></span><br>
                 MoneyNetwork session handshake: <span ng-bind="w.status.session_handshake"></span>
-                <br><br>
+                <br>
             </p>
-            <p>
-                Save wallet login?<br>
+            <p ng-show="w.z.site_info.cert_user_id">
+                Remember wallet login?<br>
                 <input type="radio" ng-model="w.status.save_login" value="0" ng-change="w.save_login_changed()" ng-disabled="w.status.save_login_disabled">
                 No thank you, I will remember wallet login by myself.<br>
                 <input type="radio" ng-model="w.status.save_login" value="1" ng-change="w.save_login_changed()" ng-disabled="w.status.save_login_disabled">
@@ -48,10 +49,14 @@
                     <br>
                     <input type="radio" ng-model="w.status.save_login" value="2" ng-change="w.save_login_changed()" ng-disabled="w.status.save_login_disabled">
                     Save wallet login in MoneyNetwork (browser/localStorage) encrypted with my MoneyNetwork password.
+                    <br>
+                    <input type="radio" ng-model="w.status.save_login" value="3" ng-change="w.save_login_changed()" ng-disabled="w.status.save_login_disabled">
+                    Save wallet login in MoneyNetwork and grant MoneyNetwork full access to wallet (send, receive, donate money + pay and receive payment).
                 </span>
             </p>
             <p ng-hide="w.status.sessionid">
                 Standalone usage. Add this wallet site to <a href="/moneynetwork.bit/?path=/wallet&new_wallet_site=1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1" target="_top" rel="noopener noreferrer">MoneyNetwork</a>?
+                <br>
             </p>
 
         </div>
@@ -135,7 +140,7 @@
         <p>
             Summary:
         <ul style="list-style-type:disc">
-            <li>Todo: Working on MoneyNetwork integration (test, security, API, generic wallet operations from MoneyNetwork)</li>
+            <li>Todo: Working on MoneyNetwork integration (test, security, API, wallet operations)</li>
             <li>Status: Tested OK with test Bitcoins</li>
             <li>Please return test Bitcoins to faucet when finish testing</li>
             <li>Please delete test wallet when finish testing</li>
@@ -173,9 +178,9 @@
 
 <script type="text/javascript" src="js-api/MoneyNetworkAPI.js"></script>
 
-<!--script type="text/javascript" src="js/all.js"></script>
+<script type="text/javascript" src="js/all.js"></script>
 <!-- -->
-<script type="text/javascript" src="js/all.js.zip/all.js"></script>
+<!--script type="text/javascript" src="js/all.js.zip/all.js"></script>
 <!-- -->
 
 </body>

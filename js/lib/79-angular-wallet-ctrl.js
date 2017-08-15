@@ -5,38 +5,13 @@ angular.module('MoneyNetworkW2')
         var controller = 'WalletCtrl';
         console.log(controller + ' loaded');
 
-        // MoneyNetwork (MN) and MoneyNetwork W2 (W2) session handshake.
-
-        // create new session:
-        // 1) sessionid is received from MN
-        // 2) read file with MN pubkey and pubkey2 (unencrypted pubkeys message)
-        // 3) generate JSEncrypt keypair, random userid2 and send W2 pubkey and pubkey2 to MN (3 layer encrypted pubkeys message)
-        // 4) secure connection OK (3 layer encryption)
-        // 5) generate long password pw1+pw2
-        // 6) send pw2 to MN (save_password message)
-        // 7) save session in localStorage.
-        //    - encrypted: W2 prvkey, W2 userid2 and sessionid
-        //    - unencrypted: MN pubkeys, W2 pubkeys and pw1
-
-        // reconnect to old session:
-        // 1) find old session data in localStorage
-        // 2) generate temporary W2 keys
-        // 3) send a get_password request to MN (original W2 pubkeys (unique id), temporary W2 pubkeys) encrypted with MN pubkeys (2 layer encrypted message)
-        // 4) MN returns pw2 encrypted with temporary keys (2 layer encryption)
-        // 4) W2 uses pw1+pw2 to unlock old session information
-        // 5) ping to verify full encrypted connection (original session)
-
-        // todo: startup.
-        // 1) save any sessionid param in new_session and redirect without sessionid
-        // 2) check old saved session. get pwd2 from MN. use old sessionid if MN returns correct pwd2 within <n> seconds
-        // 3) check new_session. create new session with new sessionid
-
-        var sessionid ;
-        if (W2Service.is_sessionid()) return ; // 1: wait for redirect without sessionid in URL
-
         // status: merger permission and session status
         self.status = W2Service.get_status() ;
         self.z = ZeroFrame ;
+
+        // MoneyNetwork (MN) and MoneyNetwork W2 (W2) session handshake.
+        var sessionid ;
+        if (W2Service.is_sessionid()) return ; // 1: wait for redirect without sessionid in URL
 
         // 2-6: startup sequence
         // 2: check merger permission

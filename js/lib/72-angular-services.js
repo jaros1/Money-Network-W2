@@ -154,10 +154,6 @@ angular.module('MoneyNetworkW2')
 
             // <== https://www.blocktrail.com/api/docs
 
-
-
-
-
             // export
             return {
                 get_wallet_info: get_wallet_info,
@@ -424,38 +420,37 @@ angular.module('MoneyNetworkW2')
             } // save_wallet_login
 
             // todo: changed ZeroId. clear z_cache.
-            var z_cache = {} ; // cache some ZeroNet objects: user_hub, wallet.json
+            var z_cache = {} ; // cache some ZeroNet objects: wallet_data_hub, wallet.json
 
-            function get_default_user_hub () {
-                var pgm = service + '.get_default_user_hub: ' ;
-                var default_user_hub, default_hubs, hub, hubs, i ;
-                default_user_hub = '1HXzvtSLuvxZfh6LgdaqTk4FSVf7x8w7NJ' ;
+            function get_default_wallet_hub () {
+                var pgm = service + '.get_default_wallet_hub: ' ;
+                var default_wallet_hub, default_hubs, hub, hubs, i ;
+                default_wallet_hub = '1HXzvtSLuvxZfh6LgdaqTk4FSVf7x8w7NJ' ;
                 console.log(pgm + 'ZeroFrame.site_info.content = ' + JSON.stringify(ZeroFrame.site_info.content));
                 default_hubs = ZeroFrame.site_info.content.settings.default_hubs ;
-                if (!default_hubs) return default_user_hub ;
+                if (!default_hubs) return default_wallet_hub ;
                 hubs = [] ;
                 for (hub in default_hubs) hubs.push(hub) ;
-                if (!hubs.length) return default_user_hub ;
+                if (!hubs.length) return default_wallet_hub ;
                 i = Math.floor(Math.random() * hubs.length);
                 return hubs[i] ;
-            } // get_default_user_hub3
-
-
-            var get_my_user_hub_cbs = [] ; // callbacks waiting for query 17 to finish
-            function get_my_user_hub (cb) {
-                var pgm = service + '.get_my_hub: ' ;
-                if (z_cache.my_user_hub == true) {
-                    // get_my_user_hub request is already running. please wait
-                    get_my_user_hub_cbs.push(cb) ;
+            } // get_default_wallet_hub
+            
+            var get_my_wallet_hub_cbs = [] ; // callbacks waiting for query 17 to finish
+            function get_my_wallet_hub (cb) {
+                var pgm = service + '.get_my_wallet_hub: ' ;
+                if (z_cache.my_wallet_data_hub == true) {
+                    // get_my_wallet_hub request is already running. please wait
+                    get_my_wallet_hub_cbs.push(cb) ;
                     return ;
                 }
-                if (z_cache.my_user_hub) return cb(z_cache.my_user_hub) ;
-                z_cache.my_user_hub = true ;
+                if (z_cache.my_wallet_data_hub) return cb(z_cache.my_wallet_data_hub, z_cache.other_wallet_data_hub) ;
+                z_cache.my_wallet_data_hub = true ;
 
                 // get a list of MN wallet data hubs
                 // ( MN merger sites with title starting with "W2 ")
                 ZeroFrame.cmd("mergerSiteList", [true], function (merger_sites) {
-                    var pgm = service + '.get_my_hub mergerSiteList callback 1: ' ;
+                    var pgm = service + '.get_my_wallet_hub mergerSiteList callback 1: ' ;
                     var wallet_data_hubs, hub, query, debug_seq, i ;
                     wallet_data_hubs = [] ;
                     if (!merger_sites || merger_sites.error) console.log(pgm + 'mergerSiteList failed. merger_sites = ' + JSON.stringify(merger_sites)) ;
@@ -470,56 +465,88 @@ angular.module('MoneyNetworkW2')
                     // - wallet.wallet_address = this site
                     // - latest updated content.json is being used
                     query =
-                        "select substr(wallet_json.directory, 1, instr(wallet_json.directory,'/')-1) as hub " +
-                        "from keyvalue as wallet_address, json as wallet_json, json as content_json, keyvalue as modified " +
+                        "select substr(wallet.directory, 1, instr(wallet.directory,'/')-1) as hub " +
+                        "from keyvalue as wallet_address, json as wallet, json as content, keyvalue as modified " +
                         "where wallet_address.key = 'wallet_address' " +
                         "and wallet_address.value = '" + ZeroFrame.site_info.address + "' " +
-                        "and wallet_json.json_id = wallet_address.json_id " +
-                        "and wallet_json.directory like '%/" + ZeroFrame.site_info.auth_address + "' " +
-                        "and content_json.directory = wallet_json.directory " +
-                        "and content_json.file_name = 'content.json' " +
-                        "and modified.json_id = content_json.json_id " +
+                        "and wallet.json_id = wallet_address.json_id " +
+                        "and wallet.directory like '%/" + ZeroFrame.site_info.auth_address + "' " +
+                        "and content.directory = wallet.directory " +
+                        "and content.file_name = 'content.json' " +
+                        "and modified.json_id = content.json_id " +
                         "and modified.key = 'modified' " +
                         "order by modified.value desc" ;
 
                     console.log(pgm + 'query 17 (MS OK) = ' + query);
                     ZeroFrame.cmd("dbQuery", [query], function (res) {
-                        var pgm = service + '.get_my_hub dbQuery callback 2: ' ;
-                        var i ;
-                        var execute_pending_callbacks = function () {
-                            while (get_my_user_hub_cbs.length) { cb = get_my_user_hub_cbs.shift() ; cb(z_cache.my_user_hub)} ;
-                        };
+                        var pgm = service + '.get_my_wallet_hub dbQuery callback 2: ' ;
+                        var i, run_callbacks, wallet_hub_selected ;
+
+                        run_callbacks = function () {
+                            var pgm = service + '.get_my_wallet_hub.run_callbacks: ' ;
+                            console.log(pgm + 'my_wallet_hub = ' + z_cache.my_wallet_data_hub + ', other_wallet_hub = ' + z_cache.other_wallet_data_hub) ;
+                            cb(z_cache.my_wallet_data_hub, z_cache.other_wallet_data_hub) ;
+                            while (get_my_wallet_hub_cbs.length) {
+                                cb = get_my_wallet_hub_cbs.shift() ;
+                                cb(z_cache.my_wallet_data_hub, z_cache.other_wallet_data_hub)
+                            }
+                        }; // run_callbacks
+
+                        wallet_hub_selected = function () {
+                            // user data hub was selected. find a random other user data hub. For user data hub lists. written to data.json file
+                            var pgm = service + '.get_my_wallet_hub.wallet_hub_selected: ' ;
+                            var other_wallet_data_hubs ;
+                            if (wallet_data_hubs.length <= 1) {
+                                z_cache.other_wallet_data_hub = z_cache.my_wallet_data_hub ;
+                                return run_callbacks() ;
+                            }
+                            other_wallet_data_hubs = [] ;
+                            for (i=0 ; i<wallet_data_hubs.length ; i++) other_wallet_data_hubs.push(wallet_data_hubs[i].hub) ;
+                            i = Math.floor(Math.random() * other_wallet_data_hubs.length);
+                            z_cache.other_wallet_data_hub = other_wallet_data_hubs[i] ;
+                            return run_callbacks() ;
+                        }; // wallet_hub_selected
+
+                        get_and_add_default_wallet_hub = function () {
+                            var pgm = service + '.get_my_wallet_hub.get_and_add_default_wallet_hub: ' ;
+                            var my_wallet_data_hub ;
+                            // no wallet_data_hubs (no merger site hubs were found)
+                            my_wallet_data_hub = get_default_wallet_hub() ;
+                            console.log(pgm + 'my_wallet_data_hub = ' + my_wallet_data_hub) ;
+                            ZeroFrame.cmd("mergerSiteAdd", [my_wallet_data_hub], function (res) {
+                                var pgm = service + '.get_my_wallet_hub.get_and_add_default_wallet_hub mergerSiteAdd callback: ' ;
+                                console.log(pgm + 'res = '+ JSON.stringify(res));
+                                z_cache.my_wallet_data_hub = my_wallet_data_hub ;
+                                wallet_hub_selected() ;
+                            }) ; // mergerSiteAdd callback 3
+                        }; // get_and_add_default_wallet_hub
+
                         if (res.error) {
-                            console.log(pgm + "user data hub lookup failed: " + res.error);
+                            console.log(pgm + "wallet data hub lookup failed: " + res.error);
                             console.log(pgm + 'query = ' + query);
-                            z_cache.my_user_hub = get_default_user_hub() ;
-                            cb(z_cache.my_user_hub) ;
-                            return;
+                            return get_and_add_default_wallet_hub() ;
                         }
                         if (res.length) {
-                            // old user
-                            z_cache.my_user_hub = res[0].hub ; // return hub for last updated content.json
-                            console.log(pgm + 'hub = ' + z_cache.my_user_hub) ;
-                            cb(z_cache.my_user_hub) ;
-                            execute_pending_callbacks() ;
-                            return ;
+                            // old wallet
+                            z_cache.my_wallet_data_hub = res[0].hub ; // return hub for last updated content.json
+                            console.log(pgm + 'hub = ' + z_cache.my_wallet_data_hub) ;
+                            return wallet_hub_selected() ;
                         }
-                        // new user. get user data hub from
+                        // new wallet. get wallet data hub from
                         // 1) list of MN merger sites (mergerSiteList)
                         // 2) default_hubs from site_info.content.sessions.default_hubs
                         if (wallet_data_hubs.length) {
                             i = Math.floor(Math.random() * wallet_data_hubs.length);
-                            z_cache.my_user_hub = wallet_data_hubs[i] ;
+                            z_cache.my_wallet_data_hub = wallet_data_hubs[i] ;
+                            console.log(pgm + 'hub = ' + z_cache.my_wallet_data_hub) ;
+                            wallet_hub_selected() ;
                         }
-                        else z_cache.my_user_hub = get_default_user_hub() ;
-                        console.log(pgm + 'hub = ' + z_cache.my_user_hub) ;
-                        cb(z_cache.my_user_hub) ;
-                        execute_pending_callbacks() ;
+                        else get_and_add_default_wallet_hub() ;
                     }) ; // dbQuery callback 2
 
                 }) ; // mergerSiteList callback 1
 
-            } // get_my_user_hub
+            } // get_my_wallet_hub
 
             var get_user_path_cbs = [] ;
             function get_user_path (cb) {
@@ -533,7 +560,7 @@ angular.module('MoneyNetworkW2')
                 }
                 if (z_cache.user_path) return cb(z_cache.user_path) ; // OK
                 z_cache.user_path = true ;
-                get_my_user_hub(function (my_hub) {
+                get_my_wallet_hub(function (my_hub) {
                     z_cache.user_path = 'merged-MoneyNetwork/' + my_hub + '/data/users/' + ZeroFrame.site_info.auth_address + '/' ;
                     MoneyNetworkAPILib.config({this_user_path: z_cache.user_path}) ;
                     cb(z_cache.user_path);
@@ -670,22 +697,30 @@ angular.module('MoneyNetworkW2')
             function update_wallet_json(cb) {
                 var pgm = service + '.update_wallet_json: ';
                 if (!cb) cb = function () {};
-                get_wallet_json(function (wallet) {
-                    var pgm = service + '.create_session get_wallet_json callback 1: ';
-                    console.log(pgm + 'wallet = ' + JSON.stringify(wallet));
-                    var old_wallet_str = JSON.stringify(wallet) ;
-                    // todo: add hub = random other W2 user data hub. For list of available W2 user data hubs. See https://github.com/jaros1/Money-Network-W2/issues/2
-                    wallet.wallet_address = ZeroFrame.site_info.address;
-                    wallet.wallet_title = ZeroFrame.site_info.content.title;
-                    wallet.wallet_description = ZeroFrame.site_info.content.description;
-                    if (old_wallet_str == JSON.stringify(wallet)) return cb('ok'); // no change to public wallet information
-                    console.log(pgm + 'wallet = ' + JSON.stringify(wallet));
-                    write_wallet_json(function (res) {
-                        console.log(pgm + 'res = ' + JSON.stringify(res));
-                        if (res == "ok") z_publish(cb);
-                        else cb(res);
-                    }); // write_wallet_json callback 2
-                }); // get_wallet_json callback 1
+
+                get_my_wallet_hub(function (hub, random_other_hub) {
+                    get_wallet_json(function (wallet) {
+                        var pgm = service + '.update_wallet_json get_wallet_json callback 2: ';
+                        console.log(pgm + 'wallet = ' + JSON.stringify(wallet));
+                        var old_wallet_str = JSON.stringify(wallet) ;
+                        // todo: add hub = random other W2 user data hub. For list of available W2 user data hubs. See https://github.com/jaros1/Money-Network-W2/issues/2
+                        // todo: json validate wallet.json. add to MoneyNetworkAPI
+                        wallet.wallet_address = ZeroFrame.site_info.address;
+                        wallet.wallet_title = ZeroFrame.site_info.content.title;
+                        wallet.wallet_description = ZeroFrame.site_info.content.description;
+                        wallet.currencies = [ { code: 'tBTC', name: 'Test Bitcoin', url: 'https://en.bitcoin.it/wiki/Testnet'} ] ;
+                        if (!wallet.hub) wallet.hub = random_other_hub ;
+                        if (old_wallet_str == JSON.stringify(wallet)) return cb('ok'); // no change to public wallet information
+                        console.log(pgm + 'wallet = ' + JSON.stringify(wallet));
+                        write_wallet_json(function (res) {
+                            var pgm = service + '.update_wallet_json write_wallet_json callback 3: ';
+                            console.log(pgm + 'res = ' + JSON.stringify(res));
+                            if (res == "ok") z_publish(cb);
+                            else cb(res);
+                        }); // write_wallet_json callback 3
+                    }); // get_wallet_json callback 2
+                }) ; // get_my_wallet_hub callback 1
+
             } // update_wallet_json
 
             // MN-W2 session. only relevant if W2 is called from MN with a sessionid or an old still working MN-W2 session can be found in localStorage
@@ -1016,7 +1051,7 @@ angular.module('MoneyNetworkW2')
                 }; // request1
                 var request2 = function (cb) {
                     var pgm = service + '.check_merger_permission.request2: ';
-                    get_my_user_hub(function (hub) {
+                    get_my_wallet_hub(function (hub) {
                         ZeroFrame.cmd("mergerSiteAdd", [hub], function (res) {
                             console.log(pgm + 'res = ', JSON.stringify(res));
                             cb((res == 'ok'));
@@ -1043,7 +1078,7 @@ angular.module('MoneyNetworkW2')
                 ZeroFrame.cmd("mergerSiteList", {}, function (merger_sites) {
                     var pgm = service + '.check_merger_permission mergerSiteList callback 2: ';
                     console.log(pgm + 'merger_sites = ', JSON.stringify(merger_sites));
-                    get_my_user_hub(function (hub) {
+                    get_my_wallet_hub(function (hub) {
                         if (merger_sites[hub] == "MoneyNetwork") cb(true);
                         else request2(cb);
                     });
@@ -1156,7 +1191,7 @@ angular.module('MoneyNetworkW2')
                             // console.log(pgm + 'decrypted prvkey. prvkey = ' + temp_prvkey) ;
 
                             temp_sessionid = MoneyNetworkAPILib.aes_decrypt(info.sessionid, temp_pwd) ;
-                            status.session_handshake = 'Old session with sessionid ' + temp_sessionid + ' was restored from localStorage' ;
+                            status.session_handshake = 'Old session was restored from localStorage' ;
                             status.sessionid = temp_sessionid ;
                             encrypt2 = new MoneyNetworkAPI({
                                 debug: 'encrypt2',
