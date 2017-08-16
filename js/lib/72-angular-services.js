@@ -568,7 +568,7 @@ angular.module('MoneyNetworkW2')
                 }) ;
             } // get_user_path
 
-            // todo: 3) publish only if wallet.json content has been created/updated/deleted
+            // now only used after wallet.json updates
             var z_publish_interval = 0 ;
             function z_publish (cb) {
                 var pgm = service + '.z_publish: ' ;
@@ -665,7 +665,7 @@ angular.module('MoneyNetworkW2')
                         else wallet = JSON.parse(wallet_str) ;
                         z_cache.wallet_json = wallet ;
                         cb(z_cache.wallet_json) ;
-                        while (get_wallet_json_cbs.length) { cb = get_wallet_json_cbs.shift() ; cb(z_cache.wallet_json)} ;
+                        while (get_wallet_json_cbs.length) { cb = get_wallet_json_cbs.shift() ; cb(z_cache.wallet_json)}
                     }) ; // fileGet callback 2
                 }) ; // get_user_path callback 1
             } // get_wallet_json
@@ -688,12 +688,7 @@ angular.module('MoneyNetworkW2')
                 }) ; // get_user_path callback 2
             } // write_wallet_json
 
-            // save pubkey2 (cryptMessage public key in wallet.json for encrypted communication
-            // todo: 1) use wallet for public information (wallet_address, wallet_title, wallet_description)
-            // todo: 2) use optional file for session data (session_at, sessionid_sha256, pubkey2)
-            // todo: 3) add optional
-            var session_at = new Date().getTime() ;
-
+            // write public wallet info
             function update_wallet_json(cb) {
                 var pgm = service + '.update_wallet_json: ';
                 if (!cb) cb = function () {};
@@ -701,10 +696,17 @@ angular.module('MoneyNetworkW2')
                 get_my_wallet_hub(function (hub, random_other_hub) {
                     get_wallet_json(function (wallet) {
                         var pgm = service + '.update_wallet_json get_wallet_json callback 2: ';
+                        var old_wallet_str, error, key ;
                         console.log(pgm + 'wallet = ' + JSON.stringify(wallet));
-                        var old_wallet_str = JSON.stringify(wallet) ;
-                        // todo: add hub = random other W2 user data hub. For list of available W2 user data hubs. See https://github.com/jaros1/Money-Network-W2/issues/2
-                        // todo: json validate wallet.json. add to MoneyNetworkAPI
+                        old_wallet_str = JSON.stringify(wallet) ;
+                        // validate after read
+                        error = encrypt1.validate_json(pgm, wallet) ;
+                        if (error) {
+                            // old wallet info is invalid. delete all
+                            console.log(pgm + 'deleting invalid wallet.json. error = ' + error) ;
+                            for (key in wallet) delete wallet[key]
+                        }
+                        wallet.msgtype = 'wallet' ;
                         wallet.wallet_address = ZeroFrame.site_info.address;
                         wallet.wallet_title = ZeroFrame.site_info.content.title;
                         wallet.wallet_description = ZeroFrame.site_info.content.description;
@@ -712,6 +714,9 @@ angular.module('MoneyNetworkW2')
                         if (!wallet.hub) wallet.hub = random_other_hub ;
                         if (old_wallet_str == JSON.stringify(wallet)) return cb('ok'); // no change to public wallet information
                         console.log(pgm + 'wallet = ' + JSON.stringify(wallet));
+                        // validate before write
+                        error = encrypt1.validate_json(pgm, wallet) ;
+                        if (error) return cb('cannot write invalid wallet.json. error = ' + error + ', json = ' + JSON.stringify(json));
                         write_wallet_json(function (res) {
                             var pgm = service + '.update_wallet_json write_wallet_json callback 3: ';
                             console.log(pgm + 'res = ' + JSON.stringify(res));
