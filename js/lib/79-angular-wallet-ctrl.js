@@ -27,7 +27,8 @@ angular.module('MoneyNetworkW2')
                 // startup. check if wallet login is saved in:
                 // - 1: wallet login is saved encrypted (cryptMessage) in MoneyNetworkW2 localStorage
                 // - 2: wallet login is saved encrypted (symmetric) in MoneyNetwork localStorage (session is required)
-                // localStorage: save_wallet_login: '0', '1' or '2'
+                // - 3: wallet login is saved encrypted (symmetric) in MoneyNetwork localStorage (session is required) + full authorization
+                // localStorage: save_wallet_login: '0', '1', '2' or '3'
                 self.status.save_login = save_login ;
                 console.log(pgm + 'self.status.save_login = ' + self.status.save_login) ;
                 if (self.status.save_login == null) {
@@ -89,7 +90,7 @@ angular.module('MoneyNetworkW2')
         // save wallet login:
         // - 0: No thank you, I will remember wallet login by myself.
         // - 1: Save wallet login in MoneyNetworkW2 (browser/localStorage) encrypted with my ZeroId certificate.
-        // - 2: Save wallet login in MoneyNetwork (browser/localStorage) encrypted with my MoneyNetwork password (sessionid is required)
+        // - 2 & 3: Save wallet login in MoneyNetwork (browser/localStorage) encrypted with my MoneyNetwork password (sessionid is required)
         self.status.save_login = '0' ;
         var old_save_wallet_login = null ; // null: not yet checked
 

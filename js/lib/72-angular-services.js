@@ -176,7 +176,35 @@ angular.module('MoneyNetworkW2')
             console.log(service + ' loaded');
 
             // localStorage wrapper. avoid some ZeroNet callbacks. cache localStorage in ls hash
+            // ls.save_login[auth_address] = { choice: '0', '1', '2' or '3', login: <choice 1: encrypted or unencrypted login> }
             var ls = { is_loading: true } ;
+            //ls = [{
+            //    "sessions": {
+            //        "jro@zeroid.bit": {
+            //            "this_pubkey": "-----BEGIN PUBLIC KEY-----\nMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCsOMfAvHPTp0K9qZfoItdJ9898\nU3S2gAZZSLuLZ1qMXr1dEnO8AwxS58UvKGwHObT1XQG8WT3Q1/6OGlJms4mYY1rF\nQXzYEV5w0RlcSrMpLz3+nJ7cVb9lYKOO8hHZFWudFRywkYb/aeNh6mAXqrulv92z\noX0S7YMeNd2YrhqefQIDAQAB\n-----END PUBLIC KEY-----",
+            //            "this_pubkey2": "Ahn94vCUvT+S/nefej83M02n/hP8Jvqc8KbxMtdSsT8R",
+            //            "other_pubkey": "-----BEGIN PUBLIC KEY-----\nMIIBITANBgkqhkiG9w0BAQEFAAOCAQ4AMIIBCQKCAQBpQDut223gZcYfGTHxqoal\nDFX4PvQY1riWEPVqiO2eXS3E47XJjRUtMSUqzpb011ZxzauTxSXlTL1uunIykTvN\nmsXaNSq/tPIue0zdVSCN4PrJo5FY5P6SYGviZBLzdHZJYqlNk3QPngrBGJl/VBBp\nToPXmN7hog/9rXEGhPyN7GX2AKy3pPFCkXFC9GDlCoEjt0Pq+y5sF/t4iPXyn878\nirWfYbRPisLjnJGqSe23/c6MhP8CTvnbFvpiBcLES7HQk6hqqBBnLe9NLTABbqXK\n6i1LW6+aZRqOX72mMwU+1LTcbQRIW1nG6rtPhaUqiIzeH0g8B743bjmcJagm1foH\nAgMBAAE=\n-----END PUBLIC KEY-----",
+            //            "other_pubkey2": "A4RQ77ia8qK1b3FW/ERL2HdW33jwCyKqxRwKQLzMw/yu",
+            //            "encrypted_info": "[\"UPvLnGUi2vDpTiUqzfzF+QLKACBDFPycbrRSQf3l7neWclOYDguddp7u4kHAWeb+AXpAdgAg89WakZt3zbPIwc5L+8DsrVG8S74APeEvlRCv5bf5WjHYokT70IZylIg/X+QsUNG9biVYsRSUe6s02+AQJCn2Z3BCNoIyvAfuVEym9A+6knyktoS+ZxFNkwMCvJ/Jki5S0OuQkX4aaOlEt8McOvX2HA==\",\"oteCwG24VjKOOUQxz7wGPQ==\",\"TGXeFTOWPpkz/sMFUcNrifinytHHXGck5pJj6OwHK6h99Y7D+QGVlaVysZvlsZRAnMW4FK7MNlXw7FmNqMAVeLca+Uw6ZML+evjtibYy+UyYFUkNvnJZQLfFuMsQopGi\"]",
+            //            "prvkey": "U2FsdGVkX1/ICZ/rij1Au+VA02bh4KEs7vla2+j4W5HPPyF0DRRjJIZf7p9FpEl4FXZgxEMlKwBrLhZEERMgYu4XOY0zCsqoWkX9WCu13xi4mhrg8IJtmDtqIujSh5ddjQ8VcxT4unvxCQOGpZ7s8H+/A9sTKm7fAqAzOdLpqMaX7u+QE0FibJGiRh2z7kylsPf1u8KIHWjICBMTuNzEvac1ah58fEVpeQgeRzdRxY4zj2Pa8OJRqeFeLJGMADqimnwGuiZ+kMDsQw2y0XO51wZrVoVY0M7kMVA3Vos1skH1/Ug0TLuyrKGQvZo/V7KhevdlwTj5FT9gPCpimXgBCMl+cFKWUQzkRYKx+OdgKFspMFohjLKJ+ZP5xlfXlziypHhgaBMdT6fXEMSGPtHlPeMGqTOna/GqjmCRuI3tUVoTwpER2ryADbUBlnZY4uBEpFWCmsUHYJgT+I0Yx9ZF/e8Zn9qYSp05APnlqVm0IA5Kl0gQGhJfCjIKeVbVeYmEaPKIe+Jc9eKcNx38AG8dUo85KDI1GQYd7iUdmV59ngSFjmP4goBEzkX/EmFck3oMeVTIahHedkyF/V8gIGQY1ouKCJ6ZyKgB9K2OQ3GqzmMNiMbAG6fklLgBPRJxVXb1jYtVCb2qdzFRKT1S9rGHjssIqYBJEU8XmGXwgUxJZPn4gg8JdFFGh6VodoqdJOhZc9FIHk5/E52cL3X+ZbDouErwGhh9a4+pcoR4zXKhuVx0XOKK8Bnfv9Baxgtjo/1KcpPve93L50U9B7E68ToFvdjyCaVjyf/9UKplYy40cO62p+HdkPRw2bOGo6RrjtVsEsvbXxMRYrPh8mD3k4uZvB4FaV+egLPR/NOPsRS+eHohtZndzMPRVbZqVSts5zNvNGSe5dy+vfvR+REoM3shFqM2hhQCk8LzGYplU0Kq3qJYtTe1R3nyOMzCyqaxNNNmP/wXLSo2O26RcsXJp3d+ABFkxB4MSjPSRqyF7bbJ1Cf2cpqAStrjr57w3nRLc235rUeuDVkEcWdTLw0C+dMVU+WtKOgg5BSxeIDuDuXXYcFMtCD0HFyEgxgOxE4Hx8GXgRj41F6nqBrFSK2U87AQeWmA+fRm5I1hLLi1wpKMxErx1rBT/H3PGdstvF9XEiytZsZI04KVTYM9I5FHm/BPGJqrtemyJS70F6yHQ2e2qrkkb9+MXa+SPF2prj4/qWoI",
+            //            "sessionid": "U2FsdGVkX1/hQbcjOztF8NtZk5xb7y+ho/zbceopRMB6g0ok7IjI93PdX6Ip5VS8oOkfQ+xfgudkVLnKI+mhiZzjDlIUqYJi0gdVz+ehLbU="
+            //        }
+            //    }, "save_login": {"jro@zeroid.bit": "2"}
+            //}];
+            //ls = [{
+            //    "sessions": {
+            //        "jro@zeroid.bit": {
+            //            "this_pubkey": "-----BEGIN PUBLIC KEY-----\nMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCsOMfAvHPTp0K9qZfoItdJ9898\nU3S2gAZZSLuLZ1qMXr1dEnO8AwxS58UvKGwHObT1XQG8WT3Q1/6OGlJms4mYY1rF\nQXzYEV5w0RlcSrMpLz3+nJ7cVb9lYKOO8hHZFWudFRywkYb/aeNh6mAXqrulv92z\noX0S7YMeNd2YrhqefQIDAQAB\n-----END PUBLIC KEY-----",
+            //            "this_pubkey2": "Ahn94vCUvT+S/nefej83M02n/hP8Jvqc8KbxMtdSsT8R",
+            //            "other_pubkey": "-----BEGIN PUBLIC KEY-----\nMIIBITANBgkqhkiG9w0BAQEFAAOCAQ4AMIIBCQKCAQBpQDut223gZcYfGTHxqoal\nDFX4PvQY1riWEPVqiO2eXS3E47XJjRUtMSUqzpb011ZxzauTxSXlTL1uunIykTvN\nmsXaNSq/tPIue0zdVSCN4PrJo5FY5P6SYGviZBLzdHZJYqlNk3QPngrBGJl/VBBp\nToPXmN7hog/9rXEGhPyN7GX2AKy3pPFCkXFC9GDlCoEjt0Pq+y5sF/t4iPXyn878\nirWfYbRPisLjnJGqSe23/c6MhP8CTvnbFvpiBcLES7HQk6hqqBBnLe9NLTABbqXK\n6i1LW6+aZRqOX72mMwU+1LTcbQRIW1nG6rtPhaUqiIzeH0g8B743bjmcJagm1foH\nAgMBAAE=\n-----END PUBLIC KEY-----",
+            //            "other_pubkey2": "A4RQ77ia8qK1b3FW/ERL2HdW33jwCyKqxRwKQLzMw/yu",
+            //            "encrypted_info": "[\"UPvLnGUi2vDpTiUqzfzF+QLKACBDFPycbrRSQf3l7neWclOYDguddp7u4kHAWeb+AXpAdgAg89WakZt3zbPIwc5L+8DsrVG8S74APeEvlRCv5bf5WjHYokT70IZylIg/X+QsUNG9biVYsRSUe6s02+AQJCn2Z3BCNoIyvAfuVEym9A+6knyktoS+ZxFNkwMCvJ/Jki5S0OuQkX4aaOlEt8McOvX2HA==\",\"oteCwG24VjKOOUQxz7wGPQ==\",\"TGXeFTOWPpkz/sMFUcNrifinytHHXGck5pJj6OwHK6h99Y7D+QGVlaVysZvlsZRAnMW4FK7MNlXw7FmNqMAVeLca+Uw6ZML+evjtibYy+UyYFUkNvnJZQLfFuMsQopGi\"]",
+            //            "prvkey": "U2FsdGVkX1/ICZ/rij1Au+VA02bh4KEs7vla2+j4W5HPPyF0DRRjJIZf7p9FpEl4FXZgxEMlKwBrLhZEERMgYu4XOY0zCsqoWkX9WCu13xi4mhrg8IJtmDtqIujSh5ddjQ8VcxT4unvxCQOGpZ7s8H+/A9sTKm7fAqAzOdLpqMaX7u+QE0FibJGiRh2z7kylsPf1u8KIHWjICBMTuNzEvac1ah58fEVpeQgeRzdRxY4zj2Pa8OJRqeFeLJGMADqimnwGuiZ+kMDsQw2y0XO51wZrVoVY0M7kMVA3Vos1skH1/Ug0TLuyrKGQvZo/V7KhevdlwTj5FT9gPCpimXgBCMl+cFKWUQzkRYKx+OdgKFspMFohjLKJ+ZP5xlfXlziypHhgaBMdT6fXEMSGPtHlPeMGqTOna/GqjmCRuI3tUVoTwpER2ryADbUBlnZY4uBEpFWCmsUHYJgT+I0Yx9ZF/e8Zn9qYSp05APnlqVm0IA5Kl0gQGhJfCjIKeVbVeYmEaPKIe+Jc9eKcNx38AG8dUo85KDI1GQYd7iUdmV59ngSFjmP4goBEzkX/EmFck3oMeVTIahHedkyF/V8gIGQY1ouKCJ6ZyKgB9K2OQ3GqzmMNiMbAG6fklLgBPRJxVXb1jYtVCb2qdzFRKT1S9rGHjssIqYBJEU8XmGXwgUxJZPn4gg8JdFFGh6VodoqdJOhZc9FIHk5/E52cL3X+ZbDouErwGhh9a4+pcoR4zXKhuVx0XOKK8Bnfv9Baxgtjo/1KcpPve93L50U9B7E68ToFvdjyCaVjyf/9UKplYy40cO62p+HdkPRw2bOGo6RrjtVsEsvbXxMRYrPh8mD3k4uZvB4FaV+egLPR/NOPsRS+eHohtZndzMPRVbZqVSts5zNvNGSe5dy+vfvR+REoM3shFqM2hhQCk8LzGYplU0Kq3qJYtTe1R3nyOMzCyqaxNNNmP/wXLSo2O26RcsXJp3d+ABFkxB4MSjPSRqyF7bbJ1Cf2cpqAStrjr57w3nRLc235rUeuDVkEcWdTLw0C+dMVU+WtKOgg5BSxeIDuDuXXYcFMtCD0HFyEgxgOxE4Hx8GXgRj41F6nqBrFSK2U87AQeWmA+fRm5I1hLLi1wpKMxErx1rBT/H3PGdstvF9XEiytZsZI04KVTYM9I5FHm/BPGJqrtemyJS70F6yHQ2e2qrkkb9+MXa+SPF2prj4/qWoI",
+            //            "sessionid": "U2FsdGVkX1/hQbcjOztF8NtZk5xb7y+ho/zbceopRMB6g0ok7IjI93PdX6Ip5VS8oOkfQ+xfgudkVLnKI+mhiZzjDlIUqYJi0gdVz+ehLbU="
+            //        }
+            //    }, "save_login": {"jro@zeroid.bit": "2"}
+            //}];
+
             function ls_load() {
                 ZeroFrame.cmd("wrapperGetLocalStorage", [], function (res) {
                     var pgm = service + '.wrapperGetLocalStorage callback: ';
@@ -218,6 +246,8 @@ angular.module('MoneyNetworkW2')
 
             function ls_get () { return ls }
             function ls_save() {
+                var pgm = service + '.ls_save: ' ;
+                // console.log(pgm + 'ls.save_login = ' + JSON.stringify(ls.save_login)) ;
                 ZeroFrame.cmd("wrapperSetLocalStorage", [ls], function () {}) ;
             } // ls_save
 
@@ -230,32 +260,48 @@ angular.module('MoneyNetworkW2')
 
             // save_wallet_login:
             // - '1': wallet login is saved encrypted (cryptMessage) in W2 localStorage
-            // - '2': wallet login is saved encrypted (symmetric) in MN localStorage (session is required)
+            // - '2' & '3': wallet login is saved encrypted (symmetric) in MN localStorage (session is required)
             function get_wallet_login(save_wallet_login, cb) {
                 var pgm = service + '.get_wallet_login: ' ;
-                var error, cert_user_id, encrypted_json, request ;
-                if (['1','2'].indexOf(save_wallet_login) == -1) return cb(null, null, "Invalid call. save_wallet_login must be equal '1' or '2'") ;
+                var error, auth_address, user_login_info, login, encrypted_json, request ;
+                if (['1','2','3'].indexOf(save_wallet_login) == -1) return cb(null, null, "Invalid call. save_wallet_login must be equal '1', '2' or '3'") ;
                 if (save_wallet_login == '1') {
                     // wallet login is saved encrypted (cryptMessage) in W2 localStorage
-                    if (!ls.wallet_login) return cb(null, null, 'wallet_login hash was not found in localStorage') ;
-                    if (typeof ls.wallet_login != 'object') {
-                        error = 'wallet_login is not a hash. wallet_login = ' + JSON.stringify(ls.wallet_login) ;
-                        ls.wallet_login = {} ;
+                    if (!ls.save_login) return cb(null, null, 'save_login hash was not found in localStorage') ;
+                    if (typeof ls.save_login != 'object') {
+                        error = 'save_login was not a hash. save_login = ' + JSON.stringify(ls.save_login) ;
+                        ls.save_login = {} ;
+                        ls_save() ;
                         return cb(null, null, error) ;
                     }
-                    cert_user_id = ZeroFrame.site_info.cert_user_id || 'n/a' ;
-                    encrypted_json = ls.wallet_login[cert_user_id] ;
-                    if (!encrypted_json) return cb(null, null, 'Wallet login for ' + cert_user_id + ' was not found') ;
+                    auth_address = ZeroFrame.site_info.cert_user_id ? ZeroFrame.site_info.auth_address : 'n/a' ;
+                    user_login_info = ls.save_login[auth_address] ;
+                    if (!user_login_info) return cb(null, null, 'Wallet login for ' + auth_address + ' was not found') ;
+                    if (auth_address == 'n/a') {
+                        // no ZeroNet certificate. login is saved unencrypted in ls
+                        login = user_login_info.login ;
+                        console.log(pgm + 'unencrypted login = ' + JSON.stringify(login)) ;
+                        if (!login) return cb(null, null, 'Wallet login for ' + auth_address + ' was not found') ;
+                        if (typeof login != 'object') {
+                            error = 'save_login[' + auth_address + '].login is not a hash. save_login = ' + JSON.stringify(login) ;
+                            user_login_info.login = {} ;
+                            ls_save() ;
+                            return cb(null, null, error) ;
+                        }
+                        return cb(login.wallet_id, login.wallet_password, null) ;
+                    }
+                    // ZeroNet certificate present. decrypt login
+                    encrypted_json = user_login_info.login ;
                     console.log(pgm + 'encrypted_json = ' + JSON.stringify(encrypted_json));
                     encrypt1.decrypt_json(encrypted_json, function(json) {
                         var pgm = service + '.get_wallet_login decrypt_json callback: ' ;
                         console.log(pgm + 'json = ' + JSON.stringify(json)) ;
-                        if (!json) cb(null, null, 'decrypt error. encrypted_json was ' + JSON.stringify(encrypted_json)) ;
+                        if (!json) cb(null, null, 'decrypt error. encrypted_json was ' + JSON.stringify(user_login_info)) ;
                         else cb(json.wallet_id, json.wallet_password, null) ;
                     }) ; // decrypt_json callback
                 }
                 else {
-                    // save_wallet_login == '2'
+                    // save_wallet_login == '2' or '3'
                     // wallet login is saved encrypted (symmetric) in MN localStorage (session is required)
                     if (!status.sessionid) return cb(null, null, 'Cannot read wallet information. MN session was not found');
                     // send get_data message to MN and wait for response
@@ -312,18 +358,49 @@ angular.module('MoneyNetworkW2')
             // save_wallet_login:
             // - '0': no thank you. Clear any wallet data previously saved with '1' or '2'
             // - '1': wallet login is saved encrypted (cryptMessage) in W2 localStorage
-            // - '2': wallet login is saved encrypted (symmetric) in MN localStorage (session is required)
+            // - '2' & '3': wallet login is saved encrypted (symmetric) in MN localStorage (session is required)
             function save_wallet_login(save_wallet_login, wallet_id, wallet_password, cb) {
                 var pgm = service + '.save_wallet_login: ';
-                var cert_user_id, data, request, old_login, save_w2;
-                if (['0', '1', '2'].indexOf(save_wallet_login) == -1) return cb({error: "Invalid call. save_wallet_login must be equal '0', '1' or '2'"});
+                var cert_user_id, auth_address, data, request, old_login, save_w2;
+                console.log(pgm + 'save_wallet_login = ' + save_wallet_login + ', wallet_id = ' + wallet_id + ', wallet_password = ' + wallet_password);
+                if (['0', '1', '2', '3'].indexOf(save_wallet_login) == -1) return cb({error: "Invalid call. save_wallet_login must be equal '0', '1', '2' or '3'"});
 
-                // update W2 localStorage
-                cert_user_id = ZeroFrame.site_info.cert_user_id || 'n/a';
+                // save wallet login choice in W2 localStorage (choice = 0, 1, 2 or 3
+                cert_user_id = ZeroFrame.site_info.cert_user_id ;
+                auth_address = cert_user_id ? ZeroFrame.site_info.auth_address : 'n/a' ;
                 if (!ls.save_login) ls.save_login = {};
-                if (!ls.save_login[cert_user_id]) ls.save_login[cert_user_id] = {};
-                old_login = JSON.parse(JSON.stringify(ls.save_login[cert_user_id]));
-                ls.save_login[cert_user_id].choice = save_wallet_login;
+                if (cert_user_id && ls.save_login[cert_user_id]) delete ls.save_login[cert_user_id] ; // old index
+                if (!ls.save_login[auth_address]) ls.save_login[auth_address] = {};
+                if (typeof ls.save_login[auth_address] != 'object') {
+                    console.log(pgm + 'error. ls.save_login[auth_address] was not a hash. ls.save_login[auth_address] = ' + JSON.stringify(ls.save_login[auth_address])) ;
+                    ls.save_login[auth_address] = {} ;
+                }
+                old_login = JSON.parse(JSON.stringify(ls.save_login[auth_address]));
+                ls.save_login[auth_address].choice = save_wallet_login;
+                console.log(pgm + 'ls = ' + JSON.stringify(ls)) ;
+                //ls = {
+                //    "sessions": {
+                //        "jro@zeroid.bit": {
+                //            "this_pubkey": "-----BEGIN PUBLIC KEY-----\nMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCsOMfAvHPTp0K9qZfoItdJ9898\nU3S2gAZZSLuLZ1qMXr1dEnO8AwxS58UvKGwHObT1XQG8WT3Q1/6OGlJms4mYY1rF\nQXzYEV5w0RlcSrMpLz3+nJ7cVb9lYKOO8hHZFWudFRywkYb/aeNh6mAXqrulv92z\noX0S7YMeNd2YrhqefQIDAQAB\n-----END PUBLIC KEY-----",
+                //            "this_pubkey2": "Ahn94vCUvT+S/nefej83M02n/hP8Jvqc8KbxMtdSsT8R",
+                //            "other_pubkey": "-----BEGIN PUBLIC KEY-----\nMIIBITANBgkqhkiG9w0BAQEFAAOCAQ4AMIIBCQKCAQBpQDut223gZcYfGTHxqoal\nDFX4PvQY1riWEPVqiO2eXS3E47XJjRUtMSUqzpb011ZxzauTxSXlTL1uunIykTvN\nmsXaNSq/tPIue0zdVSCN4PrJo5FY5P6SYGviZBLzdHZJYqlNk3QPngrBGJl/VBBp\nToPXmN7hog/9rXEGhPyN7GX2AKy3pPFCkXFC9GDlCoEjt0Pq+y5sF/t4iPXyn878\nirWfYbRPisLjnJGqSe23/c6MhP8CTvnbFvpiBcLES7HQk6hqqBBnLe9NLTABbqXK\n6i1LW6+aZRqOX72mMwU+1LTcbQRIW1nG6rtPhaUqiIzeH0g8B743bjmcJagm1foH\nAgMBAAE=\n-----END PUBLIC KEY-----",
+                //            "other_pubkey2": "A4RQ77ia8qK1b3FW/ERL2HdW33jwCyKqxRwKQLzMw/yu",
+                //            "encrypted_info": "[\"UPvLnGUi2vDpTiUqzfzF+QLKACBDFPycbrRSQf3l7neWclOYDguddp7u4kHAWeb+AXpAdgAg89WakZt3zbPIwc5L+8DsrVG8S74APeEvlRCv5bf5WjHYokT70IZylIg/X+QsUNG9biVYsRSUe6s02+AQJCn2Z3BCNoIyvAfuVEym9A+6knyktoS+ZxFNkwMCvJ/Jki5S0OuQkX4aaOlEt8McOvX2HA==\",\"oteCwG24VjKOOUQxz7wGPQ==\",\"TGXeFTOWPpkz/sMFUcNrifinytHHXGck5pJj6OwHK6h99Y7D+QGVlaVysZvlsZRAnMW4FK7MNlXw7FmNqMAVeLca+Uw6ZML+evjtibYy+UyYFUkNvnJZQLfFuMsQopGi\"]",
+                //            "prvkey": "U2FsdGVkX1/ICZ/rij1Au+VA02bh4KEs7vla2+j4W5HPPyF0DRRjJIZf7p9FpEl4FXZgxEMlKwBrLhZEERMgYu4XOY0zCsqoWkX9WCu13xi4mhrg8IJtmDtqIujSh5ddjQ8VcxT4unvxCQOGpZ7s8H+/A9sTKm7fAqAzOdLpqMaX7u+QE0FibJGiRh2z7kylsPf1u8KIHWjICBMTuNzEvac1ah58fEVpeQgeRzdRxY4zj2Pa8OJRqeFeLJGMADqimnwGuiZ+kMDsQw2y0XO51wZrVoVY0M7kMVA3Vos1skH1/Ug0TLuyrKGQvZo/V7KhevdlwTj5FT9gPCpimXgBCMl+cFKWUQzkRYKx+OdgKFspMFohjLKJ+ZP5xlfXlziypHhgaBMdT6fXEMSGPtHlPeMGqTOna/GqjmCRuI3tUVoTwpER2ryADbUBlnZY4uBEpFWCmsUHYJgT+I0Yx9ZF/e8Zn9qYSp05APnlqVm0IA5Kl0gQGhJfCjIKeVbVeYmEaPKIe+Jc9eKcNx38AG8dUo85KDI1GQYd7iUdmV59ngSFjmP4goBEzkX/EmFck3oMeVTIahHedkyF/V8gIGQY1ouKCJ6ZyKgB9K2OQ3GqzmMNiMbAG6fklLgBPRJxVXb1jYtVCb2qdzFRKT1S9rGHjssIqYBJEU8XmGXwgUxJZPn4gg8JdFFGh6VodoqdJOhZc9FIHk5/E52cL3X+ZbDouErwGhh9a4+pcoR4zXKhuVx0XOKK8Bnfv9Baxgtjo/1KcpPve93L50U9B7E68ToFvdjyCaVjyf/9UKplYy40cO62p+HdkPRw2bOGo6RrjtVsEsvbXxMRYrPh8mD3k4uZvB4FaV+egLPR/NOPsRS+eHohtZndzMPRVbZqVSts5zNvNGSe5dy+vfvR+REoM3shFqM2hhQCk8LzGYplU0Kq3qJYtTe1R3nyOMzCyqaxNNNmP/wXLSo2O26RcsXJp3d+ABFkxB4MSjPSRqyF7bbJ1Cf2cpqAStrjr57w3nRLc235rUeuDVkEcWdTLw0C+dMVU+WtKOgg5BSxeIDuDuXXYcFMtCD0HFyEgxgOxE4Hx8GXgRj41F6nqBrFSK2U87AQeWmA+fRm5I1hLLi1wpKMxErx1rBT/H3PGdstvF9XEiytZsZI04KVTYM9I5FHm/BPGJqrtemyJS70F6yHQ2e2qrkkb9+MXa+SPF2prj4/qWoI",
+                //            "sessionid": "U2FsdGVkX1/hQbcjOztF8NtZk5xb7y+ho/zbceopRMB6g0ok7IjI93PdX6Ip5VS8oOkfQ+xfgudkVLnKI+mhiZzjDlIUqYJi0gdVz+ehLbU="
+                //        },
+                //        "18DbeZgtVCcLghmtzvg4Uv8uRQAwR8wnDQ": {
+                //            "this_pubkey": "-----BEGIN PUBLIC KEY-----\nMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCuM/Sevlo2UYUkTVteBnnUWpsd\n5JjAUnYhP0M2o36da15z192iNOmd26C+UMg0U8hitK8pOJOLiWi8x6TjvnaipDjc\nIi0p0l3vGBEOvIyNEYE7AdfGqW8eEDzzl9Cezi1ARKn7gq1o8Uk4U2fjkm811GTM\n/1N9IwACfz3lGdAm4QIDAQAB\n-----END PUBLIC KEY-----",
+                //            "this_pubkey2": "Ahn94vCUvT+S/nefej83M02n/hP8Jvqc8KbxMtdSsT8R",
+                //            "other_pubkey": "-----BEGIN PUBLIC KEY-----\nMIIBITANBgkqhkiG9w0BAQEFAAOCAQ4AMIIBCQKCAQBpQDut223gZcYfGTHxqoal\nDFX4PvQY1riWEPVqiO2eXS3E47XJjRUtMSUqzpb011ZxzauTxSXlTL1uunIykTvN\nmsXaNSq/tPIue0zdVSCN4PrJo5FY5P6SYGviZBLzdHZJYqlNk3QPngrBGJl/VBBp\nToPXmN7hog/9rXEGhPyN7GX2AKy3pPFCkXFC9GDlCoEjt0Pq+y5sF/t4iPXyn878\nirWfYbRPisLjnJGqSe23/c6MhP8CTvnbFvpiBcLES7HQk6hqqBBnLe9NLTABbqXK\n6i1LW6+aZRqOX72mMwU+1LTcbQRIW1nG6rtPhaUqiIzeH0g8B743bjmcJagm1foH\nAgMBAAE=\n-----END PUBLIC KEY-----",
+                //            "other_pubkey2": "A4RQ77ia8qK1b3FW/ERL2HdW33jwCyKqxRwKQLzMw/yu",
+                //            "encrypted_info": "[\"db8ut8VPHBOJP5lkTkQuzQLKACBsjOmgGbMg2vddGNnbrs7lloCT+9/JwBqRWKShkxTHoAAgtZXB0AukJanMK0+NxSjaW9ZUlwIg01S2FfmTPUZuD3KEM6F+l/RQ93NjPWPrVEeFjjNVE7MGJ7xNKIJQYEst4h8EH0WR4oTB3I3KgG9iGCJJHuwARqhWv4+WtRehNkvCWIadBXLjR78I8LhIFEOC0w==\",\"P7LY+DnKVQbmI4aawY4BHA==\",\"0F7WY6Sx5AytXflHnxiTktpLHdKGBfIoRR+CQy/N66+SfI4OBfoBcyxVoO8EBXFTGWzXAEdXeTCi7Si19V+kMyu49o9m19FBW6ALeeGZ11zx7wDIUoixVNC1OVvnhTRi\"]",
+                //            "prvkey": "U2FsdGVkX1/CSHQ1XzsHHEp8LflGummH2FtZw0gVBSpxDYLK0pdga38ACqVynQqceNWTdS/EznKwdKa6kqbDE4MDL3cGB+Jqs6TrwUyMBGQf/y6zDBSHWH7j1Lo+w6/g4QvElVGc7XlGy4IsJfPjadCCimI5l2hBqeJGKdiBQj5geHcvUGfVBeRNKNE84Zi6phh58OZr3LzZD7C3saxg2oDpE4/Ad3btLbUt1YeXdMl0552mqZu2PBfVjk2rxyjMu3P8mnHl43MUMoy6ze5gCivC2O53pgpKS3BTQXBqo41gguXNblGIfNu/GxSb2Ql0pv59gMatRUaq7G0jJaGfd+t8+LWyPSB5wIvfIr1cWTJ5ECl68y6GahdD3kodQlhCg8ZxeZBpcLxF4PGfFMCcuVuqkjiIXd22sFuRKZUMB7qJii0NyZNle1LF9z6IjP6WLyhZAi8XnYNGrfuIEMmUbE7iUKaIhz4KtpJRtZUx5EfXq8GE5l1cYs8hU+BrXs90amdmv4B+9b0MN91R6EfyJv8ZSUIoCEsJG/VExoxowlDT+lvl+XMNYfwqNs42PLRhGqYEMnI696WGP55WsojCUHUgjFoqEjS+w1syShVjOOLezhgHRG0vXXypDqRTXjCMUipfMkB0/xrh7PhmuOYUHid5Qjndsif/6jR/QLJuyqNGqIRx/sRkbQTFb1T2JsUj1r2tXxZViz2EQL7RmZQILtfObj9PZKYB7RVJm3aIUfdjJ9yLW3UCqywFGZCgzLIqJBt4vF+rFzG6sPKWaTGUuWqIIl7H+X53PwF3sGJx0/YWcf8weEoaZeAKpCiNZywfN/j+yEB6DHF9Xx3QTCR/BPV92QJD/eoU70HIGmw++AO6DhJeQ1nx9qohBCmhnEShZlVuYMqRp9YD4TL6vUjwKJL0kHOgcjqvAPfGXFTfh+bUfFSBXKSBHlC2TiBI2CG2K6sNJFXCVFsk3H6InGwHeMnC7MbcP4Ahjdrb8ZQKRMvw9JLLFy2WzfXZpOqxlksJ1wTmRhgDEFgAby2ZkPwAI4u+98mMPNS0s4v/CSyww9Nre0SnMNZc4lLO9/LOHyf0T2QETNz92he6//lcQ0ujCAbYUALSIuF9n3XhKNX8YnPvuMIE3/MS+2Fmvx+cK/CIBpBicPRLcKbWm+xy5VJHYqtdMLsch0wz04d69KU/6ljTPwxQv5i2iyL16X3tRrp7",
+                //            "sessionid": "U2FsdGVkX1/E8FClTdFyQjciHcZG/xAo+owpPmSn8zHCx/Lt8REeqoKiz/LIoIg2t1aLwqsiWkOIApqO9M4TQVLNiZkz4hsLL1sRgEOAmyA="
+                //        }
+                //    }, "save_login": {"18DbeZgtVCcLghmtzvg4Uv8uRQAwR8wnDQ": "2"}
+                //};
+                ls_save();
 
                 // get and add W2 pubkey2 to encryption setup (self encrypt using ZeroNet certificate)
                 get_my_pubkey2(function (my_pubkey2) {
@@ -337,14 +414,14 @@ angular.module('MoneyNetworkW2')
                         var unencrypted_login;
                         if (save_wallet_login != '1') {
                             // delete any old login info from W2 localStorage
-                            delete ls.save_login[cert_user_id].login;
+                            delete ls.save_login[auth_address].login;
                             ls_save();
                             return cb();
                         }
                         // save login info in W2 localStorage
-                        if (cert_user_id == 'n/a') {
+                        if (auth_address == 'n/a') {
                             // no cert_user_id. not encrypted
-                            ls.save_login[cert_user_id].login = {
+                            ls.save_login[auth_address].login = {
                                 wallet_id: wallet_id,
                                 wallet_password: wallet_password
                             };
@@ -355,7 +432,7 @@ angular.module('MoneyNetworkW2')
                         unencrypted_login = {wallet_id: wallet_id, wallet_password: wallet_password};
                         console.log(pgm + 'encrypt1.other_pubkey2 = ' + encrypt1.other_session_pubkey2);
                         encrypt1.encrypt_json(unencrypted_login, [2], function (encrypted_login) {
-                            ls.save_login[cert_user_id].login = encrypted_login;
+                            ls.save_login[auth_address].login = encrypted_login;
                             ls_save();
                             return cb();
                         });
@@ -363,10 +440,10 @@ angular.module('MoneyNetworkW2')
 
                     save_w2(function () {
                         var pgm = service + '.save_wallet_login save_w2 callback 2: ';
-                        // update MN localStorage (choice '2')
-                        if (save_wallet_login == '2') {
+                        // update MN localStorage (choice '2' and '3')
+                        if (['2', '3'].indexOf(save_wallet_login) != -1) {
                             if (!status.sessionid) {
-                                ls.save_login[cert_user_id] = old_login;
+                                ls.save_login[auth_address] = old_login;
                                 return cb({error: 'Error. Cannot save wallet information in MN. MN session was not found'});
                             }
                             // encrypt wallet data before sending data to MN
@@ -388,20 +465,14 @@ angular.module('MoneyNetworkW2')
                                     var pgm = service + '.save_wallet_login send_message callback 4: ';
                                     if (!response) cb({error: 'No response'});
                                     else if (response.error) cb({error: response.error});
-                                    else {
-                                        // OK. saved
-                                        if (!ls.save_login) ls.save_login = {};
-                                        ls.save_login[cert_user_id] = save_wallet_login;
-                                        ls_save();
-                                        cb({});
-                                    }
+                                    else cb({}); // OK. login saved in MN
                                 }); // send_message callback 4
                             }); // encrypt_json callback 3
 
                         }
                         else {
                             // 0 or 1. clear old 2
-                            if (!status.sessionid) return cb({error: 'Cannot clear wallet information. MN session was not found'});
+                            if (!status.sessionid) return cb({}); // error: 'Cannot clear wallet information. MN session was not found'
                             // send data_delete to MN session
                             request = {msgtype: 'delete_data'}; // no keys array. delete all data for session
                             console.log(pgm + 'json = ' + JSON.stringify(request));
@@ -548,11 +619,12 @@ angular.module('MoneyNetworkW2')
 
             } // get_my_wallet_hub
 
+            // return special merger site path
             var get_user_path_cbs = [] ;
             function get_user_path (cb) {
                 var pgm = service + '.user_path: ' ;
                 if (!ZeroFrame.site_info) throw pgm + "invalid call. ZeroFrame is not finish loading" ;
-                // if (!ZeroFrame.site_info.cert_user_id) throw pgm + "invalid call. ZeroId is missing" ;
+                if (!ZeroFrame.site_info.cert_user_id) throw pgm + "invalid call. ZeroId is missing" ;
                 if (z_cache.user_path == true) {
                     // wait for previous user_path request to finish
                     get_user_path_cbs.push(cb) ;
@@ -827,7 +899,7 @@ angular.module('MoneyNetworkW2')
                         }
 
                         // mark file as read. generic process_incoming_message will not process this file
-                        MoneyNetworkAPILib.wait_for_file({msgtype: 'n/a'}, res[0].filename) ;
+                        MoneyNetworkAPILib.wait_for_file({msgtype: 'ignore pubkeys message'}, res[0].filename) ;
 
                         // first message. remember path to other session user directory. all following messages must come from same user directory
                         other_user_path = 'merged-MoneyNetwork/' + res[0].directory + '/' ;
@@ -875,7 +947,6 @@ angular.module('MoneyNetworkW2')
                             }
                             console.log(pgm + 'OK. received public keys from MN') ;
                             console.log(pgm + 'MN public keys: pubkey2 = ' + pubkeys.pubkey2 + ', pubkey = ' + pubkeys.pubkey) ;
-                            console.log(pgm + 'todo: remember MN user_path. following messages must come from same MN user_path') ;
                             encrypt2.setup_encryption({pubkey: pubkeys.pubkey, pubkey2: pubkeys.pubkey2}) ;
                             // mark file as read.
 
@@ -987,12 +1058,11 @@ angular.module('MoneyNetworkW2')
                     array = [ session_pwd1, unlock_pwd2, this_session_filename, other_session_filename] ;
                     encrypt1.encrypt_2(JSON.stringify(array), function(encrypted_info) {
                         var pgm = service + '.save_session encrypt_2 callback 2: ' ;
-                        var cert_user_id, info, prvkey, password ;
+                        var auth_address, info, prvkey, password ;
                         if (!ls.sessions) ls.sessions = {} ;
-                        cert_user_id = ZeroFrame.site_info.cert_user_id ;
-                        if (!ls.sessions[cert_user_id]) ls.sessions[cert_user_id] = {} ;
-
-                        info = ls.sessions[cert_user_id] ;
+                        auth_address = ZeroFrame.site_info.auth_address ;
+                        if (!ls.sessions[auth_address]) ls.sessions[auth_address] = {} ;
+                        info = ls.sessions[auth_address] ;
                         info.this_pubkey = this_pubkey ; // W2 (clear text)
                         info.this_pubkey2 = this_pubkey2 ; // W2 (clear text)
                         info.other_pubkey = encrypt2.other_session_pubkey ; // MN (clear text)
@@ -1097,7 +1167,7 @@ angular.module('MoneyNetworkW2')
             // w2 startup 5: check old session. restore from localStorage and password from MN
             function is_old_session (cb) {
                 var pgm = service + '.is_old_session: ' ;
-                var cert_user_id, info, encrypted_session_pwd1 ;
+                var auth_address, info, encrypted_session_pwd1 ;
                 if (!ls.sessions) {
                     console.log(pgm + 'no old sesions found in ls. ls = ' + JSON.stringify(ls)) ;
                     return cb() ;
@@ -1106,19 +1176,19 @@ angular.module('MoneyNetworkW2')
                     console.log(pgm + 'invalid call. ZeroFrame is still loading') ;
                     return cb() ;
                 }
-                cert_user_id = ZeroFrame.site_info.cert_user_id ;
-                if (!cert_user_id) {
+                if (!ZeroFrame.site_info.cert_user_id) {
                     console.log(pgm + 'invalid call. ZeroId not selected. Cert_user_id is null') ;
                     return cb() ;
                 }
-                info = ls.sessions[cert_user_id] ;
+                auth_address = ZeroFrame.site_info.auth_address ;
+                info = ls.sessions[auth_address] ;
                 if (!info) {
-                    console.log(pgm + 'no old session was found for ' + cert_user_id) ;
+                    console.log(pgm + 'no old session was found for ' + auth_address) ;
                     return cb() ;
                 }
                 if (!info.encrypted_info) {
-                    console.log(pgm + 'error in saved session for ' + cert_user_id + '. no encrypted_info. info = ' + JSON.stringify(info)) ;
-                    delete ls.sessions[cert_user_id] ;
+                    console.log(pgm + 'error in saved session for ' + auth_address + '. no encrypted_info. info = ' + JSON.stringify(info)) ;
+                    delete ls.sessions[auth_address] ;
                     ls_save() ;
                     return cb() ;
                 }
@@ -1135,15 +1205,15 @@ angular.module('MoneyNetworkW2')
                         array_names = ['session_pwd1', 'unlock_pwd2', 'this_session_filename', 'other_session_filename'] ;
                         array = JSON.parse(decrypted_info) ; // [ session_pwd1, unlock_pwd2, this_session_filename, other_session_filename]
                         if (array.length != array_names.length) {
-                            console.log(pgm + 'error in saved session for ' + cert_user_id + '. Expected encrypted_info array.length = ' + array_names.length + '. Found length = ' + array.length) ;
-                            delete ls.sessions[cert_user_id] ;
+                            console.log(pgm + 'error in saved session for ' + auth_address + '. Expected encrypted_info array.length = ' + array_names.length + '. Found length = ' + array.length) ;
+                            delete ls.sessions[auth_address] ;
                             ls_save() ;
                             return cb() ;
                         }
                         for (i=0; i<array_names.length ; i++) {
                             if (typeof array[i] != 'string') {
-                                console.log(pgm + 'error in saved session for ' + cert_user_id + '. Expected ' + array_names[i] + ' to be a string. array[' + i + '] = "' + JSON.stringify(array[i]) + '"') ;
-                                delete ls.sessions[cert_user_id] ;
+                                console.log(pgm + 'error in saved session for ' + auth_address + '. Expected ' + array_names[i] + ' to be a string. array[' + i + '] = "' + JSON.stringify(array[i]) + '"') ;
+                                delete ls.sessions[auth_address] ;
                                 ls_save() ;
                                 return cb() ;
                             }
@@ -1249,14 +1319,13 @@ angular.module('MoneyNetworkW2')
             // params:
             // - startup: true: startup, false: changed cert_user_id
             // - cb: callback function. returns sessionid and save_wallet_login
-            var old_cert_user_id ;
+            var old_auth_address ;
             function initialize (startup, cb) {
                 var pgm = service + '.initialize: ' ;
-                console.log(pgm + 'startup=', startup, ', cb=', cb) ;
                 if (!cb) cb = function() {} ;
-                if (!startup && old_cert_user_id && ZeroFrame.site_info && old_cert_user_id != ZeroFrame.site_info.cert_user_id) {
+                if (!startup && old_auth_address && ZeroFrame.site_info && old_auth_address != ZeroFrame.site_info.auth_address) {
                     // reset session variables
-                    console.log(pgm + 'changed cert_user_id. reset encrypts and sessionid') ;
+                    console.log(pgm + 'changed ZeroNet certificate. reset encrypts and sessionid') ;
                     status.sessionid = null ;
                     encrypt1 = new MoneyNetworkAPI({debug: 'encrypt1'}) ;
                     encrypt2 = new MoneyNetworkAPI({debug: 'encrypt2', cb: process_incoming_message}) ;
@@ -1266,28 +1335,28 @@ angular.module('MoneyNetworkW2')
                 check_merger_permission(function(ok) {
                     var pgm = service + '.initialize step 2 check_merger_permission callback 1: ' ;
                     if (!ok) {
+                        // no merger permission
                         return cb(null) ;
-                    } // no merger permission
+                    }
                     // step 3 - check zeroNet login
                     console.log(pgm + 'initialize step 3: check ZeroNet login') ;
                     if (!ZeroFrame.site_info.cert_user_id) return cb(null); // not logged in
-                    old_cert_user_id = ZeroFrame.site_info.cert_user_id ;
+                    old_auth_address = ZeroFrame.site_info.auth_address ;
                     // step 4 - update wallet.json
                     console.log(pgm + 'initialize step 4: update wallet.json') ;
                     update_wallet_json(function (res) {
                         var pgm = service + '.initialize update_wallet_json callback 2: ' ;
                         var cb2 ;
                         console.log(pgm + 'res = ' + JSON.stringify(res)) ;
-                        // extend cb. lookup save_wallet from ls
+                        // extend cb. lookup save_login[].choice (radio group) from ls
                         cb2 = function (sessionid) {
+                            var pgm = service + '.initialize.cb2: ' ;
                             var save_wallet_login ;
-                            if (sessionid) {
-                                // session found. check save_wallet_login
-                                if (!ls.save_login) ls.save_login = {} ;
-                                if (!ls.save_login[old_cert_user_id]) ls.save_login[old_cert_user_id] = '0' ;
-                                save_wallet_login = ls.save_login[old_cert_user_id] ;
-                                ls_save() ;
-                            }
+                            if (!ls.save_login) ls.save_login = {} ;
+                            // console.log(pgm + 'ls.save_login = ' + JSON.stringify(ls.save_login)) ;
+                            if (!ls.save_login[old_auth_address]) ls.save_login[old_auth_address] = { choice: '0' } ;
+                            save_wallet_login = ls.save_login[old_auth_address].choice ;
+                            ls_save() ;
                             cb(sessionid, save_wallet_login) ;
                         };
                         // check for old (1. priority) or new (2. priority) session
