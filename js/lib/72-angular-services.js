@@ -817,7 +817,26 @@ angular.module('MoneyNetworkW2')
             // - encrypt2: instance of MoneyNetworkAPI class created with new MoneyNetworkAPI request
             function process_incoming_message (inner_path, encrypt2) {
                 var pgm = service + '.process_incoming_message: ';
+                var pos, other_user_path, file_timestamp ;
+
+                if (encrypt2.destroyed) {
+                    // MoneyNetworkAPI instance has been destroyed. Maybe deleted session?
+                    console.log(pgm + 'ignoring incoming message ' + inner_path + '. session has been destroyed. reason = ' + encrypt2.destroyed) ;
+                    return ;
+                }
                 console.log(pgm + 'inner_path = ' + inner_path);
+
+                // check other_user_path. all messages for this session must come from same user directory
+                pos = inner_path.lastIndexOf('/') ;
+                other_user_path = inner_path.substr(0,pos+1) ;
+                // console.log(pgm + 'other_user_path = ' + other_user_path) ;
+                encrypt2.setup_encryption({other_user_path: other_user_path}) ; // set and check
+
+                // get file timestamp. used in reponse. double link between request and response
+                pos = inner_path.lastIndexOf('.') ;
+                file_timestamp = parseInt(inner_path.substr(pos+1)) ;
+                console.log(pgm + 'file_timestamp = ' + file_timestamp) ;
+
                 ZeroFrame.cmd("fileGet", {inner_path: inner_path, required: false}, function (json_str) {
                     var pgm = service + '.process_incoming_message fileGet callback 1: ';
                     var encrypted_json ;
@@ -827,11 +846,33 @@ angular.module('MoneyNetworkW2')
                     }
                     encrypted_json = JSON.parse(json_str) ;
                     // decrypt json
-                    encrypt2.decrypt_json(encrypted_json, function (json) {
+                    encrypt2.decrypt_json(encrypted_json, function (request) {
                         var pgm = service + '.process_incoming_message decrypt_json callback 2: ';
-                        var error ;
-                        console.log(pgm + 'json = ' + JSON.stringify(json)) ;
-                        console.log(pgm + 'todo: not implemented') ;
+                        var response_timestamp, request_timestamp, error, response ;
+
+                        // remove any response timestamp before validation (used in response filename)
+                        response_timestamp = request.response ; delete request.response ; // request received. must use response_timestamp in response filename
+                        request_timestamp = request.request ; delete request.request ; // response received. todo: must be a response to previous send request with request timestamp in request filename
+
+                        console.log(pgm + 'request = ' + JSON.stringify(request)) ;
+
+                        // validate and process incoming json message and process
+                        response = { msgtype: 'response' } ;
+                        error = encrypt2.validate_json(pgm, request) ;
+                        if (error) response.error = 'message is invalid. ' + error ;
+                        else if (request.msgtype == 'ping') {
+                            // simple ping from MN. checking connection. return OK response
+
+                        }
+                        else response.error = 'Unknown msgtype ' + request.msgtype ;
+                        console.log(pgm + 'response = '  + JSON.stringify(response)) ;
+                        if (!response_timestamp) return ; // no response was requested
+
+                        // send response to other session
+                        encrypt2.send_message(response, {timestamp: response_timestamp, msgtype: request.msgtype, request: file_timestamp}, function (res)  {
+                            var pgm = service + '.process_incoming_message send_message callback 3: ';
+                            console.log(pgm + 'res = ' + JSON.stringify(res)) ;
+                        }) ; // send_message callback 3
 
                     }) ; // decrypt_json callback 2
                 }); // fileGet callback 1

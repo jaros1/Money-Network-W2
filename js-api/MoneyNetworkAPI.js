@@ -335,6 +335,33 @@ var MoneyNetworkAPILib = (function () {
         }); // get_wallet callback
     } // add_session
 
+    // return session
+    function get_session (sessionid, cb) {
+        var pgm = module + '.get_sessions: ' ;
+        var retry_get_session, fake_get_wallet_cb, other_session_filename, session_info ;
+        console.log(pgm + 'get_wallet_cbs.length = ' + get_wallet_cbs.length) ;
+        if (get_wallet_cbs.length) {
+            // wait for get_wallet queue to empty before returning sessions (get_session_filenames)
+            retry_get_session = function() {
+                get_session(sessionid, cb) ;
+            };
+            fake_get_wallet_cb = function() {
+                // wait a moment to empty get_wallet_cbs queue
+                setTimeout(retry_get_session, 200) ;
+            };
+            get_wallet_cbs.push(fake_get_wallet_cb) ;
+            return ;
+        }
+        for (other_session_filename in sessions) {
+            session_info = sessions[other_session_filename];
+            if (session_info.encrypt && session_info.encrypt.destroyed) continue;
+            if (session_info.sessionid != sessionid) continue ;
+            console.log(pgm + 'found session with sessionid ' + sessionid) ;
+            return cb(session_info) ;
+        }
+        cb() ;
+    } // get_session
+
     function get_sessions (cb) {
         var pgm = module + '.get_sessions: ' ;
         var array, other_session_filename, session_info1, session_info2, key, retry_get_sessions, fake_get_wallet_cb ;
@@ -447,7 +474,6 @@ var MoneyNetworkAPILib = (function () {
         else console.log(pgm + 'no debug 2') ;
         return null;
     } // wait_for_file
-
 
     var timestamp_re = /^[0-9]{13}$/ ;
     function demon() {
@@ -679,6 +705,7 @@ var MoneyNetworkAPILib = (function () {
         get_wallet: get_wallet,
         is_session: is_session,
         add_session: add_session,
+        get_session: get_session,
         get_sessions: get_sessions,
         wait_for_file: wait_for_file,
         delete_session: delete_session,
@@ -1361,6 +1388,16 @@ MoneyNetworkAPI.json_schemas = {
         "additionalProperties": false
     }, // response
 
+    "ping": {
+        "type": 'object',
+        "title": 'Simple ping. Expects Timeout or OK response',
+        "properties": {
+            "msgtype": {"type": 'string', "pattern": '^ping$'},
+        },
+        "required": ['msgtype'],
+        "additionalProperties": false
+    }, // ping
+
     "get_balance": {
         "type": 'object',
         "title": 'MN: send get_balance request to wallet session',
@@ -1470,7 +1507,7 @@ MoneyNetworkAPI.prototype.validate_json = function (calling_pgm, json, request_m
 //   - timestamp: timestamp to be used in filename for outgoing message. Only used when sending response
 //   - msgtype: request msgtype. only used when sending response. Used for json validation
 //   - request: request timestamp. only used when sending response. Added to response json after validation. used for offline transactions
-// - cb: callback. returns an empty hash, hash with an error messsage or response
+// - cb: callback. returns an empty hash, a hash with an error messsage or a response
 MoneyNetworkAPI.prototype.send_message = function (request, options, cb) {
     var pgm = this.module + '.send_message: ';
     var self, response, request_msgtype, request_timestamp, encryptions, error, request_at, request_file_timestamp,
