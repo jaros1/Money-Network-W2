@@ -690,6 +690,24 @@ var MoneyNetworkAPILib = (function () {
         return output_wa.toString(CryptoJS.enc.Utf8);
     } // aes_decrypt
 
+    // helper. caculate wallet_sha256 from other wallet fields (minimize wallet.json disk usage)
+    function calc_wallet_sha256 (wallet) {
+        var pgm = module + '.calc_wallet_sha256: ';
+        var wallet_sha256_json, wallet_sha256 ;
+        if (!wallet.wallet_address || !wallet.wallet_title || !wallet.wallet_description || !wallet.currencies) {
+            this.log(pgm + 'cannot calculate wallet_sha256 for wallet ' + JSON.stringify(wallet))  ;
+            return null ;
+        }
+        wallet_sha256_json = {
+            wallet_address: wallet.wallet_address,
+            wallet_title: wallet.wallet_title,
+            wallet_description: wallet.wallet_description,
+            currencies: wallet.currencies
+        } ;
+        wallet_sha256 = CryptoJS.SHA256(JSON.stringify(wallet_sha256_json)).toString();
+        return wallet_sha256 ;
+    } // calc_wallet_sha256
+
     // export MoneyNetworkAPILib
     return {
         config: config,
@@ -712,7 +730,8 @@ var MoneyNetworkAPILib = (function () {
         delete_all_sessions: delete_all_sessions,
         clear_all_data: clear_all_data,
         aes_encrypt: aes_encrypt,
-        aes_decrypt: aes_decrypt
+        aes_decrypt: aes_decrypt,
+        calc_wallet_sha256: calc_wallet_sha256
     };
 
 })(); // MoneyNetworkAPILib
@@ -1390,7 +1409,7 @@ MoneyNetworkAPI.json_schemas = {
 
     "ping": {
         "type": 'object',
-        "title": 'Simple ping. Expects Timeout or OK response',
+        "title": 'Simple session ping. Expects Timeout or OK response',
         "properties": {
             "msgtype": {"type": 'string', "pattern": '^ping$'},
         },
@@ -1436,7 +1455,7 @@ MoneyNetworkAPI.json_schemas = {
     "wallet": {
         "type": 'object',
         "title": 'Public wallet information in wallet.json files',
-        "description": 'wallet_* from site_info, currencies is a list of supported currencies and hub is a random wallet data hub address',
+        "description": 'wallet_* from site_info, currencies is a list of supported currencies and hub is a random wallet data hub address. wallet_sha256 is sha256 signature for {wallet_address, wallet_title, wallet_description, currencies} hash',
         "properties": {
             "msgtype": {"type": 'string', "pattern": '^wallet$'},
             "wallet_address": { "type": 'string'},
@@ -1456,10 +1475,11 @@ MoneyNetworkAPI.json_schemas = {
                     "additionalProperties": false
                 }
             },
+            "wallet_sha256": { "type": 'string', "pattern": '^[0-9a-f]{64}$' },
             "hub": { "type": 'string'}
 
         },
-        "required": ['msgtype', 'wallet_address', 'wallet_title', 'wallet_description'],
+        "required": ['msgtype', 'wallet_sha256'],
         "additionalProperties": false
     } // wallet
 

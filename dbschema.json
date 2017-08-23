@@ -10,7 +10,7 @@
       ]
     },
     ".+/data/users/.+/wallet.json": {
-      "to_keyvalue": [ "wallet_address", "wallet_title", "wallet_description" ]
+      "to_keyvalue": [ "wallet_address", "wallet_title", "wallet_description", "wallet_sha256" ]
     }
   },
   "tables": {

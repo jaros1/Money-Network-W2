@@ -768,9 +768,10 @@ angular.module('MoneyNetworkW2')
                 get_my_wallet_hub(function (hub, random_other_hub) {
                     get_wallet_json(function (wallet) {
                         var pgm = service + '.update_wallet_json get_wallet_json callback 2: ';
-                        var old_wallet_str, error, key ;
+                        var old_wallet_str, old_wallet_json, error, key, wallet_sha256, query ;
                         console.log(pgm + 'wallet = ' + JSON.stringify(wallet));
                         old_wallet_str = JSON.stringify(wallet) ;
+                        old_wallet_json = JSON.parse(old_wallet_str) ;
                         // validate after read
                         error = encrypt1.validate_json(pgm, wallet) ;
                         if (error) {
@@ -784,17 +785,66 @@ angular.module('MoneyNetworkW2')
                         wallet.wallet_description = ZeroFrame.site_info.content.description;
                         wallet.currencies = [ { code: 'tBTC', name: 'Test Bitcoin', url: 'https://en.bitcoin.it/wiki/Testnet'} ] ;
                         if (!wallet.hub) wallet.hub = random_other_hub ;
-                        if (old_wallet_str == JSON.stringify(wallet)) return cb('ok'); // no change to public wallet information
-                        console.log(pgm + 'wallet = ' + JSON.stringify(wallet));
-                        // validate before write
-                        error = encrypt1.validate_json(pgm, wallet) ;
-                        if (error) return cb('cannot write invalid wallet.json. error = ' + error + ', json = ' + JSON.stringify(json));
-                        write_wallet_json(function (res) {
-                            var pgm = service + '.update_wallet_json write_wallet_json callback 3: ';
-                            console.log(pgm + 'res = ' + JSON.stringify(res));
-                            if (res == "ok") z_publish(cb);
-                            else cb(res);
-                        }); // write_wallet_json callback 3
+
+                        // calc wallet_sha256 signature. sha256 signature can be used instead of wallet_address, wallet_title, wallet_description and wallet_currencies
+                        wallet_sha256 = MoneyNetworkAPILib.calc_wallet_sha256 (wallet) ;
+                        console.log(pgm + 'wallet_sha256 = ' + wallet_sha256) ;
+                        if ((wallet.msgtype == old_wallet_json.msgtype) &&
+                            (wallet_sha256 == old_wallet_json.wallet_sha256) &&
+                            (wallet.hub == old_wallet_json.hub)) {
+                            console.log(pgm + 'ok. no change to public wallet information') ;
+                            return cb("ok") ;
+                        }
+
+                        // count number of wallets with this wallet_sha256 signature
+                        // there should always be 5 wallets with identical full wallet information (wallet_address, wallet_title, wallet_description, currencies and wallet_sha256)
+                        wallet.wallet_sha256 = wallet_sha256 ;
+                        query =
+                            "select count(*) as no from (" +
+                            "  select keyvalue.json_id, count(*) as no " +
+                            "  from keyvalue as wallet_sha256, keyvalue " +
+                            "  where wallet_sha256.key = 'wallet_sha256' " +
+                            "  and wallet_sha256.value = '" + wallet_sha256 + "' " +
+                            "  and keyvalue.json_id = wallet_sha256.json_id " +
+                            "  and keyvalue.value is not null " +
+                            "  and keyvalue.key like 'wallet_%' " +
+                            "  group by keyvalue.json_id " +
+                            "  having count(*) >= 4" +
+                            ")" ;
+                        console.log(pgm + 'query = ' + query) ;
+                        ZeroFrame.cmd("dbQuery", [query], function (res) {
+                            var pgm = service + '.update_wallet_json dbQuery callback 3: ';
+                            var write_full_info ;
+                            // console.log(pgm + 'res = ' + JSON.stringify(res)) ;
+                            if (res.error || (res.length != 1)) {
+                                console.log(pgm + 'wallet sha256 query failed. res = ' + JSON.stringify(res));
+                                console.log(pgm + 'query = ' + query);
+                                write_full_info = true;
+                            }
+                            else write_full_info = (res[0].no < 5) ;
+                            console.log(pgm + 'write_full_info = ' + write_full_info) ;
+                            if (!write_full_info) {
+                                // full wallet info is already in database. only wallet_sha256 signature is needed
+                                delete wallet.wallet_address ;
+                                delete wallet.wallet_title ;
+                                delete wallet.wallet_description ;
+                                delete wallet.currencies ;
+                            }
+                            if (old_wallet_str == JSON.stringify(wallet)) return cb('ok'); // no change to public wallet information
+                            console.log(pgm + 'wallet = ' + JSON.stringify(wallet));
+                            // validate before write
+                            error = encrypt1.validate_json(pgm, wallet) ;
+                            if (error) return cb('cannot write invalid wallet.json. error = ' + error + ', wallet = ' + JSON.stringify(wallet));
+                            write_wallet_json(function (res) {
+                                var pgm = service + '.update_wallet_json write_wallet_json callback 4: ';
+                                console.log(pgm + 'res = ' + JSON.stringify(res));
+                                if (res == "ok") {
+                                    console.log(pgm + 'todo: only sign now and publish after end of session handshake. see initialize');
+                                    z_publish(cb);
+                                }
+                                else cb(res);
+                            }); // write_wallet_json callback 4
+                        }) ; // dbQuery callback 3
                     }); // get_wallet_json callback 2
                 }) ; // get_my_wallet_hub callback 1
 
@@ -819,63 +869,72 @@ angular.module('MoneyNetworkW2')
                 var pgm = service + '.process_incoming_message: ';
                 var pos, other_user_path, file_timestamp ;
 
-                if (encrypt2.destroyed) {
-                    // MoneyNetworkAPI instance has been destroyed. Maybe deleted session?
-                    console.log(pgm + 'ignoring incoming message ' + inner_path + '. session has been destroyed. reason = ' + encrypt2.destroyed) ;
-                    return ;
-                }
-                console.log(pgm + 'inner_path = ' + inner_path);
-
-                // check other_user_path. all messages for this session must come from same user directory
-                pos = inner_path.lastIndexOf('/') ;
-                other_user_path = inner_path.substr(0,pos+1) ;
-                // console.log(pgm + 'other_user_path = ' + other_user_path) ;
-                encrypt2.setup_encryption({other_user_path: other_user_path}) ; // set and check
-
-                // get file timestamp. used in reponse. double link between request and response
-                pos = inner_path.lastIndexOf('.') ;
-                file_timestamp = parseInt(inner_path.substr(pos+1)) ;
-                console.log(pgm + 'file_timestamp = ' + file_timestamp) ;
-
-                ZeroFrame.cmd("fileGet", {inner_path: inner_path, required: false}, function (json_str) {
-                    var pgm = service + '.process_incoming_message fileGet callback 1: ';
-                    var encrypted_json ;
-                    if (!json_str) {
-                        console.log(pgm + 'fileGet ' + inner_path + ' failed') ;
+                try {
+                    if (encrypt2.destroyed) {
+                        // MoneyNetworkAPI instance has been destroyed. Maybe deleted session?
+                        console.log(pgm + 'ignoring incoming message ' + inner_path + '. session has been destroyed. reason = ' + encrypt2.destroyed) ;
                         return ;
                     }
-                    encrypted_json = JSON.parse(json_str) ;
-                    // decrypt json
-                    encrypt2.decrypt_json(encrypted_json, function (request) {
-                        var pgm = service + '.process_incoming_message decrypt_json callback 2: ';
-                        var response_timestamp, request_timestamp, error, response ;
+                    console.log(pgm + 'inner_path = ' + inner_path);
 
-                        // remove any response timestamp before validation (used in response filename)
-                        response_timestamp = request.response ; delete request.response ; // request received. must use response_timestamp in response filename
-                        request_timestamp = request.request ; delete request.request ; // response received. todo: must be a response to previous send request with request timestamp in request filename
+                    // check other_user_path. all messages for this session must come from same user directory
+                    pos = inner_path.lastIndexOf('/') ;
+                    other_user_path = inner_path.substr(0,pos+1) ;
+                    // console.log(pgm + 'other_user_path = ' + other_user_path) ;
+                    encrypt2.setup_encryption({other_user_path: other_user_path}) ; // set and check
 
-                        console.log(pgm + 'request = ' + JSON.stringify(request)) ;
+                    // get file timestamp. used in reponse. double link between request and response
+                    pos = inner_path.lastIndexOf('.') ;
+                    file_timestamp = parseInt(inner_path.substr(pos+1)) ;
+                    console.log(pgm + 'file_timestamp = ' + file_timestamp) ;
 
-                        // validate and process incoming json message and process
-                        response = { msgtype: 'response' } ;
-                        error = encrypt2.validate_json(pgm, request) ;
-                        if (error) response.error = 'message is invalid. ' + error ;
-                        else if (request.msgtype == 'ping') {
-                            // simple ping from MN. checking connection. return OK response
-
+                    ZeroFrame.cmd("fileGet", {inner_path: inner_path, required: false}, function (json_str) {
+                        var pgm = service + '.process_incoming_message fileGet callback 1: ';
+                        var encrypted_json ;
+                        if (!json_str) {
+                            console.log(pgm + 'fileGet ' + inner_path + ' failed') ;
+                            return ;
                         }
-                        else response.error = 'Unknown msgtype ' + request.msgtype ;
-                        console.log(pgm + 'response = '  + JSON.stringify(response)) ;
-                        if (!response_timestamp) return ; // no response was requested
+                        encrypted_json = JSON.parse(json_str) ;
+                        // decrypt json
+                        encrypt2.decrypt_json(encrypted_json, function (request) {
+                            var pgm = service + '.process_incoming_message decrypt_json callback 2: ';
+                            var response_timestamp, request_timestamp, error, response ;
 
-                        // send response to other session
-                        encrypt2.send_message(response, {timestamp: response_timestamp, msgtype: request.msgtype, request: file_timestamp}, function (res)  {
-                            var pgm = service + '.process_incoming_message send_message callback 3: ';
-                            console.log(pgm + 'res = ' + JSON.stringify(res)) ;
-                        }) ; // send_message callback 3
+                            // remove any response timestamp before validation (used in response filename)
+                            response_timestamp = request.response ; delete request.response ; // request received. must use response_timestamp in response filename
+                            request_timestamp = request.request ; delete request.request ; // response received. todo: must be a response to previous send request with request timestamp in request filename
 
-                    }) ; // decrypt_json callback 2
-                }); // fileGet callback 1
+                            console.log(pgm + 'request = ' + JSON.stringify(request)) ;
+
+                            // validate and process incoming json message and process
+                            response = { msgtype: 'response' } ;
+                            error = encrypt2.validate_json(pgm, request) ;
+                            if (error) response.error = 'message is invalid. ' + error ;
+                            else if (request.msgtype == 'ping') {
+                                // simple ping from MN. checking connection. return OK response
+
+                            }
+                            else response.error = 'Unknown msgtype ' + request.msgtype ;
+                            console.log(pgm + 'response = '  + JSON.stringify(response)) ;
+                            if (!response_timestamp) return ; // no response was requested
+
+                            // send response to other session
+                            encrypt2.send_message(response, {timestamp: response_timestamp, msgtype: request.msgtype, request: file_timestamp}, function (res)  {
+                                var pgm = service + '.process_incoming_message send_message callback 3: ';
+                                console.log(pgm + 'res = ' + JSON.stringify(res)) ;
+                            }) ; // send_message callback 3
+
+                        }) ; // decrypt_json callback 2
+                    }); // fileGet callback 1
+
+                } // try
+                catch (e) {
+                    console.log(pgm + e.message) ;
+                    console.log(e.stack);
+                    throw(e) ;
+                } // catch
+
             } // process_incoming_message
 
             // encrypt2 - encrypt messages between MN and W2
