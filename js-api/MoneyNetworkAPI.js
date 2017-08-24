@@ -1421,7 +1421,7 @@ MoneyNetworkAPI.json_schemas = {
     "get_balance": {
         "type": 'object',
         "title": 'MN: send get_balance request to wallet session',
-        "description": 'Wallet session must return a balance (OK) or response (error) message. Open and/or close wallet before/after get_balance request',
+        "description": 'Wallet session must return a balance (OK) or response (error) message. Boolean flags: Open and/or close wallet before/after get_balance request',
         "properties": {
             "msgtype": {"type": 'string', "pattern": '^get_balance$'},
             "open_wallet": {"type": 'boolean'},
@@ -1507,6 +1507,7 @@ MoneyNetworkAPI.prototype.validate_json = function (calling_pgm, json, request_m
         else if ((request_msgtype == 'pubkeys') && (json.msgtype == 'pubkeys')) null; // OK combination
         else if ((request_msgtype == 'get_data') && (json.msgtype == 'data')) null; // OK combination
         else if ((request_msgtype == 'get_password') && (json.msgtype == 'password')) null; // OK combination
+        else if ((request_msgtype == 'get_balance') && (json.msgtype == 'balance')) null; // OK combination
         else return 'Invalid ' + request_msgtype + ' request ' + json.msgtype + ' response combination';
     }
     if (typeof tv4 === 'undefined') {

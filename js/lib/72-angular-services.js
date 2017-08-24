@@ -170,10 +170,13 @@ angular.module('MoneyNetworkW2')
         }])
 
 
-    .factory('MoneyNetworkW2Service', ['$timeout', '$rootScope', '$window', '$location',
-        function ($timeout, $rootScope, $window, $location) {
+    .factory('MoneyNetworkW2Service', ['$timeout', '$rootScope', '$window', '$location', 'btcService',
+        function ($timeout, $rootScope, $window, $location, btcService) {
             var service = 'MoneyNetworkW2Service';
             console.log(service + ' loaded');
+
+            // for MN <=> W2 integration
+            var wallet_info = btcService.get_wallet_info() ;
 
             // localStorage wrapper. avoid some ZeroNet callbacks. cache localStorage in ls hash
             // ls.save_login[auth_address] = { choice: '0', '1', '2' or '3', login: <choice 1: encrypted or unencrypted login> }
@@ -258,6 +261,8 @@ angular.module('MoneyNetworkW2')
 
             var encrypt1 = new MoneyNetworkAPI({debug: 'encrypt1'}) ; // encrypt1. no sessionid. self encrypt/decrypt data in W2 localStorage ;
 
+            var save_wallet_id, save_wallet_password ; // last saved wallet id and password. For get_balance request
+
             // save_wallet_login:
             // - '1': wallet login is saved encrypted (cryptMessage) in W2 localStorage
             // - '2' & '3': wallet login is saved encrypted (symmetric) in MN localStorage (session is required)
@@ -288,7 +293,9 @@ angular.module('MoneyNetworkW2')
                             ls_save() ;
                             return cb(null, null, error) ;
                         }
-                        return cb(login.wallet_id, login.wallet_password, null) ;
+                        save_wallet_id = login.wallet_id ;
+                        save_wallet_password = login.wallet_password ;
+                        return cb(save_wallet_id, save_wallet_password, null) ;
                     }
                     // ZeroNet certificate present. decrypt login
                     encrypted_json = user_login_info.login ;
@@ -297,7 +304,11 @@ angular.module('MoneyNetworkW2')
                         var pgm = service + '.get_wallet_login decrypt_json callback: ' ;
                         console.log(pgm + 'json = ' + JSON.stringify(json)) ;
                         if (!json) cb(null, null, 'decrypt error. encrypted_json was ' + JSON.stringify(user_login_info)) ;
-                        else cb(json.wallet_id, json.wallet_password, null) ;
+                        else {
+                            save_wallet_id = json.wallet_id ;
+                            save_wallet_password = json.wallet_password ;
+                            cb(save_wallet_id, save_wallet_password, null) ;
+                        }
                     }) ; // decrypt_json callback
                 }
                 else {
@@ -341,14 +352,10 @@ angular.module('MoneyNetworkW2')
                             // OK. received wallet login from MN
                             console.log(pgm + 'data[0] = ' + JSON.stringify(data[0])) ;
                             // data[0] = {"key":"login","value":{"wallet_id":"UZGToFfXOz7GKCogsOOuxJYndjcmt2","wallet_password":"bGaGK/+w(Qm4Wi}fAyz:CcgxWuen)F"}}
-                            cb(data[0].value.wallet_id, data[0].value.wallet_password, null);
-                        }) ;
-
-                        //encrypt1.decrypt(encrypted_data, function (data) {
-                        //    if (!data) cb({error: 'decrypt get_data response failed'}) ;
-                        //    else if (data.error) cb({error: 'get_data request failed. ' + data.error}) ;
-                        //    else cb({wallet_id: data.wallet_id, wallet_password: data.wallet_password}) ;
-                        //}) ; // decrypt callback
+                            save_wallet_id = data[0].value.wallet_id ;
+                            save_wallet_password = data[0].value.wallet_password ;
+                            cb(save_wallet_id, save_wallet_password, null);
+                        }) ; // decrypt_row callback
 
                     }) ; // send_message callback
                 }
@@ -378,29 +385,11 @@ angular.module('MoneyNetworkW2')
                 old_login = JSON.parse(JSON.stringify(ls.save_login[auth_address]));
                 ls.save_login[auth_address].choice = save_wallet_login;
                 console.log(pgm + 'ls = ' + JSON.stringify(ls)) ;
-                //ls = {
-                //    "sessions": {
-                //        "jro@zeroid.bit": {
-                //            "this_pubkey": "-----BEGIN PUBLIC KEY-----\nMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCsOMfAvHPTp0K9qZfoItdJ9898\nU3S2gAZZSLuLZ1qMXr1dEnO8AwxS58UvKGwHObT1XQG8WT3Q1/6OGlJms4mYY1rF\nQXzYEV5w0RlcSrMpLz3+nJ7cVb9lYKOO8hHZFWudFRywkYb/aeNh6mAXqrulv92z\noX0S7YMeNd2YrhqefQIDAQAB\n-----END PUBLIC KEY-----",
-                //            "this_pubkey2": "Ahn94vCUvT+S/nefej83M02n/hP8Jvqc8KbxMtdSsT8R",
-                //            "other_pubkey": "-----BEGIN PUBLIC KEY-----\nMIIBITANBgkqhkiG9w0BAQEFAAOCAQ4AMIIBCQKCAQBpQDut223gZcYfGTHxqoal\nDFX4PvQY1riWEPVqiO2eXS3E47XJjRUtMSUqzpb011ZxzauTxSXlTL1uunIykTvN\nmsXaNSq/tPIue0zdVSCN4PrJo5FY5P6SYGviZBLzdHZJYqlNk3QPngrBGJl/VBBp\nToPXmN7hog/9rXEGhPyN7GX2AKy3pPFCkXFC9GDlCoEjt0Pq+y5sF/t4iPXyn878\nirWfYbRPisLjnJGqSe23/c6MhP8CTvnbFvpiBcLES7HQk6hqqBBnLe9NLTABbqXK\n6i1LW6+aZRqOX72mMwU+1LTcbQRIW1nG6rtPhaUqiIzeH0g8B743bjmcJagm1foH\nAgMBAAE=\n-----END PUBLIC KEY-----",
-                //            "other_pubkey2": "A4RQ77ia8qK1b3FW/ERL2HdW33jwCyKqxRwKQLzMw/yu",
-                //            "encrypted_info": "[\"UPvLnGUi2vDpTiUqzfzF+QLKACBDFPycbrRSQf3l7neWclOYDguddp7u4kHAWeb+AXpAdgAg89WakZt3zbPIwc5L+8DsrVG8S74APeEvlRCv5bf5WjHYokT70IZylIg/X+QsUNG9biVYsRSUe6s02+AQJCn2Z3BCNoIyvAfuVEym9A+6knyktoS+ZxFNkwMCvJ/Jki5S0OuQkX4aaOlEt8McOvX2HA==\",\"oteCwG24VjKOOUQxz7wGPQ==\",\"TGXeFTOWPpkz/sMFUcNrifinytHHXGck5pJj6OwHK6h99Y7D+QGVlaVysZvlsZRAnMW4FK7MNlXw7FmNqMAVeLca+Uw6ZML+evjtibYy+UyYFUkNvnJZQLfFuMsQopGi\"]",
-                //            "prvkey": "U2FsdGVkX1/ICZ/rij1Au+VA02bh4KEs7vla2+j4W5HPPyF0DRRjJIZf7p9FpEl4FXZgxEMlKwBrLhZEERMgYu4XOY0zCsqoWkX9WCu13xi4mhrg8IJtmDtqIujSh5ddjQ8VcxT4unvxCQOGpZ7s8H+/A9sTKm7fAqAzOdLpqMaX7u+QE0FibJGiRh2z7kylsPf1u8KIHWjICBMTuNzEvac1ah58fEVpeQgeRzdRxY4zj2Pa8OJRqeFeLJGMADqimnwGuiZ+kMDsQw2y0XO51wZrVoVY0M7kMVA3Vos1skH1/Ug0TLuyrKGQvZo/V7KhevdlwTj5FT9gPCpimXgBCMl+cFKWUQzkRYKx+OdgKFspMFohjLKJ+ZP5xlfXlziypHhgaBMdT6fXEMSGPtHlPeMGqTOna/GqjmCRuI3tUVoTwpER2ryADbUBlnZY4uBEpFWCmsUHYJgT+I0Yx9ZF/e8Zn9qYSp05APnlqVm0IA5Kl0gQGhJfCjIKeVbVeYmEaPKIe+Jc9eKcNx38AG8dUo85KDI1GQYd7iUdmV59ngSFjmP4goBEzkX/EmFck3oMeVTIahHedkyF/V8gIGQY1ouKCJ6ZyKgB9K2OQ3GqzmMNiMbAG6fklLgBPRJxVXb1jYtVCb2qdzFRKT1S9rGHjssIqYBJEU8XmGXwgUxJZPn4gg8JdFFGh6VodoqdJOhZc9FIHk5/E52cL3X+ZbDouErwGhh9a4+pcoR4zXKhuVx0XOKK8Bnfv9Baxgtjo/1KcpPve93L50U9B7E68ToFvdjyCaVjyf/9UKplYy40cO62p+HdkPRw2bOGo6RrjtVsEsvbXxMRYrPh8mD3k4uZvB4FaV+egLPR/NOPsRS+eHohtZndzMPRVbZqVSts5zNvNGSe5dy+vfvR+REoM3shFqM2hhQCk8LzGYplU0Kq3qJYtTe1R3nyOMzCyqaxNNNmP/wXLSo2O26RcsXJp3d+ABFkxB4MSjPSRqyF7bbJ1Cf2cpqAStrjr57w3nRLc235rUeuDVkEcWdTLw0C+dMVU+WtKOgg5BSxeIDuDuXXYcFMtCD0HFyEgxgOxE4Hx8GXgRj41F6nqBrFSK2U87AQeWmA+fRm5I1hLLi1wpKMxErx1rBT/H3PGdstvF9XEiytZsZI04KVTYM9I5FHm/BPGJqrtemyJS70F6yHQ2e2qrkkb9+MXa+SPF2prj4/qWoI",
-                //            "sessionid": "U2FsdGVkX1/hQbcjOztF8NtZk5xb7y+ho/zbceopRMB6g0ok7IjI93PdX6Ip5VS8oOkfQ+xfgudkVLnKI+mhiZzjDlIUqYJi0gdVz+ehLbU="
-                //        },
-                //        "18DbeZgtVCcLghmtzvg4Uv8uRQAwR8wnDQ": {
-                //            "this_pubkey": "-----BEGIN PUBLIC KEY-----\nMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCuM/Sevlo2UYUkTVteBnnUWpsd\n5JjAUnYhP0M2o36da15z192iNOmd26C+UMg0U8hitK8pOJOLiWi8x6TjvnaipDjc\nIi0p0l3vGBEOvIyNEYE7AdfGqW8eEDzzl9Cezi1ARKn7gq1o8Uk4U2fjkm811GTM\n/1N9IwACfz3lGdAm4QIDAQAB\n-----END PUBLIC KEY-----",
-                //            "this_pubkey2": "Ahn94vCUvT+S/nefej83M02n/hP8Jvqc8KbxMtdSsT8R",
-                //            "other_pubkey": "-----BEGIN PUBLIC KEY-----\nMIIBITANBgkqhkiG9w0BAQEFAAOCAQ4AMIIBCQKCAQBpQDut223gZcYfGTHxqoal\nDFX4PvQY1riWEPVqiO2eXS3E47XJjRUtMSUqzpb011ZxzauTxSXlTL1uunIykTvN\nmsXaNSq/tPIue0zdVSCN4PrJo5FY5P6SYGviZBLzdHZJYqlNk3QPngrBGJl/VBBp\nToPXmN7hog/9rXEGhPyN7GX2AKy3pPFCkXFC9GDlCoEjt0Pq+y5sF/t4iPXyn878\nirWfYbRPisLjnJGqSe23/c6MhP8CTvnbFvpiBcLES7HQk6hqqBBnLe9NLTABbqXK\n6i1LW6+aZRqOX72mMwU+1LTcbQRIW1nG6rtPhaUqiIzeH0g8B743bjmcJagm1foH\nAgMBAAE=\n-----END PUBLIC KEY-----",
-                //            "other_pubkey2": "A4RQ77ia8qK1b3FW/ERL2HdW33jwCyKqxRwKQLzMw/yu",
-                //            "encrypted_info": "[\"db8ut8VPHBOJP5lkTkQuzQLKACBsjOmgGbMg2vddGNnbrs7lloCT+9/JwBqRWKShkxTHoAAgtZXB0AukJanMK0+NxSjaW9ZUlwIg01S2FfmTPUZuD3KEM6F+l/RQ93NjPWPrVEeFjjNVE7MGJ7xNKIJQYEst4h8EH0WR4oTB3I3KgG9iGCJJHuwARqhWv4+WtRehNkvCWIadBXLjR78I8LhIFEOC0w==\",\"P7LY+DnKVQbmI4aawY4BHA==\",\"0F7WY6Sx5AytXflHnxiTktpLHdKGBfIoRR+CQy/N66+SfI4OBfoBcyxVoO8EBXFTGWzXAEdXeTCi7Si19V+kMyu49o9m19FBW6ALeeGZ11zx7wDIUoixVNC1OVvnhTRi\"]",
-                //            "prvkey": "U2FsdGVkX1/CSHQ1XzsHHEp8LflGummH2FtZw0gVBSpxDYLK0pdga38ACqVynQqceNWTdS/EznKwdKa6kqbDE4MDL3cGB+Jqs6TrwUyMBGQf/y6zDBSHWH7j1Lo+w6/g4QvElVGc7XlGy4IsJfPjadCCimI5l2hBqeJGKdiBQj5geHcvUGfVBeRNKNE84Zi6phh58OZr3LzZD7C3saxg2oDpE4/Ad3btLbUt1YeXdMl0552mqZu2PBfVjk2rxyjMu3P8mnHl43MUMoy6ze5gCivC2O53pgpKS3BTQXBqo41gguXNblGIfNu/GxSb2Ql0pv59gMatRUaq7G0jJaGfd+t8+LWyPSB5wIvfIr1cWTJ5ECl68y6GahdD3kodQlhCg8ZxeZBpcLxF4PGfFMCcuVuqkjiIXd22sFuRKZUMB7qJii0NyZNle1LF9z6IjP6WLyhZAi8XnYNGrfuIEMmUbE7iUKaIhz4KtpJRtZUx5EfXq8GE5l1cYs8hU+BrXs90amdmv4B+9b0MN91R6EfyJv8ZSUIoCEsJG/VExoxowlDT+lvl+XMNYfwqNs42PLRhGqYEMnI696WGP55WsojCUHUgjFoqEjS+w1syShVjOOLezhgHRG0vXXypDqRTXjCMUipfMkB0/xrh7PhmuOYUHid5Qjndsif/6jR/QLJuyqNGqIRx/sRkbQTFb1T2JsUj1r2tXxZViz2EQL7RmZQILtfObj9PZKYB7RVJm3aIUfdjJ9yLW3UCqywFGZCgzLIqJBt4vF+rFzG6sPKWaTGUuWqIIl7H+X53PwF3sGJx0/YWcf8weEoaZeAKpCiNZywfN/j+yEB6DHF9Xx3QTCR/BPV92QJD/eoU70HIGmw++AO6DhJeQ1nx9qohBCmhnEShZlVuYMqRp9YD4TL6vUjwKJL0kHOgcjqvAPfGXFTfh+bUfFSBXKSBHlC2TiBI2CG2K6sNJFXCVFsk3H6InGwHeMnC7MbcP4Ahjdrb8ZQKRMvw9JLLFy2WzfXZpOqxlksJ1wTmRhgDEFgAby2ZkPwAI4u+98mMPNS0s4v/CSyww9Nre0SnMNZc4lLO9/LOHyf0T2QETNz92he6//lcQ0ujCAbYUALSIuF9n3XhKNX8YnPvuMIE3/MS+2Fmvx+cK/CIBpBicPRLcKbWm+xy5VJHYqtdMLsch0wz04d69KU/6ljTPwxQv5i2iyL16X3tRrp7",
-                //            "sessionid": "U2FsdGVkX1/E8FClTdFyQjciHcZG/xAo+owpPmSn8zHCx/Lt8REeqoKiz/LIoIg2t1aLwqsiWkOIApqO9M4TQVLNiZkz4hsLL1sRgEOAmyA="
-                //        }
-                //    }, "save_login": {"18DbeZgtVCcLghmtzvg4Uv8uRQAwR8wnDQ": "2"}
-                //};
                 ls_save();
+
+                // for get_balance request
+                save_wallet_id = wallet_id ;
+                save_wallet_password = wallet_password ;
 
                 // get and add W2 pubkey2 to encryption setup (self encrypt using ZeroNet certificate)
                 get_my_pubkey2(function (my_pubkey2) {
@@ -904,31 +893,91 @@ angular.module('MoneyNetworkW2')
                         // decrypt json
                         encrypt2.decrypt_json(encrypted_json, function (request) {
                             var pgm = service + '.process_incoming_message decrypt_json callback 2: ';
-                            var response_timestamp, request_timestamp, error, response ;
+                            var response_timestamp, request_timestamp, error, response, old_wallet_status, send_response ;
 
                             // remove any response timestamp before validation (used in response filename)
                             response_timestamp = request.response ; delete request.response ; // request received. must use response_timestamp in response filename
                             request_timestamp = request.request ; delete request.request ; // response received. todo: must be a response to previous send request with request timestamp in request filename
 
                             console.log(pgm + 'request = ' + JSON.stringify(request)) ;
+                            response = { msgtype: 'response' } ;
+
+                            send_response = function (error) {
+                                if (!response_timestamp) return ; // no response was requested
+                                if (error) response.error = error ;
+
+                                // send response to other session
+                                encrypt2.send_message(response, {timestamp: response_timestamp, msgtype: request.msgtype, request: file_timestamp}, function (res)  {
+                                    var pgm = service + '.process_incoming_message send_message callback 3: ';
+                                    console.log(pgm + 'res = ' + JSON.stringify(res)) ;
+                                }) ; // send_message callback 3
+
+
+                            }; // send_response
 
                             // validate and process incoming json message and process
-                            response = { msgtype: 'response' } ;
                             error = encrypt2.validate_json(pgm, request) ;
                             if (error) response.error = 'message is invalid. ' + error ;
                             else if (request.msgtype == 'ping') {
                                 // simple ping from MN. checking connection. return OK response
 
                             }
+                            else if (request.msgtype == 'get_balance') {
+                                // get balance request from MN. Return error or balance in test Bitcoins
+                                old_wallet_status = wallet_info.status ;
+                                if (wallet_info.status != 'Open') {
+                                    // wallet closed
+                                    if (!request.open_wallet) return send_response('Wallet is not open and open_wallet was not requested') ;
+                                    else if (!save_wallet_id || !save_wallet_password) return send_response('Wallet is not open and no wallet login was found') ;
+                                    else {
+                                        // open test bitcoin wallet (also get_balance request)
+                                        btcService.init_wallet(save_wallet_id, save_wallet_password, function (error) {
+                                            if (error) {
+                                                // open wallet or get_balance request failed
+                                                if (wallet_info.status != 'Open') return send_response('Open wallet request failed with error = ' + error) ;
+                                                else {
+                                                    response.error = 'Get balance request failed with error = ' + error ;
+                                                    // close wallet and send error
+                                                    btcService.close_wallet(function (res) {
+                                                        send_response() ;
+                                                    }) ;
+                                                }
+                                            }
+                                            // open wallet + get_balance request OK
+                                            response.msgtype = 'balance' ;
+                                            response.balance = [ {code: 'tBTC', amount: parseFloat(wallet_info.confirmed_balance)} ] ;
+                                            // close wallet and return balance info
+                                            btcService.close_wallet(function (res) {
+                                                send_response() ;
+                                            }) ;
+                                        }) ;
+                                        return ;
+                                    }
+                                }
+                                else {
+                                    // wallet already open.
+                                    btcService.get_balance(function (error) {
+                                        if (error) return send_response('Get balance request failed with error = ' + error) ;
+                                        // get_balance request OK
+                                        response.msgtype = 'balance' ;
+                                        response.balance = [ {code: 'tBTC', amount: parseFloat(wallet_info.confirmed_balance)} ] ;
+                                        if (request.close_wallet) {
+                                            btcService.close_wallet(function (res) {
+                                                send_response() ;
+                                            }) ;
+                                        }
+                                        else send_response() ;
+                                    }) ;
+                                    return ;
+                                }
+
+                                // wallet_info.status = 'Open' ;
+
+                            }
                             else response.error = 'Unknown msgtype ' + request.msgtype ;
                             console.log(pgm + 'response = '  + JSON.stringify(response)) ;
-                            if (!response_timestamp) return ; // no response was requested
 
-                            // send response to other session
-                            encrypt2.send_message(response, {timestamp: response_timestamp, msgtype: request.msgtype, request: file_timestamp}, function (res)  {
-                                var pgm = service + '.process_incoming_message send_message callback 3: ';
-                                console.log(pgm + 'res = ' + JSON.stringify(res)) ;
-                            }) ; // send_message callback 3
+                            send_response() ;
 
                         }) ; // decrypt_json callback 2
                     }); // fileGet callback 1
