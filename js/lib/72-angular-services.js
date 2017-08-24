@@ -640,41 +640,44 @@ angular.module('MoneyNetworkW2')
                 }) ;
             } // get_user_path
 
-            // now only used after wallet.json updates
+            // sign or publish
             var z_publish_interval = 0 ;
-            function z_publish (cb) {
+            var z_publish_pending = false ;
+            function z_publish (publish, cb) {
                 var pgm = service + '.z_publish: ' ;
                 var inner_path ;
                 if (!cb) cb = function () {} ;
                 // get full merger site user path
                 get_user_path(function (user_path) {
+                    var cmd ;
                     inner_path = user_path + 'content.json' ;
-                    console.log(pgm + 'publishing ' + inner_path) ;
+                    if (publish) console.log(pgm + 'publishing ' + inner_path) ;
                     // content.json file must have optional files support
                     encrypt1.add_optional_files_support(function() {
-                        // sitePublish
-                        console.log(pgm + inner_path + ' siteSign start') ;
-                        ZeroFrame.cmd("sitePublish", {inner_path: inner_path}, function (res) {
-                            var pgm = service + '.z_publish siteSign callback 3: ';
+                        // sign or publish
+                        cmd = publish ? 'sitePublish' : 'siteSign' ;
+                        if (publish) console.log(pgm + inner_path + ' sitePublish started') ;
+                        ZeroFrame.cmd(cmd, {inner_path: inner_path}, function (res) {
+                            var pgm = service + '.z_publish ' + cmd + ' callback 3: ';
                             console.log(pgm + 'res = ' + res) ;
                             if (res != "ok") {
-                                ZeroFrame.cmd("wrapperNotification", ["error", "Failed to publish: " + res.error, 5000]);
+                                ZeroFrame.cmd("wrapperNotification", ["error", "Failed to " + (publish ? "publish" : "sign") + ": " + res.error, 5000]);
+                                if (!publish) return cb(res.error) ; // sign only. must be a serious error
                                 // error - repeat sitePublish in 30, 60, 120, 240 etc seconds (device maybe offline or no peers)
                                 if (!z_publish_interval) z_publish_interval = 30;
                                 else z_publish_interval = z_publish_interval * 2;
                                 console.log(pgm + 'Error. Failed to publish: ' + res.error + '. Try again in ' + z_publish_interval + ' seconds');
                                 var retry_zeronet_site_publish = function () {
-                                    z_publish();
+                                    z_publish(publish, cb);
                                 };
-                                if (cb) cb(res.error);
                                 $timeout(retry_zeronet_site_publish, z_publish_interval * 1000);
-                                // debug_info() ;
-                                return cb(false);
+                                // continue processing while waiting for sitePublish to finish
+                                return cb(res.error);
                             }
-
-                            // sitePublish OK
-                            z_publish_interval = 0;
-                            cb(true);
+                            // sign/publish OK
+                            if (publish) z_publish_interval = 0 ;
+                            else z_publish_pending = true ;
+                            cb();
 
                         }) ; // sitePublish callback 3
 
@@ -781,6 +784,8 @@ angular.module('MoneyNetworkW2')
                         }
                         wallet.msgtype = 'wallet' ;
                         wallet.wallet_address = ZeroFrame.site_info.address;
+                        wallet.wallet_domain = ZeroFrame.site_info.domain;
+                        if (!wallet.wallet_domain) delete wallet.wallet_domain ;
                         wallet.wallet_title = ZeroFrame.site_info.content.title;
                         wallet.wallet_description = ZeroFrame.site_info.content.description;
                         wallet.currencies = [ { code: 'tBTC', name: 'Test Bitcoin', url: 'https://en.bitcoin.it/wiki/Testnet'} ] ;
@@ -824,8 +829,9 @@ angular.module('MoneyNetworkW2')
                             else write_full_info = (res[0].no < 5) ;
                             console.log(pgm + 'write_full_info = ' + write_full_info) ;
                             if (!write_full_info) {
-                                // full wallet info is already in database. only wallet_sha256 signature is needed
+                                // full wallet info is already in database. only wallet_sha256 signature is needed in wallet.json
                                 delete wallet.wallet_address ;
+                                delete wallet.wallet_domain ;
                                 delete wallet.wallet_title ;
                                 delete wallet.wallet_description ;
                                 delete wallet.currencies ;
@@ -839,15 +845,14 @@ angular.module('MoneyNetworkW2')
                                 var pgm = service + '.update_wallet_json write_wallet_json callback 4: ';
                                 console.log(pgm + 'res = ' + JSON.stringify(res));
                                 if (res == "ok") {
-                                    console.log(pgm + 'todo: only sign now and publish after end of session handshake. see initialize');
-                                    z_publish(cb);
+                                    console.log(pgm + 'sign now and publish after end of session handshake. see initialize');
+                                    z_publish(false, cb);
                                 }
                                 else cb(res);
                             }); // write_wallet_json callback 4
                         }) ; // dbQuery callback 3
                     }); // get_wallet_json callback 2
                 }) ; // get_my_wallet_hub callback 1
-
             } // update_wallet_json
 
             // MN-W2 session. only relevant if W2 is called from MN with a sessionid or an old still working MN-W2 session can be found in localStorage
@@ -1458,6 +1463,7 @@ angular.module('MoneyNetworkW2')
                             save_wallet_login = ls.save_login[old_auth_address].choice ;
                             ls_save() ;
                             cb(sessionid, save_wallet_login) ;
+                            if (z_publish_pending) z_publish(true); // wallet.json file was updated. publish to distribute info to other users
                         };
                         // check for old (1. priority) or new (2. priority) session
                         // step 5 - check old session
