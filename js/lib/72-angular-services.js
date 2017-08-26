@@ -365,7 +365,7 @@ angular.module('MoneyNetworkW2')
             // save_wallet_login:
             // - '0': no thank you. Clear any wallet data previously saved with '1' or '2'
             // - '1': wallet login is saved encrypted (cryptMessage) in W2 localStorage
-            // - '2' & '3': wallet login is saved encrypted (symmetric) in MN localStorage (session is required)
+            // - '2': wallet login is saved encrypted (symmetric) in MN localStorage (session is required)
             function save_wallet_login(save_wallet_login, wallet_id, wallet_password, cb) {
                 var pgm = service + '.save_wallet_login: ';
                 var cert_user_id, auth_address, data, request, old_login, save_w2;
@@ -478,6 +478,106 @@ angular.module('MoneyNetworkW2')
                 }); // get_my_pubkey2 callback 1
 
             } // save_wallet_login
+
+            // MN-W2 session. only relevant if W2 is called from MN with a sessionid or an old still working MN-W2 session can be found in localStorage
+            // session status: use at startup and after changing/selecting ZeroId
+            var status = {
+                sessionid: null,
+                merger_permission: 'n/a', // checking Merger:MoneyNetwork permission
+                session_handshake: 'n/a', // checking old/new session
+                save_login: '0', // radio group '0', '1' (W2 LS) or '2' (MN LS)
+                save_login_disabled: true, // radio group disabled while checking save_wallet_login status
+                permissions: {} // MoneyNetwork permissions to wallet operations
+            } ;
+            function get_status () { return status }
+
+            // get permissions from ls (rules for MoneyNetwork wallet operations)
+            function get_permissions (cb) {
+                var pgm = service + '.get_permissions: ' ;
+                var error, auth_address, user_info, permissions, encrypted_json, key ;
+                if (!ls.save_login) return cb('save_login hash was not found in localStorage') ;
+                if (typeof ls.save_login != 'object') {
+                    error = 'save_login was not a hash. save_login = ' + JSON.stringify(ls.save_login) ;
+                    ls.save_login = {} ;
+                    ls_save() ;
+                    for (key in status.permissions) delete status.permissions[key] ;
+                    return cb(error) ;
+                }
+                auth_address = ZeroFrame.site_info.cert_user_id ? ZeroFrame.site_info.auth_address : 'n/a' ;
+                user_info = ls.save_login[auth_address] ;
+                if (!user_info) return cb('User info for ' + auth_address + ' was not found') ;
+                if (auth_address == 'n/a') {
+                    // no ZeroNet certificate. login is saved unencrypted in ls
+                    permissions = user_info.permissions ;
+                    // console.log(pgm + 'unencrypted permissions = ' + JSON.stringify(permissions)) ;
+                    if (!permissions) return cb('Permissions for ' + auth_address + ' was not found') ;
+                    if (typeof permissions != 'object') {
+                        error = 'save_login[' + auth_address + '].permissions is not a hash. permissions = ' + JSON.stringify(permissions) ;
+                        user_info.permissions = {} ;
+                        ls_save() ;
+                        for (key in status.permissions) delete status.permissions[key] ;
+                        return cb(error) ;
+                    }
+                    // copy permissions to ls
+                    for (key in status.permissions) delete status.permissions[key] ;
+                    for (key in permissions) status.permissions[key] = permissions[key] ;
+                    // console.log(pgm + 'status.permissions = ' + JSON.stringify(status.permissions));
+                    return cb(null) ;
+                }
+                // ZeroNet certificate present. decrypt permissions
+                encrypted_json = user_info.permissions ;
+                // console.log(pgm + 'encrypted_json = ' + JSON.stringify(encrypted_json));
+                if (!encrypted_json) return cb('No encrypted permissions was found for ' + auth_address) ;
+                encrypt1.decrypt_json(encrypted_json, function(json) {
+                    var pgm = service + '.get_permissions decrypt_json callback: ' ;
+                    var key ;
+                    // console.log(pgm + 'json = ' + JSON.stringify(json)) ;
+                    if (!json) {
+                        for (key in status.permissions) delete status.permissions[key] ;
+                        cb('decrypt error. encrypted_json was ' + JSON.stringify(encrypted_json)) ;
+                    }
+                    else {
+                        // copy permissions
+                        for (key in status.permissions) delete status.permissions[key] ;
+                        for (key in json) status.permissions[key] = json[key] ;
+                        // console.log(pgm + 'status.permissions = ' + JSON.stringify(status.permissions));
+                        cb(null) ;
+                    }
+                }) ; // decrypt_json callback
+            } // get_permissions
+
+            // save permissions in ls (rules for MoneyNetwork wallet operations)
+            function save_permissions (cb) {
+                var pgm = service + '.save_permissions: ' ;
+                var auth_address, unencrypted_permissions ;
+                auth_address = ZeroFrame.site_info.cert_user_id ? ZeroFrame.site_info.auth_address : 'n/a' ;
+                if (auth_address == 'n/a') {
+                    // no cert_user_id. not encrypted
+                    ls.save_login[auth_address].permissions = JSON.parse(JSON.stringify(status.permissions)) ;
+                    ls_save();
+                    return cb();
+                }
+                // get and add W2 pubkey2 to encryption setup (self encrypt using ZeroNet certificate)
+                get_my_pubkey2(function (my_pubkey2) {
+                    var pgm = service + '.save_permissions get_my_pubkey2 callback 1: ';
+                    var save_w2;
+                    encrypt1.setup_encryption({pubkey2: my_pubkey2});
+                    // console.log(pgm + 'encrypt1.other_pubkey2 = ' + encrypt1.other_session_pubkey2);
+
+                    // cert_user_id: encrypt permissions
+                    unencrypted_permissions = status.permissions;
+                    // console.log(pgm + 'unencrypted_permissions = ' + JSON.stringify(unencrypted_permissions)) ;
+                    encrypt1.encrypt_json(unencrypted_permissions, [2], function (encrypted_permissions) {
+                        var pgm = service + '.save_permissions encrypt_json callback 2: ';
+                        ls.save_login[auth_address].permissions = encrypted_permissions;
+                        // console.log(pgm + 'encrypted_permissions = ' + JSON.stringify(encrypted_permissions)) ;
+                        ls_save();
+                        return cb();
+                    }); // encrypt_json callback 2
+
+                }) ; // get_my_pubkey2 callback 1
+
+            } // save_permissions
 
             // todo: changed ZeroId. clear z_cache.
             var z_cache = {} ; // cache some ZeroNet objects: wallet_data_hub, wallet.json
@@ -844,16 +944,6 @@ angular.module('MoneyNetworkW2')
                 }) ; // get_my_wallet_hub callback 1
             } // update_wallet_json
 
-            // MN-W2 session. only relevant if W2 is called from MN with a sessionid or an old still working MN-W2 session can be found in localStorage
-            // session status: use at startup and after changing/selecting ZeroId
-            var status = {
-                sessionid: null,
-                merger_permission: 'n/a', // checking Merger:MoneyNetwork permission
-                session_handshake: 'n/a', // checking old/new session
-                save_login: '0', // radio group '0', '1' (W2 LS) or '2' (MN LS)
-                save_login_disabled: true // radio group disabled while checking save_wallet_login status
-            } ;
-            function get_status () { return status }
 
             // listen for incoming messages from MN. called from MoneyNetworkAPILib.demon
             // params:
@@ -926,7 +1016,7 @@ angular.module('MoneyNetworkW2')
                                 // get balance request from MN. Return error or balance in test Bitcoins
                                 old_wallet_status = wallet_info.status ;
                                 if (wallet_info.status != 'Open') {
-                                    // wallet closed
+                                    // wallet not open (not created, not logged in etc)
                                     if (!request.open_wallet) return send_response('Wallet is not open and open_wallet was not requested') ;
                                     else if (!save_wallet_id || !save_wallet_password) return send_response('Wallet is not open and no wallet login was found') ;
                                     else {
@@ -947,9 +1037,8 @@ angular.module('MoneyNetworkW2')
                                             response.msgtype = 'balance' ;
                                             response.balance = [ {code: 'tBTC', amount: parseFloat(wallet_info.confirmed_balance)} ] ;
                                             // close wallet and return balance info
-                                            btcService.close_wallet(function (res) {
-                                                send_response() ;
-                                            }) ;
+                                            if (!request.close_wallet) send_response() ;
+                                            else btcService.close_wallet(function (res) { send_response() }) ;
                                         }) ;
                                         return ;
                                     }
@@ -1496,47 +1585,53 @@ angular.module('MoneyNetworkW2')
                     console.log(pgm + 'initialize step 3: check ZeroNet login') ;
                     if (!ZeroFrame.site_info.cert_user_id) return cb(null); // not logged in
                     old_auth_address = ZeroFrame.site_info.auth_address ;
-                    // step 4 - update wallet.json
-                    console.log(pgm + 'initialize step 4: update wallet.json') ;
-                    update_wallet_json(function (res) {
-                        var pgm = service + '.initialize update_wallet_json callback 2: ' ;
-                        var cb2 ;
+                    // step 3.5 - get permissions
+                    get_permissions(function (res) {
+                        var pgm = service + '.initialize step 3.5 get_permissions callback 2: ' ;
                         console.log(pgm + 'res = ' + JSON.stringify(res)) ;
-                        // extend cb. lookup save_login[].choice (radio group) from ls
-                        cb2 = function (sessionid) {
-                            var pgm = service + '.initialize.cb2: ' ;
-                            var save_wallet_login ;
-                            if (!ls.save_login) ls.save_login = {} ;
-                            // console.log(pgm + 'ls.save_login = ' + JSON.stringify(ls.save_login)) ;
-                            if (!ls.save_login[old_auth_address]) ls.save_login[old_auth_address] = { choice: '0' } ;
-                            save_wallet_login = ls.save_login[old_auth_address].choice ;
-                            ls_save() ;
-                            cb(sessionid, save_wallet_login) ;
-                            if (z_publish_pending) z_publish(true); // wallet.json file was updated. publish to distribute info to other users
-                        };
-                        // check for old (1. priority) or new (2. priority) session
-                        // step 5 - check old session
-                        console.log(pgm + 'initialize step 5: check old session') ;
-                        is_old_session(function(sessionid) {
-                            var pgm = service + '.initialize is_old_session callback 3: ' ;
-                            console.log(pgm + 'sessionid = ' + JSON.stringify(sessionid)) ;
-                            if (sessionid) {
-                                $rootScope.$apply() ;
-                                return cb2(sessionid);
-                            } // session was restored from localStorage
-                            // step 6 - check new session
-                            console.log(pgm + 'initialize step 6: check new session');
-                            is_new_session(function(sessionid) {
-                                var pgm = service + '.initialize is_new_session callback 4: ' ;
+                        // step 4 - update wallet.json
+                        console.log(pgm + 'initialize step 4: update wallet.json') ;
+                        update_wallet_json(function (res) {
+                            var pgm = service + '.initialize update_wallet_json callback 3: ' ;
+                            var cb2 ;
+                            console.log(pgm + 'res = ' + JSON.stringify(res)) ;
+                            // extend cb. lookup save_login[].choice (radio group) from ls
+                            cb2 = function (sessionid) {
+                                var pgm = service + '.initialize.cb2: ' ;
+                                var save_wallet_login ;
+                                if (!ls.save_login) ls.save_login = {} ;
+                                // console.log(pgm + 'ls.save_login = ' + JSON.stringify(ls.save_login)) ;
+                                if (!ls.save_login[old_auth_address]) ls.save_login[old_auth_address] = { choice: '0' } ;
+                                save_wallet_login = ls.save_login[old_auth_address].choice ;
+                                ls_save() ;
+                                cb(sessionid, save_wallet_login) ;
+                                if (z_publish_pending) z_publish(true); // wallet.json file was updated. publish to distribute info to other users
+                            };
+                            // check for old (1. priority) or new (2. priority) session
+                            // step 5 - check old session
+                            console.log(pgm + 'initialize step 5: check old session') ;
+                            is_old_session(function(sessionid) {
+                                var pgm = service + '.initialize is_old_session callback 4: ' ;
                                 console.log(pgm + 'sessionid = ' + JSON.stringify(sessionid)) ;
-                                if (!sessionid) return cb2(null);
-                                $rootScope.$apply() ;
-                                save_session(function() { cb2(sessionid)}) ;
-                            }) ; // is_new_session callback 4
+                                if (sessionid) {
+                                    $rootScope.$apply() ;
+                                    return cb2(sessionid);
+                                } // session was restored from localStorage
+                                // step 6 - check new session
+                                console.log(pgm + 'initialize step 6: check new session');
+                                is_new_session(function(sessionid) {
+                                    var pgm = service + '.initialize is_new_session callback 5: ' ;
+                                    console.log(pgm + 'sessionid = ' + JSON.stringify(sessionid)) ;
+                                    if (!sessionid) return cb2(null);
+                                    $rootScope.$apply() ;
+                                    save_session(function() { cb2(sessionid)}) ;
+                                }) ; // is_new_session callback 5
 
-                        }) ; // is_old_session callback 3
+                            }) ; // is_old_session callback 4
 
-                    }) ; // update_wallet_json callback 2
+                        }) ; // update_wallet_json callback 3
+
+                    }) ; // get_permissions callback 2
 
                 }) ; // check_merger_permission callback 1
 
@@ -1574,7 +1669,8 @@ angular.module('MoneyNetworkW2')
                 generate_random_string: generate_random_string,
                 is_sessionid: is_sessionid,
                 initialize: initialize,
-                get_status: get_status
+                get_status: get_status,
+                save_permissions: save_permissions
             };
 
             // end kW2Service

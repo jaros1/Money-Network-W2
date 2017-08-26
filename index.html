@@ -49,14 +49,24 @@
                     <br>
                     <input type="radio" ng-model="w.status.save_login" value="2" ng-change="w.save_login_changed()" ng-disabled="w.status.save_login_disabled">
                     Save wallet login in MoneyNetwork (browser/localStorage) encrypted with my MoneyNetwork password.
-                    <br>
-                    <input type="radio" ng-model="w.status.save_login" value="3" ng-change="w.save_login_changed()" ng-disabled="w.status.save_login_disabled">
-                    Save wallet login in MoneyNetwork and grant MoneyNetwork full access to wallet (send, receive, donate money + pay and receive payment).
                 </span>
             </p>
             <p ng-hide="w.status.sessionid">
                 Standalone usage. Add this wallet site to <a href="/moneynetwork.bit/?path=/wallet&new_wallet_site=1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1" target="_top" rel="noopener noreferrer">MoneyNetwork</a>?
                 <br>
+            </p>
+            <p ng-show="w.status.sessionid">
+                Grant MoneyNetwork session permission to:
+                All             <input type="checkbox" ng-model="w.status.permissions.all"             ng-change="w.permissions_changed('all')">,
+                none            <input type="checkbox" ng-model="w.status.permissions.none"            ng-change="w.permissions_changed('none')">,
+                open wallet     <input type="checkbox" ng-model="w.status.permissions.open_wallet"     ng-change="w.permissions_changed('open_wallet')">,
+                get balance     <input type="checkbox" ng-model="w.status.permissions.get_balance"     ng-change="w.permissions_changed('get_balance')">,
+                send money      <input type="checkbox" ng-model="w.status.permissions.send_money"      ng-change="w.permissions_changed('send_money')">,
+                receive money   <input type="checkbox" ng-model="w.status.permissions.receive_money"   ng-change="w.permissions_changed('receive_money')">,
+                pay             <input type="checkbox" ng-model="w.status.permissions.pay"             ng-change="w.permissions_changed('pay')">,
+                receive payment <input type="checkbox" ng-model="w.status.permissions.receive_payment" ng-change="w.permissions_changed('receive_payment')"> and
+                close wallet    <input type="checkbox" ng-model="w.status.permissions.close_wallet"    ng-change="w.permissions_changed('close_wallet')">.<br>
+                Confirm MoneyNetwork money transactions <input type="checkbox" ng-model="w.status.permissions.confirm" ng-change="w.permissions_changed('confirm')"> (send, receive, pay & receive payment)
             </p>
 
         </div>

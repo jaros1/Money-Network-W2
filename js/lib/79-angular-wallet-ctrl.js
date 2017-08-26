@@ -90,7 +90,7 @@ angular.module('MoneyNetworkW2')
         // save wallet login:
         // - 0: No thank you, I will remember wallet login by myself.
         // - 1: Save wallet login in MoneyNetworkW2 (browser/localStorage) encrypted with my ZeroId certificate.
-        // - 2 & 3: Save wallet login in MoneyNetwork (browser/localStorage) encrypted with my MoneyNetwork password (sessionid is required)
+        // - 2: Save wallet login in MoneyNetwork (browser/localStorage) encrypted with my MoneyNetwork password (sessionid is required)
         self.status.save_login = '0' ;
         var old_save_wallet_login = null ; // null: not yet checked
 
@@ -106,6 +106,60 @@ angular.module('MoneyNetworkW2')
 
             }) ;
         }; // save_session_changed
+
+        //permissions = {
+        //    "all": true,
+        //    "none": true,
+        //    "open_wallet": true,
+        //    "get_balance": true,
+        //    "send_money": true,
+        //    "receive_money": true,
+        //    "pay": true,
+        //    "receive_payment": true,
+        //    "close_wallet": true,
+        //    "confirm": true
+        //};
+        var old_permissions = 'x' ;
+        self.permissions_changed = function (name) {
+            var pgm = controller + '.permissions_changed: ';
+            var permissions, i, old_permissions;
+            permissions = ['open_wallet', 'get_balance', 'send_money', 'receive_money', 'pay', 'receive_payment', 'close_wallet'];
+            // console.log(pgm + 'permissions = ' + JSON.stringify(self.status.permissions) + ', name = ' + JSON.stringify(name));
+            if (name == 'all') {
+                if (self.status.permissions.all) {
+                    for (i = 0; i < permissions.length; i++) {
+                        name = permissions[i];
+                        self.status.permissions[name] = true;
+                    }
+                    self.status.permissions.none = false;
+                }
+            }
+            else if (name == 'none') {
+                if (self.status.permissions.none) {
+                    for (i = 0; i < permissions.length; i++) {
+                        name = permissions[i];
+                        self.status.permissions[name] = false;
+                    }
+                    self.status.permissions.all = false;
+                }
+            }
+            else if (name == 'confirm') {
+                // no operation
+            }
+            else if (self.status.permissions[name]) self.status.permissions.none = false;
+            else self.status.permissions.all = false;
+            if (old_permissions == JSON.stringify(self.status.permissions)) {
+                // console.log(pgm + 'no change in permissions') ;
+                return ;
+            }
+            old_permissions = JSON.stringify(self.status.permissions) ;
+            // save permissions in ls
+            W2Service.save_permissions(function (res) {
+                var pgm = controller + '.permissions_changed save_permissions callback: ';
+                console.log(pgm + 'res = ' + JSON.stringify(res));
+            });
+
+        }; // permissions_changed
 
         self.add_site = function () {
             var pgm = controller + '.add_site: ' ;
