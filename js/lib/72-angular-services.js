@@ -1014,11 +1014,14 @@ angular.module('MoneyNetworkW2')
                             }
                             else if (request.msgtype == 'get_balance') {
                                 // get balance request from MN. Return error or balance in test Bitcoins
+                                if (!status.permissions || !status.permissions.get_balance) return send_response('get_balance operation is not authorized');
                                 old_wallet_status = wallet_info.status ;
                                 if (wallet_info.status != 'Open') {
                                     // wallet not open (not created, not logged in etc)
+                                    if (!status.permissions.open_wallet) return send_response('open_wallet operation is not authorized');
                                     if (!request.open_wallet) return send_response('Wallet is not open and open_wallet was not requested') ;
                                     else if (!save_wallet_id || !save_wallet_password) return send_response('Wallet is not open and no wallet login was found') ;
+                                    else if (request.close_wallet && !status.permissions.close_wallet) return send_response('close_wallet operation was requested but is not authorized') ;
                                     else {
                                         // open test bitcoin wallet (also get_balance request)
                                         btcService.init_wallet(save_wallet_id, save_wallet_password, function (error) {
@@ -1044,18 +1047,13 @@ angular.module('MoneyNetworkW2')
                                     }
                                 }
                                 else {
-                                    // wallet already open.
+                                    // wallet already open. ignore open_wallet and close_wallet flags
                                     btcService.get_balance(function (error) {
                                         if (error) return send_response('Get balance request failed with error = ' + error) ;
                                         // get_balance request OK
                                         response.msgtype = 'balance' ;
                                         response.balance = [ {code: 'tBTC', amount: parseFloat(wallet_info.confirmed_balance)} ] ;
-                                        if (request.close_wallet) {
-                                            btcService.close_wallet(function (res) {
-                                                send_response() ;
-                                            }) ;
-                                        }
-                                        else send_response() ;
+                                        send_response() ;
                                     }) ;
                                     return ;
                                 }
