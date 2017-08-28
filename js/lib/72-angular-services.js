@@ -47,7 +47,7 @@ angular.module('MoneyNetworkW2')
                     bitcoin_wallet_backup_info = backupInfo ;
                     console.log('Backup info = ' + CircularJSON.stringify(backupInfo)) ;
                     wallet_info.status = 'Open' ;
-                    get_wallet_balance(cb) ;
+                    get_balance(cb) ;
                 }).then(
                     function () {
                         console.log(pgm + 'success: arguments = ', arguments);
@@ -70,7 +70,7 @@ angular.module('MoneyNetworkW2')
                         bitcoin_wallet = wallet;
                         bitcoin_wallet_backup_info = null;
                         wallet_info.status = 'Open';
-                        get_wallet_balance(cb);
+                        get_balance(cb);
                     }).then(
                     function () {
                         console.log(pgm + 'success: arguments = ', arguments);
@@ -82,7 +82,7 @@ angular.module('MoneyNetworkW2')
                 );
             } // init_wallet
 
-            function get_wallet_balance (cb) {
+            function get_balance (cb) {
                 bitcoin_wallet.getBalance(
                     function(err, confirmedBalance, unconfirmedBalance) {
                         if (err) return cb(err) ;
@@ -159,7 +159,7 @@ angular.module('MoneyNetworkW2')
                 get_wallet_info: get_wallet_info,
                 create_new_wallet: create_new_wallet,
                 init_wallet: init_wallet,
-                get_balance: get_wallet_balance,
+                get_balance: get_balance,
                 close_wallet: close_wallet,
                 delete_wallet: delete_wallet,
                 get_new_address: get_new_address,
@@ -1635,12 +1635,6 @@ angular.module('MoneyNetworkW2')
 
             } // initialize
 
-
-
-            function get_sessionid () {
-                return status.sessionid ;
-            }
-
             function generate_random_string(length, use_special_characters) {
                 var character_set = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
                 if (use_special_characters) character_set += '![]{}#%&/()=?+-:;_-.@$|£' ;
@@ -1653,7 +1647,22 @@ angular.module('MoneyNetworkW2')
                 return string.join('');
             } // generate_random_string
 
-
+            // send current wallet balance to MN
+            function send_balance (cb) {
+                var pgm = service + '.send_balance: ' ;
+                var request ;
+                if (!status.sessionid) return cb('Cannot send balance to MoneyNetwork. No session found') ;
+                if (wallet_info.status != 'Open') return cb('Cannot send balance to MoneyNetwork. Wallet not open');
+                // send balance to MN
+                request = {
+                    msgtype: 'balance',
+                    balance: [ {code: 'tBTC', amount: parseFloat(wallet_info.confirmed_balance)} ]
+                } ;
+                encrypt2.send_message(request, { response: 5000}, function (response) {
+                    if (!response || response.error) return cb('Could not send balance to MN. Response = ' + JSON.stringify(response)) ;
+                    else cb() ;
+                }) ;
+            } // send_balance
 
             // export kW2Service
             return {
@@ -1668,10 +1677,11 @@ angular.module('MoneyNetworkW2')
                 is_sessionid: is_sessionid,
                 initialize: initialize,
                 get_status: get_status,
-                save_permissions: save_permissions
+                save_permissions: save_permissions,
+                send_balance: send_balance
             };
 
-            // end kW2Service
+            // end W2Service
         }])
 
 ;

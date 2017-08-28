@@ -207,20 +207,32 @@ angular.module('MoneyNetworkW2')
         }; // create_new_wallet
 
         self.init_wallet = function () {
+            var pgm = controller + '.init_wallet: ' ;
             btcService.init_wallet(self.wallet_id, self.wallet_password, function (error) {
                 if (error) ZeroFrame.cmd("wrapperNotification", ["error", error]);
                 else {
                     ZeroFrame.cmd("wrapperNotification", ["info", 'Bitcoin wallet was initialized OK.', 5000]);
                     $rootScope.$apply() ;
+                    if (!self.status.sessionid) return ; // no MN session
+                    // send balance to MN
+                    W2Service.send_balance(function (res) {
+                        console.log(pgm + 'send_balance. res = ' + JSON.stringify(res)) ;
+                    }) ;
                 }
             }) ;
         }; // init_wallet
 
         self.get_balance = function () {
+            var pgm = controller + '.get_balance: ' ;
             if (self.wallet_info.status != 'Open') return ZeroFrame.cmd("wrapperNotification", ["info", "No bitcoin wallet found", 3000]) ;
             btcService.get_balance(function(error) {
-                if (error) ZeroFrame.cmd("wrapperNotification", ["error", error]);
-                else $rootScope.$apply() ;
+                if (error) return ZeroFrame.cmd("wrapperNotification", ["error", error]);
+                $rootScope.$apply() ;
+                if (!self.status.sessionid) return ; // no MN session
+                // send balance to MN
+                W2Service.send_balance(function (res) {
+                    console.log(pgm + 'send_balance. res = ' + JSON.stringify(res)) ;
+                }) ;
             })
         } ; // get_balance
 
