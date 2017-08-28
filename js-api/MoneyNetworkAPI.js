@@ -834,7 +834,7 @@ MoneyNetworkAPI.prototype.readonly = function (options, options_property) {
     var pgm = this.module + '.setup_encryption: ';
     var self_property, error ;
     self_property = this.internal_property(options_property) ;
-    if (!self[self_property] || !options[options_property] || (self[self_property] == options[options_property])) return ;
+    if (!this[self_property] || !options[options_property] || (this[self_property] == options[options_property])) return ;
     error = pgm +
         'invalid call. ' + options_property + ' cannot be changed. ' +
         'please use new MoneyNetworkAPI to initialize a new instance with new ' + options_property + '. ' +
@@ -1446,9 +1446,10 @@ MoneyNetworkAPI.json_schemas = {
                     "required": ['code', 'amount'],
                     "additionalProperties": false
                 }
-            }
+            },
+            "balance_at": { "type": "number", "multipleOf": 1.0 }
         },
-        "required": ['msgtype'],
+        "required": ['msgtype', 'balance', 'balance_at'],
         "additionalProperties": false
     }, // balance
 
@@ -1474,13 +1475,14 @@ MoneyNetworkAPI.json_schemas = {
                     },
                     "required": ['code', 'name'],
                     "additionalProperties": false
-                }
+                },
+                "minItems": 1
             },
             "wallet_sha256": { "type": 'string', "pattern": '^[0-9a-f]{64}$' },
             "hub": { "type": 'string'}
 
         },
-        "required": ['msgtype', 'wallet_sha256'],
+        "required": ['msgtype', 'wallet_sha256', 'currencies'],
         "additionalProperties": false
     } // wallet
 

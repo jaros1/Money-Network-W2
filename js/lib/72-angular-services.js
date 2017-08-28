@@ -1039,6 +1039,7 @@ angular.module('MoneyNetworkW2')
                                             // open wallet + get_balance request OK
                                             response.msgtype = 'balance' ;
                                             response.balance = [ {code: 'tBTC', amount: parseFloat(wallet_info.confirmed_balance)} ] ;
+                                            response.balance_at = new Date().getTime() ;
                                             // close wallet and return balance info
                                             if (!request.close_wallet) send_response() ;
                                             else btcService.close_wallet(function (res) { send_response() }) ;
@@ -1053,6 +1054,7 @@ angular.module('MoneyNetworkW2')
                                         // get_balance request OK
                                         response.msgtype = 'balance' ;
                                         response.balance = [ {code: 'tBTC', amount: parseFloat(wallet_info.confirmed_balance)} ] ;
+                                        response.balance_at = new Date().getTime() ;
                                         send_response() ;
                                     }) ;
                                     return ;
@@ -1656,7 +1658,8 @@ angular.module('MoneyNetworkW2')
                 // send balance to MN
                 request = {
                     msgtype: 'balance',
-                    balance: [ {code: 'tBTC', amount: parseFloat(wallet_info.confirmed_balance)} ]
+                    balance: [ {code: 'tBTC', amount: parseFloat(wallet_info.confirmed_balance)} ],
+                    balance_at: new Date().getTime()
                 } ;
                 encrypt2.send_message(request, { response: 5000}, function (response) {
                     if (!response || response.error) return cb('Could not send balance to MN. Response = ' + JSON.stringify(response)) ;
