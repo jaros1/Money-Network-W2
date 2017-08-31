@@ -788,7 +788,13 @@ angular.module('MoneyNetworkW2')
                     ZeroFrame.cmd("fileGet", {inner_path: inner_path, required: false}, function (content_str) {
                         var content ;
                         if (!content_str) content = {} ;
-                        else content = JSON.parse(content_str) ;
+                        else {
+                            try {content = JSON.parse(content_str) }
+                            catch (e) {
+                                console.log(pgm + inner_path + ' was invalid. content_str = ' + content_str + ', error = ' + e.message) ;
+                                content = {} ;
+                            }
+                        }
                         z_cache.content_json = content ;
                         cb(z_cache.content_json) ;
                         while (get_content_json_cbs.length) { cb = get_content_json_cbs.shift() ; cb(z_cache.content_json)} ;
@@ -826,7 +832,15 @@ angular.module('MoneyNetworkW2')
                     ZeroFrame.cmd("fileGet", {inner_path: inner_path, required: false}, function (wallet_str) {
                         var wallet ;
                         if (!wallet_str) wallet = {} ;
-                        else wallet = JSON.parse(wallet_str) ;
+                        else {
+                            try {
+                                wallet = JSON.parse(wallet_str) ;
+                            }
+                            catch (e) {
+                                console.log(pgm + 'ignoring invalid wallet.json file ' + inner_path + '. wallet_str = ' + wallet_str + ', error = ' + e.message) ;
+                                wallet = {} ;
+                            }
+                        }
                         z_cache.wallet_json = wallet ;
                         cb(z_cache.wallet_json) ;
                         while (get_wallet_json_cbs.length) { cb = get_wallet_json_cbs.shift() ; cb(z_cache.wallet_json)}
@@ -865,7 +879,7 @@ angular.module('MoneyNetworkW2')
                         old_wallet_str = JSON.stringify(wallet) ;
                         old_wallet_json = JSON.parse(old_wallet_str) ;
                         // validate after read
-                        error = encrypt1.validate_json(pgm, wallet) ;
+                        error = MoneyNetworkAPILib.validate_json(pgm, wallet) ;
                         if (error) {
                             // old wallet info is invalid. delete all
                             console.log(pgm + 'deleting invalid wallet.json. error = ' + error) ;
@@ -877,7 +891,15 @@ angular.module('MoneyNetworkW2')
                         if (!wallet.wallet_domain) delete wallet.wallet_domain ;
                         wallet.wallet_title = ZeroFrame.site_info.content.title;
                         wallet.wallet_description = ZeroFrame.site_info.content.description;
-                        wallet.currencies = [ { code: 'tBTC', name: 'Test Bitcoin', url: 'https://en.bitcoin.it/wiki/Testnet'} ] ;
+                        wallet.currencies = [{
+                            code: 'tBTC',
+                            name: 'Test Bitcoin',
+                            url: 'https://en.bitcoin.it/wiki/Testnet',
+                            units: [
+                                { unit: 'BitCoin', factor: 1 },
+                                { unit: 'Satoshi', factor: 0.00000001 }
+                            ]
+                        }];
                         if (!wallet.hub) wallet.hub = random_other_hub ;
 
                         // calc wallet_sha256 signature. sha256 signature can be used instead of wallet_address, wallet_title, wallet_description and wallet_currencies
@@ -928,7 +950,7 @@ angular.module('MoneyNetworkW2')
                             if (old_wallet_str == JSON.stringify(wallet)) return cb('ok'); // no change to public wallet information
                             console.log(pgm + 'wallet = ' + JSON.stringify(wallet));
                             // validate before write
-                            error = encrypt1.validate_json(pgm, wallet) ;
+                            error = MoneyNetworkAPILib.validate_json(pgm, wallet) ;
                             if (error) return cb('cannot write invalid wallet.json. error = ' + error + ', wallet = ' + JSON.stringify(wallet));
                             write_wallet_json(function (res) {
                                 var pgm = service + '.update_wallet_json write_wallet_json callback 4: ';
@@ -979,7 +1001,13 @@ angular.module('MoneyNetworkW2')
                             console.log(pgm + 'fileGet ' + inner_path + ' failed') ;
                             return ;
                         }
-                        encrypted_json = JSON.parse(json_str) ;
+                        try {
+                            encrypted_json = JSON.parse(json_str) ;
+                        }
+                        catch (e) {
+                            console.log(pgm + inner_path + ' is invalid. json_str = ' + json_str + ', error = ' + e.message) ;
+                            return ;
+                        }
                         // decrypt json
                         encrypt2.decrypt_json(encrypted_json, function (request) {
                             var pgm = service + '.process_incoming_message decrypt_json callback 2: ';
@@ -1006,7 +1034,7 @@ angular.module('MoneyNetworkW2')
                             }; // send_response
 
                             // validate and process incoming json message and process
-                            error = encrypt2.validate_json(pgm, request) ;
+                            error = MoneyNetworkAPILib.validate_json(pgm, request) ;
                             if (error) response.error = 'message is invalid. ' + error ;
                             else if (request.msgtype == 'ping') {
                                 // simple ping from MN. checking connection. return OK response
@@ -1176,8 +1204,15 @@ angular.module('MoneyNetworkW2')
                                 return cb(status.sessionid) ;
                             }
                             // console.log(pgm + 'timestamps: file_timestamp = ' + file_timestamp + ', content_signed = ' + content_signed + ', now = ' + now) ;
-                            pubkeys = JSON.parse(pubkeys_str) ;
-                            error = encrypt2.validate_json(pgm, pubkeys) ;
+                            try {
+                                pubkeys = JSON.parse(pubkeys_str) ;
+                            }
+                            catch (e) {
+                                console.log(pgm + prefix + 'read pubkeys failed. file + ' + inner_path + ' is invalid. pubkeys_str = ' + pubkeys_str + ', error = ' + e.message) ;
+                                status.sessionid = null ;
+                                return cb(status.sessionid) ;
+                            }
+                            error = MoneyNetworkAPILib.validate_json(pgm, pubkeys) ;
                             if (error) {
                                 console.log(pgm + prefix + 'invalid pubkeys message. error = ' + error) ;
                                 status.sessionid = null ;
