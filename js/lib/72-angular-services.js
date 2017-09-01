@@ -918,9 +918,11 @@ angular.module('MoneyNetworkW2')
                         query =
                             "select count(*) as no from (" +
                             "  select keyvalue.json_id, count(*) as no " +
-                            "  from keyvalue as wallet_sha256, keyvalue " +
+                            "  from keyvalue as wallet_sha256, json, keyvalue " +
                             "  where wallet_sha256.key = 'wallet_sha256' " +
                             "  and wallet_sha256.value = '" + wallet_sha256 + "' " +
+                            "  and json.json_id = wallet_sha256.json_id " +
+                            "  and json.directory like '" + hub + "/%' " +
                             "  and keyvalue.json_id = wallet_sha256.json_id " +
                             "  and keyvalue.value is not null " +
                             "  and keyvalue.key like 'wallet_%' " +
