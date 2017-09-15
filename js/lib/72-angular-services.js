@@ -1013,7 +1013,8 @@ angular.module('MoneyNetworkW2')
                         // decrypt json
                         encrypt2.decrypt_json(encrypted_json, function (request) {
                             var pgm = service + '.process_incoming_message decrypt_json callback 2: ';
-                            var response_timestamp, request_timestamp, error, response, old_wallet_status, send_response ;
+                            var response_timestamp, request_timestamp, error, response, old_wallet_status, send_response,
+                                send_money, request_money, i, money_transaction ;
 
                             // remove any response timestamp before validation (used in response filename)
                             response_timestamp = request.response ; delete request.response ; // request received. must use response_timestamp in response filename
@@ -1092,6 +1093,80 @@ angular.module('MoneyNetworkW2')
 
                                 // wallet_info.status = 'Open' ;
 
+                            }
+                            else if (request.msgtype == 'prepare_mt_request') {
+                                // got a prepare money transactions request from MN. Return error message or json to be included in chat message for each money transaction
+                                // check permissions
+                                send_money = false ;
+                                request_money = false ;
+                                for (i=0 ; i<request.money_transactions.length ; i++) {
+                                    money_transaction = request.money_transactions[i] ;
+                                    if (money_transaction.action == 'Send') send_money = true ;
+                                    if (money_transaction.action == 'Request') request_money = true ;
+                                }
+                                console.log(pgm + 'send_money = ' + send_money + ', request_money = ' + request_money) ;
+                                console.log(pgm + 'todo: add permissions in wallet ping response? MN session should know permissions before sending prepare_mt_request to wallet') ;
+                                if (send_money && (!status.permissions || !status.permissions.send_money)) return send_response('send_money operation is not authorized');
+                                if (request_money && (!status.permissions || !status.permissions.receive_money)) return send_response('receive_money operation is not authorized');
+
+                                // todo: do some validations without contacting external API (Blocktrails Node.js API)
+                                // 1) send money: check amount + fee > balance
+                                // todo: must add fee information to wallet.json. Users should know fee politics.
+
+                                // todo: check confirm. wait max <n> seconds for confirmation
+                                // 1) add a wallet <=> feedback? waiting for confirmation?
+
+                                // callback chain definitions
+                                var step_2_more = function () {
+                                    var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_1_confirm: ';
+                                    return send_response('prepare_mt_request not fully implemented');
+
+                                } ; // step_2_more
+
+                                var step_1_confirm = function () {
+                                    var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_1_confirm: ';
+                                    var request2 ;
+                                    if (!status.permissions && !status.permissions.confirm) {
+                                        return step_2_more() ;
+                                    }
+                                    // send notification to MN. do not wait for any response
+                                    request2 = {
+                                        msgtype: 'notification',
+                                        type: 'info',
+                                        message: 'Please confirm money transaction',
+                                        timeout: 10000
+                                    } ;
+                                    console.log(pgm + 'sending request2 = ' + JSON.stringify(request2)) ;
+                                    encrypt2.send_message(request2, {response: false}, function (response) {
+                                        var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_1_confirm send_message callback 1: ';
+                                        var message, confirm_status, confirm_timeout_fnk ;
+                                        if (response && response.error) return send_response('Confirm transaction failed. error = ' + response.error) ;
+                                        // confirm box. handle confirm timeout. wait max 2+10 seconds for confirmation
+                                        confirm_status = { done: false } ;
+                                        confirm_timeout_fnk = function () {
+                                            if (confirm_status.done) return ; // confirm dialog done
+                                            confirm_status.done = true ;
+                                            send_response('Confirm transaction timeout')
+                                        } ;
+                                        setTimeout(confirm_timeout_fnk, 12000) ;
+
+                                        // todo: 1) add transaction details to confirm text
+                                        message = 'Send .... money transaction to ' + request.contact.alias + '?' ;
+                                        ZeroFrame.cmd('wrapperConfirm', [message, 'OK'], function (confirm) {
+                                            if (confirm_status.done) return ; // confirm dialog timeout
+                                            confirm_status.done = true ;
+                                            if (!confirm) return send_response('money transaction was rejected');
+                                            // Money transaction was confirmed. continue
+                                            step_2_more() ;
+                                        }) ; // wrapperConfirm callback 2
+                                    }) ; // send_message callback 1
+
+                                } ; // step_1_confirm
+
+                                // start callback chain
+                                step_1_confirm() ;
+                                // wait for callback chain to finish
+                                return ;
                             }
                             else response.error = 'Unknown msgtype ' + request.msgtype ;
                             console.log(pgm + 'response = '  + JSON.stringify(response)) ;
