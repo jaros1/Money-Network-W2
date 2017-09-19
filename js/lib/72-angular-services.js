@@ -487,7 +487,8 @@ angular.module('MoneyNetworkW2')
                 session_handshake: 'n/a', // checking old/new session
                 save_login: '0', // radio group '0', '1' (W2 LS) or '2' (MN LS)
                 save_login_disabled: true, // radio group disabled while checking save_wallet_login status
-                permissions: {} // MoneyNetwork permissions to wallet operations
+                permissions: {}, // MoneyNetwork permissions to wallet operations
+                offline: [] // array with offline outgoing money transaction
             } ;
             function get_status () { return status }
 
@@ -518,7 +519,7 @@ angular.module('MoneyNetworkW2')
                         for (key in status.permissions) delete status.permissions[key] ;
                         return cb(error) ;
                     }
-                    // copy permissions to ls
+                    // copy permissions to status (used in UI)
                     for (key in status.permissions) delete status.permissions[key] ;
                     for (key in permissions) status.permissions[key] = permissions[key] ;
                     // console.log(pgm + 'status.permissions = ' + JSON.stringify(status.permissions));
@@ -537,7 +538,7 @@ angular.module('MoneyNetworkW2')
                         cb('decrypt error. encrypted_json was ' + JSON.stringify(encrypted_json)) ;
                     }
                     else {
-                        // copy permissions
+                        // copy permissions to status (used in UI)
                         for (key in status.permissions) delete status.permissions[key] ;
                         for (key in json) status.permissions[key] = json[key] ;
                         // console.log(pgm + 'status.permissions = ' + JSON.stringify(status.permissions));
@@ -578,6 +579,92 @@ angular.module('MoneyNetworkW2')
                 }) ; // get_my_pubkey2 callback 1
 
             } // save_permissions
+
+            // get offline transactions from ls (timestamps for long outgoing money transactions)
+            function get_offline (cb) {
+                var pgm = service + '.get_offline: ' ;
+                var error, auth_address, user_info, offline, encrypted_json, key ;
+                if (!ls.save_login) return cb('save_login hash was not found in localStorage') ;
+                if (typeof ls.save_login != 'object') {
+                    error = 'save_login was not a hash. save_login = ' + JSON.stringify(ls.save_login) ;
+                    ls.save_login = {} ;
+                    ls_save() ;
+                    while (status.offline.length) status.offline.shift() ;
+                    return cb(error) ;
+                }
+                auth_address = ZeroFrame.site_info.cert_user_id ? ZeroFrame.site_info.auth_address : 'n/a' ;
+                user_info = ls.save_login[auth_address] ;
+                if (!user_info) return cb('User info for ' + auth_address + ' was not found') ;
+                if (auth_address == 'n/a') {
+                    // no ZeroNet certificate. login is saved unencrypted in ls
+                    offline = user_info.offline ;
+                    // console.log(pgm + 'unencrypted offline = ' + JSON.stringify(offline)) ;
+                    if (!offline) return cb('Offline transaction for ' + auth_address + ' was not found') ;
+                    if (!Array.isArray(offline)) {
+                        error = 'save_login[' + auth_address + '].offline is not an array. offline = ' + JSON.stringify(offline) ;
+                        user_info.offline = [] ;
+                        ls_save() ;
+                        while (status.offline.length) status.offline.shift() ;
+                        return cb(error) ;
+                    }
+                    // copy offline to status (used in UI)
+                    for (key in status.offline) delete status.offline[key] ;
+                    // console.log(pgm + 'status.offline = ' + JSON.stringify(status.offline));
+                    return cb(null) ;
+                }
+                // ZeroNet certificate present. decrypt offline
+                encrypted_json = user_info.offline ;
+                // console.log(pgm + 'encrypted_json = ' + JSON.stringify(encrypted_json));
+                if (!encrypted_json) return cb('No encrypted offline was found for ' + auth_address) ;
+                encrypt1.decrypt_json(encrypted_json, function(json) {
+                    var pgm = service + '.get_offline decrypt_json callback: ' ;
+                    var i ;
+                    // console.log(pgm + 'json = ' + JSON.stringify(json)) ;
+                    if (!json) {
+                        while (status.offline.length) status.offline.shift() ;
+                        cb('decrypt error. encrypted_json was ' + JSON.stringify(encrypted_json)) ;
+                    }
+                    else {
+                        // copy offline to status (used in UI)
+                        while (status.offline.length) status.offline.shift() ;
+                        for (i=0 ; i<json.length ; i++) status.offline.push(json[i]) ;
+                        // console.log(pgm + 'status.offline = ' + JSON.stringify(status.offline));
+                        cb(null) ;
+                    }
+                }) ; // decrypt_json callback
+            } // get_offline
+
+            // save offline in ls (rules for MoneyNetwork wallet operations)
+            function save_offline (cb) {
+                var pgm = service + '.save_offline: ' ;
+                var auth_address, unencrypted_offline ;
+                auth_address = ZeroFrame.site_info.cert_user_id ? ZeroFrame.site_info.auth_address : 'n/a' ;
+                if (auth_address == 'n/a') {
+                    // no cert_user_id. not encrypted
+                    ls.save_login[auth_address].offline = JSON.parse(JSON.stringify(status.offline)) ;
+                    ls_save();
+                    return cb();
+                }
+                // get and add W2 pubkey2 to encryption setup (self encrypt using ZeroNet certificate)
+                get_my_pubkey2(function (my_pubkey2) {
+                    var pgm = service + '.save_offline get_my_pubkey2 callback 1: ';
+                    encrypt1.setup_encryption({pubkey2: my_pubkey2});
+                    // console.log(pgm + 'encrypt1.other_pubkey2 = ' + encrypt1.other_session_pubkey2);
+
+                    // cert_user_id: encrypt offline
+                    unencrypted_offline = status.offline;
+                    // console.log(pgm + 'unencrypted_offline = ' + JSON.stringify(unencrypted_offline)) ;
+                    encrypt1.encrypt_json(unencrypted_offline, [2], function (encrypted_offline) {
+                        var pgm = service + '.save_offline encrypt_json callback 2: ';
+                        ls.save_login[auth_address].offline = encrypted_offline;
+                        // console.log(pgm + 'encrypted_offline = ' + JSON.stringify(encrypted_offline)) ;
+                        ls_save();
+                        return cb();
+                    }); // encrypt_json callback 2
+
+                }) ; // get_my_pubkey2 callback 1
+
+            } // save_offline
 
             // todo: changed ZeroId. clear z_cache.
             var z_cache = {} ; // cache some ZeroNet objects: wallet_data_hub, wallet.json
@@ -1105,7 +1192,9 @@ angular.module('MoneyNetworkW2')
                                     if (money_transaction.action == 'Request') request_money = true ;
                                 }
                                 console.log(pgm + 'send_money = ' + send_money + ', request_money = ' + request_money) ;
+
                                 console.log(pgm + 'todo: add permissions in wallet ping response? MN session should know permissions before sending prepare_mt_request to wallet') ;
+
                                 if (send_money && (!status.permissions || !status.permissions.send_money)) return send_response('send_money operation is not authorized');
                                 if (request_money && (!status.permissions || !status.permissions.receive_money)) return send_response('receive_money operation is not authorized');
 
@@ -1129,7 +1218,7 @@ angular.module('MoneyNetworkW2')
                                     if (!status.permissions && !status.permissions.confirm) {
                                         return step_2_more() ;
                                     }
-                                    // send notification to MN. do not wait for any response
+                                    // send confirm notification to MN
                                     request2 = {
                                         msgtype: 'notification',
                                         type: 'info',
@@ -1141,7 +1230,7 @@ angular.module('MoneyNetworkW2')
                                         var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_1_confirm send_message callback 1: ';
                                         var message, confirm_status, confirm_timeout_fnk ;
                                         if (response && response.error) return send_response('Confirm transaction failed. error = ' + response.error) ;
-                                        // confirm box. handle confirm timeout. wait max 2+10 seconds for confirmation
+                                        // open confirm dialog. handle confirm timeout. wait max 2+10 seconds for confirmation
                                         confirm_status = { done: false } ;
                                         confirm_timeout_fnk = function () {
                                             if (confirm_status.done) return ; // confirm dialog done
@@ -1149,7 +1238,6 @@ angular.module('MoneyNetworkW2')
                                             send_response('Confirm transaction timeout')
                                         } ;
                                         setTimeout(confirm_timeout_fnk, 12000) ;
-
                                         // todo: 1) add transaction details to confirm text
                                         message = 'Send .... money transaction to ' + request.contact.alias + '?' ;
                                         ZeroFrame.cmd('wrapperConfirm', [message, 'OK'], function (confirm) {
@@ -1716,9 +1804,116 @@ angular.module('MoneyNetworkW2')
                                 if (!ls.save_login[old_auth_address]) ls.save_login[old_auth_address] = { choice: '0' } ;
                                 save_wallet_login = ls.save_login[old_auth_address].choice ;
                                 ls_save() ;
-                                cb(sessionid, save_wallet_login) ;
-                                if (z_publish_pending) z_publish(true); // wallet.json file was updated. publish to distribute info to other users
-                            };
+                                // todo: add cleanup old outgoing money transaction files
+                                // delete all outgoing money transaction files except offline transactions
+                                // todo: where to save array with offline transactions?
+
+                                // load list of offline transactions from ls (loaded into status.offline array)
+                                get_offline(function(error) {
+                                    var pgm = service + '.initialize get_offline callback 4: ' ;
+                                    var query1 ;
+                                    if (error) console.log(pgm + error) ;
+                                    // find outgoing money transactions
+
+
+                                    // query 1. simple get all optional files for current user directory
+                                    // todo: optional files and actual files on file system can be out of sync. Should delete files_optional + sign to be sure that optional files and file system matches
+                                    query1 =
+                                        "select files_optional.filename from json, files_optional " +
+                                        "where directory like '" + z_cache.my_wallet_data_hub + "/data/users/" + ZeroFrame.site_info.auth_address + "' " +
+                                        "and file_name = 'content.json' " +
+                                        "and files_optional.json_id = json.json_id";
+                                    console.log(pgm + 'query1 = ' + query1);
+
+                                    ZeroFrame.cmd("dbQuery", [query1], function (res) {
+                                        var pgm = service + '.initialize dbQuery callback 5: ' ;
+                                        var files, i, re, filename, this_session_filename, timestamp, session_info, sessionid,
+                                            session_at, delete_files, delete_file, delete_ok, delete_failed;
+                                        if (res.error) {
+                                            console.log(pgm + 'query failed. error = ' + res.error);
+                                            console.log(pgm + 'query = ' + query1);
+                                            return;
+                                        }
+                                        console.log(pgm + 'res = ' + JSON.stringify(res)) ;
+
+                                        re = new RegExp('^[0-9a-f]{10}.[0-9]{13}$'); // no user seq (MoneyNetworkAPI messages)
+                                        files = [] ;
+                                        for (i=0 ; i<res.length ; i++) if (res[i].filename.match(re)) files.push(res[i].filename) ;
+                                        console.log(pgm + 'files = ' + JSON.stringify(files)) ;
+
+                                        delete_files = [] ;
+                                        for (i=0 ; i<files.length ; i++) {
+                                            filename = files[i] ;
+                                            this_session_filename = filename.substr(0,10) ;
+                                            if (this_session_filename != encrypt2.this_session_filename) {
+                                                // unknown (old) session
+                                                delete_files.push(filename) ;
+                                                continue ;
+                                            }
+                                            timestamp = parseInt(filename.substr(11)) ;
+                                            if (timestamp == 0) {
+                                                // special file with timestamps for offline transactions (encrypted)
+                                                if (!status.offline || !status.offline.offline.length) {
+                                                    // no offline transactions. delete file with offline transactions
+                                                    delete_files.push(filename) ;
+                                                }
+                                            }
+                                            else if (timestamp < encrypt2.session_at) {
+                                                // old outgoing money transaction message
+                                                if (!status.offline || (status.offline.indexOf(timestamp) == -1)) {
+                                                    // old outgoing message not in offline transactions
+                                                    delete_files.push(filename) ;
+                                                }
+                                            }
+                                        } // i
+                                        console.log(pgm + 'delete_files = ' + JSON.stringify(delete_files)) ;
+
+                                        // delete file loop
+                                        delete_ok = [] ;
+                                        delete_failed = [] ;
+                                        delete_file = function() {
+                                            var pgm = service + '.create_sessions.step_3_find_old_outgoing_files.delete_file: ';
+                                            var filename, inner_path, debug_seq ;
+                                            if (!delete_files.length) {
+                                                // finish deleting old optional files
+                                                if (!delete_ok.length) {
+                                                    // nothing to sign
+                                                    cb(sessionid, save_wallet_login) ;
+                                                    if (z_publish_pending) z_publish(true); // wallet.json file was updated. publish to distribute info to other users
+                                                    return ;
+                                                }
+                                                // sign
+                                                z_publish_pending = true ;
+                                                inner_path = 'merged-MoneyNetwork/' + z_cache.my_wallet_data_hub + '/data/users/' + ZeroFrame.site_info.auth_address + '/content.json' ;
+                                                self.ZeroFrame.cmd("siteSign", {inner_path: inner_path}, function (res) {
+                                                    var pgm = service + '.create_sessions.step_3_find_old_outgoing_files.delete_file siteSign callback: ';
+                                                    if (res != 'ok') console.log(pgm + inner_path + ' siteSign failed. error = ' + res) ;
+                                                    // done with or without errors
+                                                    cb(sessionid, save_wallet_login) ;
+                                                    z_publish(true); // wallet.json file was updated. publish to distribute info to other users
+                                                }) ;
+                                                return ;
+                                            } // done
+                                            filename = delete_files.shift() ;
+                                            inner_path = 'merged-MoneyNetwork/' + z_cache.my_wallet_data_hub + '/data/users/' + ZeroFrame.site_info.auth_address + '/' + filename ;
+                                            ZeroFrame.cmd("fileDelete", inner_path, function (res) {
+                                                if (res == 'ok') delete_ok.push(filename) ;
+                                                else {
+                                                    console.log(pgm + inner_path + ' fileDelete failed. error = ' + res) ;
+                                                    delete_failed.push(filename) ;
+                                                }
+                                                // continue with next file
+                                                delete_file() ;
+                                            }); // fileDelete
+                                        } ; // delete_file
+                                        // start delete file loop
+                                        delete_file() ;
+
+                                    }) ; // dbQuery
+
+                                }) ; // get_offline callback 4
+
+                            }; // cb2
                             // check for old (1. priority) or new (2. priority) session
                             // step 5 - check old session
                             console.log(pgm + 'initialize step 5: check old session') ;
