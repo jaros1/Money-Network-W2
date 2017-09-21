@@ -987,6 +987,7 @@ angular.module('MoneyNetworkW2')
                                 { unit: 'Satoshi', factor: 0.00000001 }
                             ]
                         }];
+                        wallet.api_url = 'https://www.blocktrail.com/api/docs' ;
                         if (!wallet.hub) wallet.hub = random_other_hub ;
 
                         // calc wallet_sha256 signature. sha256 signature can be used instead of wallet_address, wallet_title, wallet_description and wallet_currencies
@@ -1128,7 +1129,11 @@ angular.module('MoneyNetworkW2')
                             if (error) response.error = 'message is invalid. ' + error ;
                             else if (request.msgtype == 'ping') {
                                 // simple ping from MN. checking connection. return OK response
-
+                            }
+                            else if (request.msgtype == 'password') {
+                                // got a password response from MN. Must be a lost get_password response. todo: 607 matches in last W2 log check!
+                                console.log(pgm + 'warning. got a password message. must be a "lost" get_password response. todo: check reason for lost get_password responses') ;
+                                response_timestamp = null ;
                             }
                             else if (request.msgtype == 'get_balance') {
                                 // get balance request from MN. Return error or balance in test Bitcoins
@@ -1197,6 +1202,8 @@ angular.module('MoneyNetworkW2')
 
                                 if (send_money && (!status.permissions || !status.permissions.send_money)) return send_response('send_money operation is not authorized');
                                 if (request_money && (!status.permissions || !status.permissions.receive_money)) return send_response('receive_money operation is not authorized');
+
+                                // todo: calculate fee. Blockchain requires a fee for a money transaction (send/receive) to be included in blockchain.
 
                                 // todo: do some validations without contacting external API (Blocktrails Node.js API)
                                 // 1) send money: check amount + fee > balance

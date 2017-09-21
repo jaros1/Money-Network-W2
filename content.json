@@ -21,20 +21,20 @@
    "size": 885
   },
   "index.html": {
-   "sha512": "046788d8093e96081d1c589272cc06aeef21decc7e7c8c533f59fd0b6a9fb618",
-   "size": 10039
+   "sha512": "4d1932680be626d844930e249a555d4184c9021ef0594f208c97581ee5e728ec",
+   "size": 10037
   },
   "js-api/MoneyNetworkAPI.js": {
-   "sha512": "4586b68ac031173523f4d2e6a9452128412c88e591c3b549c82f6c6fd95eaba8",
-   "size": 113054
+   "sha512": "4a8308895730cd47d53e7c8676e75aa7e37aab01a8d8e344893533f1ce3e26ea",
+   "size": 113344
   },
   "js/all.js": {
-   "sha512": "0e0bb4182886225ec77e52ce98599fbe7f5f35faea4ab1088ab49f6efe0a24d0",
-   "size": 4903114
+   "sha512": "0f276d3e5b5d214e07431c4493282805c142087e3c2c708aefbe88ac79ec6110",
+   "size": 4916975
   },
   "js/all.js.zip": {
-   "sha512": "1f8bbfae74245756af186100c08fe146a5b9e9dc5c6a0b84925ac2f650be3bc9",
-   "size": 1074492
+   "sha512": "fa705ed51f5dc9eb8e5829821c2a754dba12a175fad97078ce2caa0c59b25bbb",
+   "size": 1076241
   }
  },
  "ignore": "((js|css)/(?!all.(js|css))|.idea|.git|data/users/.*/.*|merged-.*)",
@@ -45,7 +45,7 @@
   }
  },
  "inner_path": "content.json",
- "modified": 1505807373,
+ "modified": 1505908654,
  "postmessage_nonce_security": true,
  "settings": {
   "default_hubs": {
@@ -57,7 +57,7 @@
  },
  "signers_sign": "G07H0Zdvu6yUtEe7wxc515d5wVoZJpezNYNiKN8T1cwlBkZTYqZRbBzltNbJkstHlOMLxVLGQP6OdGCNEMCI8zE=",
  "signs": {
-  "1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1": "HEOt2+zNPXAb4es/ms1z2mB+kXb2mGMapsDexvB+thXcNp98a+HXXqe5ghz8E3EzS93RXh2ZumgOlWGywIhzCjk="
+  "1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1": "HKWel0jNiote09UOwnxiohXnuzMxWYbEYtE3hGrvh6j3J0wJyTvlzIMrQNgaG1WuQt/v6SnEWicGfvcREAPRYq4="
  },
  "signs_required": 1,
  "title": "MoneyNetworkW2",
