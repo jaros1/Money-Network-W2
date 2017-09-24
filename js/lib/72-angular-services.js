@@ -982,6 +982,7 @@ angular.module('MoneyNetworkW2')
                             code: 'tBTC',
                             name: 'Test Bitcoin',
                             url: 'https://en.bitcoin.it/wiki/Testnet',
+                            fee_info: 'Fee calculated by external API (btc.com) xxand subtracted from amount. Calculated from the last X block in block chain. Lowest fee that still had more than an 80% chance to be confirmed in the next block.',
                             units: [
                                 { unit: 'BitCoin', factor: 1 },
                                 { unit: 'Satoshi', factor: 0.00000001 }
@@ -1101,12 +1102,19 @@ angular.module('MoneyNetworkW2')
                         // decrypt json
                         encrypt2.decrypt_json(encrypted_json, function (request) {
                             var pgm = service + '.process_incoming_message decrypt_json callback 2: ';
-                            var response_timestamp, request_timestamp, error, response, old_wallet_status, send_response,
-                                send_money, request_money, i, money_transaction ;
+                            var response_timestamp, request_timestamp, request_timeout_at, error, response,
+                                old_wallet_status, send_response, send_money, request_money, i, money_transaction ;
 
                             // remove any response timestamp before validation (used in response filename)
                             response_timestamp = request.response ; delete request.response ; // request received. must use response_timestamp in response filename
                             request_timestamp = request.request ; delete request.request ; // response received. todo: must be a response to previous send request with request timestamp in request filename
+                            request_timeout_at = request.timeout_at ; delete request.timeout_at ; // request received. when does request expire. how long does other session wait for response
+
+                            // request timeout?
+                            if (request_timeout_at < (new Date().getTime())) {
+                                console.log(pgm + 'warning. request timeout. ignoring request = ' + JSON.stringify(request) + ', inner_path = ' + inner_path) ;
+                                return ;
+                            }
 
                             console.log(pgm + 'request = ' + JSON.stringify(request)) ;
                             response = { msgtype: 'response' } ;
@@ -1116,7 +1124,7 @@ angular.module('MoneyNetworkW2')
                                 if (error) response.error = error ;
 
                                 // send response to other session
-                                encrypt2.send_message(response, {timestamp: response_timestamp, msgtype: request.msgtype, request: file_timestamp}, function (res)  {
+                                encrypt2.send_message(response, {timestamp: response_timestamp, msgtype: request.msgtype, request: file_timestamp, timeout_at: request_timeout_at}, function (res)  {
                                     var pgm = service + '.process_incoming_message send_message callback 3: ';
                                     console.log(pgm + 'res = ' + JSON.stringify(res)) ;
                                 }) ; // send_message callback 3
@@ -1203,14 +1211,21 @@ angular.module('MoneyNetworkW2')
                                 if (send_money && (!status.permissions || !status.permissions.send_money)) return send_response('send_money operation is not authorized');
                                 if (request_money && (!status.permissions || !status.permissions.receive_money)) return send_response('receive_money operation is not authorized');
 
+                                //request = {
+                                //    "msgtype": "prepare_mt_request",
+                                //    "money_transactions": [{
+                                //        "action": "Send",
+                                //        "code": "tBTC",
+                                //        "amount": "0.00001"
+                                //    }]
+                                //};
                                 // todo: calculate fee. Blockchain requires a fee for a money transaction (send/receive) to be included in blockchain.
+                                // no fee calculation. is done by blocktrail/btc when sending money and fee is subtracted from amount
 
                                 // todo: do some validations without contacting external API (Blocktrails Node.js API)
-                                // 1) send money: check amount + fee > balance
-                                // todo: must add fee information to wallet.json. Users should know fee politics.
+                                // 1) send money: check amount >= balance
+                                // todo: must add fee information to wallet.json. Users must know fee politics.
 
-                                // todo: check confirm. wait max <n> seconds for confirmation
-                                // 1) add a wallet <=> feedback? waiting for confirmation?
 
                                 // callback chain definitions
                                 var step_2_more = function () {
