@@ -1204,7 +1204,8 @@ angular.module('MoneyNetworkW2')
                             else if (request.msgtype == 'prepare_mt_request') {
                                 // got a prepare money transactions request from MN. Return error message or json to be included in chat message for each money transaction
                                 (function() {
-                                    var send_money, request_money, i, money_transaction, jsons ;
+                                    var send_money, request_money, i, money_transaction, jsons, step_1_confirm,
+                                        step_2_open_wallet, step_3_get_new_address, step_4_close_wallet, step_n_more ;
 
                                     // check permissions
                                     send_money = false ;
@@ -1247,22 +1248,29 @@ angular.module('MoneyNetworkW2')
                                     //    - request money: address for send money operation
 
                                     // callback chain definitions
-                                    var step_n_more = function () {
+                                    step_n_more = function () {
                                         var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_n_more: ';
                                         console.log(pgm + 'jsons = ' + JSON.stringify(jsons)) ;
                                         // jsons = [{"return_address":"2N23sTaKZT4SG1veLHrAxR1WLfNeqnBE4tT"}]
-                                        return send_response('prepare_mt_request not fully implemented');
-
+                                        response.msgtype = 'prepare_mt_response' ;
+                                        response.jsons = jsons ;
+                                        send_response();
                                     } ; // step_n_more
+
+                                    // step 4: optional close wallet. only if wallet has been opened in step 2
+                                    step_4_close_wallet = function() {
+                                        if (request.close_wallet) btcService.close_wallet(function (res){ step_n_more() }) ;
+                                        else return step_n_more() ;
+                                    } ; // step_4_close_wallet
 
                                     // step 3: get new bitcoin address
                                     // - send money - get return address to be used in case of a partly failed money transaction (multiple money transactions)
                                     // - request money - address to be used in send money operation
-                                    var step_3_get_new_address = function (i) {
+                                    step_3_get_new_address = function (i) {
                                         var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_3_get_new_address: ';
                                         if (!i) i = 0 ;
                                         console.log(pgm + 'i = ' + i) ;
-                                        if (i >= request.money_transactions.length) return step_n_more() ;
+                                        if (i >= request.money_transactions.length) return step_4_close_wallet() ;
                                         btcService.get_new_address(function (error, address) {
                                             var money_transaction ;
                                             if (error) return send_response('Could not get a new bitcoin address. error = ' + error) ;
@@ -1271,13 +1279,14 @@ angular.module('MoneyNetworkW2')
                                             else jsons[i].address = address ;
                                             step_3_get_new_address(i+1) ;
                                         }) ; // get_new_address
-
                                     } ; // step_3_get_new_address
 
                                     // step 2: optional open wallet. wallet must be open before get new address request
-                                    var step_2_open_wallet = function() {
+                                    step_2_open_wallet = function() {
                                         if (wallet_info.status == 'Open') {
-                                            // bitcoin wallet is already open. check balance. only for send money requests
+                                            // bitcoin wallet is already open. never close an already open wallet
+                                            request.close_wallet = false ;
+                                            // check balance. only for send money requests
                                             if (!send_money) return step_3_get_new_address() ;
                                             // sending money. refresh balance.
                                             btcService.get_balance(function (error) {
@@ -1296,17 +1305,17 @@ angular.module('MoneyNetworkW2')
                                     } ; // step_2_open_wallet
 
                                     // step 1: optional confirm money transaction (see permissions)
-                                    var step_1_confirm = function () {
+                                    step_1_confirm = function () {
                                         var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_1_confirm: ';
                                         var request2 ;
                                         console.log(pgm + 'todo: check open/close wallet permissions');
                                         if (wallet_info.status != 'Open') {
                                             // wallet not open (not created, not logged in etc)
-                                            if (!status.permissions.open_wallet) return send_response('open_wallet operation is not authorized');
-                                            if (!request.open_wallet) return send_response('Wallet is not open and open_wallet was not requested');
-                                            else if (!save_wallet_id || !save_wallet_password) return send_response('Wallet is not open and no wallet login was found');
+                                            if (!status.permissions.open_wallet) return send_response('Cannot start money transaction. Open wallet operation is not authorized');
+                                            if (!request.open_wallet) return send_response('Cannot start money transaction. Wallet is not open and open_wallet was not requested');
+                                            else if (!save_wallet_id || !save_wallet_password) return send_response('Cannot start money transaction. Wallet is not open and no wallet login was found');
                                         }
-                                        if (request.close_wallet && !status.permissions.close_wallet) return send_response('close_wallet operation was requested but is not authorized');
+                                        if (request.close_wallet && !status.permissions.close_wallet) return send_response('Cannot start money transaction. Close wallet operation was requested but is not authorized');
                                         console.log(pgm + 'todo: add transactions details in confirm dialog') ;
                                         if (!status.permissions && !status.permissions.confirm) return step_2_open_wallet() ;
                                         // send confirm notification to MN
