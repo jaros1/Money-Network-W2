@@ -60,8 +60,6 @@ angular.module('MoneyNetworkW2')
             }) ;
         }) ;
 
-        var old_cert_user_id = -1 ;
-
         self.select_zeronet_cert = function() {
             var pgm = controller + '.select_zeronet_cert: ' ;
             console.log(pgm + 'click');
@@ -79,10 +77,10 @@ angular.module('MoneyNetworkW2')
         // - must load any saved wallet into
         self.zeronet_cert_changed = function () {
             var pgm = controller + '.zeronet_cert_changed: ' ;
-            if (ZeroFrame.site_info.cert_user_id && (old_cert_user_id == ZeroFrame.site_info.cert_user_id)) return ;
-            console.log(pgm + 'old_cert_user_id = ' + old_cert_user_id) ;
+            if (ZeroFrame.site_info.cert_user_id && (self.status.old_cert_user_id == ZeroFrame.site_info.cert_user_id)) return ;
+            console.log(pgm + 'old_cert_user_id = ' + self.status.old_cert_user_id) ;
             console.log(pgm + 'ZeroFrame.site_info = ' + JSON.stringify(ZeroFrame.site_info));
-            console.log(pgm + 'calling check_merger_permission') ;
+            console.log(pgm + 'calling initialize') ;
             W2Service.initialize(false);
         };
 

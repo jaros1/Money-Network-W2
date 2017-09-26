@@ -482,6 +482,7 @@ angular.module('MoneyNetworkW2')
             // MN-W2 session. only relevant if W2 is called from MN with a sessionid or an old still working MN-W2 session can be found in localStorage
             // session status: use at startup and after changing/selecting ZeroId
             var status = {
+                old_cert_user_id: -1,
                 sessionid: null,
                 merger_permission: 'n/a', // checking Merger:MoneyNetwork permission
                 session_handshake: 'n/a', // checking old/new session
@@ -982,7 +983,7 @@ angular.module('MoneyNetworkW2')
                             code: 'tBTC',
                             name: 'Test Bitcoin',
                             url: 'https://en.bitcoin.it/wiki/Testnet',
-                            fee_info: 'Fee calculated by external API (btc.com) xxand subtracted from amount. Calculated from the last X block in block chain. Lowest fee that still had more than an 80% chance to be confirmed in the next block.',
+                            fee_info: 'Fee is calculated by external API (btc.com) and subtracted from amount. Calculated from the last X block in block chain. Lowest fee that still had more than an 80% chance to be confirmed in the next block.',
                             units: [
                                 { unit: 'BitCoin', factor: 1 },
                                 { unit: 'Satoshi', factor: 0.00000001 }
@@ -999,6 +1000,12 @@ angular.module('MoneyNetworkW2')
                             (wallet.hub == old_wallet_json.hub)) {
                             console.log(pgm + 'ok. no change to public wallet information') ;
                             return cb("ok") ;
+                        }
+                        else {
+                            console.log(pgm + 'updating wallet.json') ;
+                            if (wallet.msgtype != old_wallet_json.msgtype) console.log(pgm + 'changed msgtype. old = ' + old_wallet_json.msgtype + ', new = ' + wallet.msgtype) ;
+                            if (wallet_sha256 != old_wallet_json.wallet_sha256) console.log(pgm + 'changed wallet_sha256. old = ' + old_wallet_json.wallet_sha256 + ', new = ' + wallet_sha256) ;
+                            if (wallet.hub != old_wallet_json.hub) console.log(pgm + 'changed hub. old = ' + old_wallet_json.hub + ', new = ' + wallet.hub) ;
                         }
 
                         // count number of wallets with this wallet_sha256 signature
@@ -1103,7 +1110,7 @@ angular.module('MoneyNetworkW2')
                         encrypt2.decrypt_json(encrypted_json, function (request) {
                             var pgm = service + '.process_incoming_message decrypt_json callback 2: ';
                             var response_timestamp, request_timestamp, request_timeout_at, error, response,
-                                old_wallet_status, send_response, send_money, request_money, i, money_transaction ;
+                                old_wallet_status, send_response ;
 
                             // remove any response timestamp before validation (used in response filename)
                             response_timestamp = request.response ; delete request.response ; // request received. must use response_timestamp in response filename
@@ -1196,85 +1203,149 @@ angular.module('MoneyNetworkW2')
                             }
                             else if (request.msgtype == 'prepare_mt_request') {
                                 // got a prepare money transactions request from MN. Return error message or json to be included in chat message for each money transaction
-                                // check permissions
-                                send_money = false ;
-                                request_money = false ;
-                                for (i=0 ; i<request.money_transactions.length ; i++) {
-                                    money_transaction = request.money_transactions[i] ;
-                                    if (money_transaction.action == 'Send') send_money = true ;
-                                    if (money_transaction.action == 'Request') request_money = true ;
-                                }
-                                console.log(pgm + 'send_money = ' + send_money + ', request_money = ' + request_money) ;
+                                (function() {
+                                    var send_money, request_money, i, money_transaction, jsons ;
 
-                                console.log(pgm + 'todo: add permissions in wallet ping response? MN session should know permissions before sending prepare_mt_request to wallet') ;
-
-                                if (send_money && (!status.permissions || !status.permissions.send_money)) return send_response('send_money operation is not authorized');
-                                if (request_money && (!status.permissions || !status.permissions.receive_money)) return send_response('receive_money operation is not authorized');
-
-                                //request = {
-                                //    "msgtype": "prepare_mt_request",
-                                //    "money_transactions": [{
-                                //        "action": "Send",
-                                //        "code": "tBTC",
-                                //        "amount": "0.00001"
-                                //    }]
-                                //};
-                                // todo: calculate fee. Blockchain requires a fee for a money transaction (send/receive) to be included in blockchain.
-                                // no fee calculation. is done by blocktrail/btc when sending money and fee is subtracted from amount
-
-                                // todo: do some validations without contacting external API (Blocktrails Node.js API)
-                                // 1) send money: check amount >= balance
-                                // todo: must add fee information to wallet.json. Users must know fee politics.
-
-
-                                // callback chain definitions
-                                var step_2_more = function () {
-                                    var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_1_confirm: ';
-                                    return send_response('prepare_mt_request not fully implemented');
-
-                                } ; // step_2_more
-
-                                var step_1_confirm = function () {
-                                    var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_1_confirm: ';
-                                    var request2 ;
-                                    if (!status.permissions && !status.permissions.confirm) {
-                                        return step_2_more() ;
+                                    // check permissions
+                                    send_money = false ;
+                                    request_money = false ;
+                                    jsons = [] ;
+                                    for (i=0 ; i<request.money_transactions.length ; i++) {
+                                        money_transaction = request.money_transactions[i] ;
+                                        if (money_transaction.action == 'Send') send_money = true ;
+                                        if (money_transaction.action == 'Request') request_money = true ;
+                                        jsons.push({}) ;
                                     }
-                                    // send confirm notification to MN
-                                    request2 = {
-                                        msgtype: 'notification',
-                                        type: 'info',
-                                        message: 'Please confirm money transaction',
-                                        timeout: 10000
-                                    } ;
-                                    console.log(pgm + 'sending request2 = ' + JSON.stringify(request2)) ;
-                                    encrypt2.send_message(request2, {response: false}, function (response) {
-                                        var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_1_confirm send_message callback 1: ';
-                                        var message, confirm_status, confirm_timeout_fnk ;
-                                        if (response && response.error) return send_response('Confirm transaction failed. error = ' + response.error) ;
-                                        // open confirm dialog. handle confirm timeout. wait max 2+10 seconds for confirmation
-                                        confirm_status = { done: false } ;
-                                        confirm_timeout_fnk = function () {
-                                            if (confirm_status.done) return ; // confirm dialog done
-                                            confirm_status.done = true ;
-                                            send_response('Confirm transaction timeout')
+                                    console.log(pgm + 'send_money = ' + send_money + ', request_money = ' + request_money) ;
+                                    if (send_money && (!status.permissions || !status.permissions.send_money)) return send_response('send_money operation is not authorized');
+                                    if (request_money && (!status.permissions || !status.permissions.receive_money)) return send_response('receive_money operation is not authorized');
+
+                                    //request = {
+                                    //    "msgtype": "prepare_mt_request",
+                                    //    "money_transactions": [{
+                                    //        "action": "Send",
+                                    //        "code": "tBTC",
+                                    //        "amount": "0.00001"
+                                    //    }]
+                                    //};
+
+                                    // no fee calculation here. is done by blocktrail/btc when sending money and fee is subtracted from amount. added fee_info to wallet.json
+
+                                    // todo: do some validations without contacting external API (Blocktrails Node.js API)
+                                    // 1) send money: check amount >= balance
+                                    // 2) general: balance - send amount + (request amount-fee) >= 0
+                                    // 3) refresh balance before validation
+                                    // 4) what about already send but not yet effected money transactions?
+                                    //    a) send money: waiting for bitcoin address from other contact
+                                    //    b) request money: send bitcoin address to contact. waiting for bitcoin transaction to be submitted to blockchain
+                                    // 5) abort send but not yet effected money transactions? abort from wallet / abort from MN / abort from both contacts
+                                    // 6) wallet must keep a list of transactions (in process, cancelled and done)
+                                    // 7) create a session for direct wallet to wallet communication? (publish is needed when communicating between wallets)
+                                    // 8) or use MN chat messages from communication?
+                                    // 9) always call get_new_address.
+                                    //    - send money: return address in case of aborted operation after send money request has been sent to external API
+                                    //    - request money: address for send money operation
+
+                                    // callback chain definitions
+                                    var step_n_more = function () {
+                                        var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_n_more: ';
+                                        console.log(pgm + 'jsons = ' + JSON.stringify(jsons)) ;
+                                        // jsons = [{"return_address":"2N23sTaKZT4SG1veLHrAxR1WLfNeqnBE4tT"}]
+                                        return send_response('prepare_mt_request not fully implemented');
+
+                                    } ; // step_n_more
+
+                                    // step 3: get new bitcoin address
+                                    // - send money - get return address to be used in case of a partly failed money transaction (multiple money transactions)
+                                    // - request money - address to be used in send money operation
+                                    var step_3_get_new_address = function (i) {
+                                        var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_3_get_new_address: ';
+                                        if (!i) i = 0 ;
+                                        console.log(pgm + 'i = ' + i) ;
+                                        if (i >= request.money_transactions.length) return step_n_more() ;
+                                        btcService.get_new_address(function (error, address) {
+                                            var money_transaction ;
+                                            if (error) return send_response('Could not get a new bitcoin address. error = ' + error) ;
+                                            money_transaction = request.money_transactions[i] ;
+                                            if (money_transaction.action == 'Send') jsons[i].return_address = address ;
+                                            else jsons[i].address = address ;
+                                            step_3_get_new_address(i+1) ;
+                                        }) ; // get_new_address
+
+                                    } ; // step_3_get_new_address
+
+                                    // step 2: optional open wallet. wallet must be open before get new address request
+                                    var step_2_open_wallet = function() {
+                                        if (wallet_info.status == 'Open') {
+                                            // bitcoin wallet is already open. check balance. only for send money requests
+                                            if (!send_money) return step_3_get_new_address() ;
+                                            // sending money. refresh balance.
+                                            btcService.get_balance(function (error) {
+                                                if (error) console.log(pgm + 'warning. sending money and get_balance request failed with error = ' + error);
+                                                return step_3_get_new_address();
+                                            }) ;
+                                        }
+                                        else {
+                                            // open test bitcoin wallet (also get_balance request)
+                                            btcService.init_wallet(save_wallet_id, save_wallet_password, function (error) {
+                                                if (error && (wallet_info.status != 'Open')) return send_response('Open wallet request failed with error = ' + error);
+                                                if (error && send_money) console.log(pgm + 'warning. sending money and get_balance request failed with error = ' + error);
+                                                step_3_get_new_address();
+                                            }) ;
+                                        }
+                                    } ; // step_2_open_wallet
+
+                                    // step 1: optional confirm money transaction (see permissions)
+                                    var step_1_confirm = function () {
+                                        var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_1_confirm: ';
+                                        var request2 ;
+                                        console.log(pgm + 'todo: check open/close wallet permissions');
+                                        if (wallet_info.status != 'Open') {
+                                            // wallet not open (not created, not logged in etc)
+                                            if (!status.permissions.open_wallet) return send_response('open_wallet operation is not authorized');
+                                            if (!request.open_wallet) return send_response('Wallet is not open and open_wallet was not requested');
+                                            else if (!save_wallet_id || !save_wallet_password) return send_response('Wallet is not open and no wallet login was found');
+                                        }
+                                        if (request.close_wallet && !status.permissions.close_wallet) return send_response('close_wallet operation was requested but is not authorized');
+                                        console.log(pgm + 'todo: add transactions details in confirm dialog') ;
+                                        if (!status.permissions && !status.permissions.confirm) return step_2_open_wallet() ;
+                                        // send confirm notification to MN
+                                        request2 = {
+                                            msgtype: 'notification',
+                                            type: 'info',
+                                            message: 'Please confirm money transaction<br>todo: more text',
+                                            timeout: 10000
                                         } ;
-                                        setTimeout(confirm_timeout_fnk, 12000) ;
-                                        // todo: 1) add transaction details to confirm text
-                                        message = 'Send .... money transaction to ' + request.contact.alias + '?' ;
-                                        ZeroFrame.cmd('wrapperConfirm', [message, 'OK'], function (confirm) {
-                                            if (confirm_status.done) return ; // confirm dialog timeout
-                                            confirm_status.done = true ;
-                                            if (!confirm) return send_response('money transaction was rejected');
-                                            // Money transaction was confirmed. continue
-                                            step_2_more() ;
-                                        }) ; // wrapperConfirm callback 2
-                                    }) ; // send_message callback 1
+                                        console.log(pgm + 'sending request2 = ' + JSON.stringify(request2)) ;
+                                        encrypt2.send_message(request2, {response: false}, function (response) {
+                                            var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_1_confirm send_message callback 1: ';
+                                            var message, confirm_status, confirm_timeout_fnk ;
+                                            if (response && response.error) return send_response('Confirm transaction failed. error = ' + response.error) ;
+                                            // open confirm dialog. handle confirm timeout. wait max 2+10 seconds for confirmation
+                                            confirm_status = { done: false } ;
+                                            confirm_timeout_fnk = function () {
+                                                if (confirm_status.done) return ; // confirm dialog done
+                                                confirm_status.done = true ;
+                                                send_response('Confirm transaction timeout')
+                                            } ;
+                                            setTimeout(confirm_timeout_fnk, 12000) ;
+                                            // todo: 1) add transaction details to confirm text
+                                            message = 'Send .... money transaction to ' + request.contact.alias + '?' ;
+                                            ZeroFrame.cmd('wrapperConfirm', [message, 'OK'], function (confirm) {
+                                                if (confirm_status.done) return ; // confirm dialog timeout
+                                                confirm_status.done = true ;
+                                                if (!confirm) return send_response('money transaction was rejected');
+                                                // Money transaction was confirmed. continue
+                                                step_2_open_wallet() ;
+                                            }) ; // wrapperConfirm callback 2
+                                        }) ; // send_message callback 1
 
-                                } ; // step_1_confirm
+                                    } ; // step_1_confirm
 
-                                // start callback chain
-                                step_1_confirm() ;
+                                    // start callback chain
+                                    step_1_confirm() ;
+
+                                })() ;
                                 // wait for callback chain to finish
                                 return ;
                             }
@@ -1821,6 +1892,8 @@ angular.module('MoneyNetworkW2')
                             cb2 = function (sessionid) {
                                 var pgm = service + '.initialize.cb2: ' ;
                                 var save_wallet_login ;
+                                // sessionid found. remember login. must reset session after changed login
+                                status.old_cert_user_id = ZeroFrame.site_info.cert_user_id ;
                                 if (!ls.save_login) ls.save_login = {} ;
                                 // console.log(pgm + 'ls.save_login = ' + JSON.stringify(ls.save_login)) ;
                                 if (!ls.save_login[old_auth_address]) ls.save_login[old_auth_address] = { choice: '0' } ;
@@ -1901,7 +1974,10 @@ angular.module('MoneyNetworkW2')
                                                 if (!delete_ok.length) {
                                                     // nothing to sign
                                                     cb(sessionid, save_wallet_login) ;
-                                                    if (z_publish_pending) z_publish(true); // wallet.json file was updated. publish to distribute info to other users
+                                                    if (z_publish_pending) {
+                                                        console.log('wallet.json file was updated. publish to distribute info to other users') ;
+                                                        z_publish(true);
+                                                    }
                                                     return ;
                                                 }
                                                 // sign
@@ -1912,7 +1988,8 @@ angular.module('MoneyNetworkW2')
                                                     if (res != 'ok') console.log(pgm + inner_path + ' siteSign failed. error = ' + res) ;
                                                     // done with or without errors
                                                     cb(sessionid, save_wallet_login) ;
-                                                    z_publish(true); // wallet.json file was updated. publish to distribute info to other users
+                                                    console.log('content.json file was updated (files_optional). publish to distribute info to other users') ;
+                                                    z_publish(true);
                                                 }) ;
                                                 return ;
                                             } // done
