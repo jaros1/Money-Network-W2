@@ -670,6 +670,79 @@ angular.module('MoneyNetworkW2')
             // todo: changed ZeroId. clear z_cache.
             var z_cache = {} ; // cache some ZeroNet objects: wallet_data_hub, wallet.json
 
+
+
+
+            // fix "Merger site (MoneyNetwork) does not have permission for merged site: xxx" errors
+            // wait for mergerSiteAdd event to finish. see todo: xxxx
+            var new_wallet_hub_cbs = {} ; // hub => array with (fileGet) callbacks waiting for hub to be ready
+
+            // demon. dbQuery. check for any json for new wallet data wallet hub before running any fileGet operations
+            function monitor_first_hub_event () {
+                var pgm = service + '.monitor_first_hub_event: ' ;
+                var query ;
+                if (!Object.keys(new_wallet_hub_cbs).length) return ; // no more new wallet hubs to monitor
+
+                query =
+                    "select substr(directory, 1, instr(directory,'/')-1) as hub, count(*) as rows " +
+                    "from json " +
+                    "group by substr(directory, 1, instr(directory,'/')-1);" ;
+                ZeroFrame.cmd("dbQuery", [query], function (res) {
+                    var pgm = service + '.monitor_first_hub_event dbQuery callback: ';
+                    var hub, i, cbs, cb;
+                    // if (detected_client_log_out(pgm)) return ;
+                    if (res.error) {
+                        console.log(pgm + "first hub lookup failed: " + res.error);
+                        console.log(pgm + 'query = ' + query);
+                        for (hub in new_wallet_hub_cbs) console.log(pgm + 'error: ' + new_wallet_hub_cbs[hub].length + ' callbacks are waiting forever for hub ' + hub) ;
+                        return ;
+                    }
+                    for (i=0 ; i<res.length ; i++) {
+                        hub = res[i].hub ;
+                        if (!new_wallet_hub_cbs[hub]) continue ;
+                        console.log(pgm + 'new user data hub ' + hub + ' is ready. ' + new_wallet_hub_cbs[hub].length + ' fileGet operations are waiting in callback queue. running callbacks now') ;
+                        // move to temporary cbs array
+                        cbs = [] ;
+                        while (new_wallet_hub_cbs[hub].length) {
+                            cb = new_wallet_hub_cbs[hub].shift() ;
+                            cbs.push(cb) ;
+                        }
+                        delete new_wallet_hub_cbs[hub] ;
+                        // run cbs
+                        while (cbs.length) {
+                            cb = cbs.shift() ;
+                            cb() ;
+                        }
+                    }
+                    $timeout(monitor_first_hub_event, 250) ;
+                }) ; // dbQuery callback
+
+            } // monitor_first_hub_event
+
+            // ZeroFrame fileGet wrapper. first fileGet request must wait for mergerSiteAdd operation to finish
+            var inner_path_re1 = /^data\/users\// ; // invalid inner_path. old before merger-site syntax
+            var inner_path_re2 = /^merged-MoneyNetwork\/(.*?)\/data\/users\// ; // extract hub
+            function z_file_get (pgm, options, cb) {
+                var inner_path, match2, hub ;
+                inner_path = options.inner_path ;
+
+                if (inner_path.match(inner_path_re1)) throw pgm + 'Invalid fileGet path. Not a merger-site path. inner_path = ' + inner_path ;
+
+                match2 = inner_path.match(inner_path_re2) ;
+                if (match2) {
+                    hub = match2[1] ;
+                    if (new_wallet_hub_cbs[hub]) {
+                        console.log(pgm + 'new wallet hub ' + hub + '. waiting with fileGet request for ' + inner_path) ;
+                        new_wallet_hub_cbs[hub].push(function() { z_file_get (pgm, options, cb) }) ;
+                        return ;
+                    }
+                }
+
+                ZeroFrame.cmd("fileGet", options, function (data) {
+                    cb(data) ;
+                }) ; // fileGet callback
+            } // z_file_get
+
             function get_default_wallet_hub () {
                 var pgm = service + '.get_default_wallet_hub: ' ;
                 var default_wallet_hub, default_hubs, hub, hubs, i ;
@@ -728,7 +801,7 @@ angular.module('MoneyNetworkW2')
                     console.log(pgm + 'query 17 (MS OK) = ' + query);
                     ZeroFrame.cmd("dbQuery", [query], function (res) {
                         var pgm = service + '.get_my_wallet_hub dbQuery callback 2: ' ;
-                        var i, run_callbacks, wallet_hub_selected ;
+                        var i, run_callbacks, wallet_hub_selected, get_and_add_default_wallet_hub ;
 
                         run_callbacks = function () {
                             var pgm = service + '.get_my_wallet_hub.run_callbacks: ' ;
@@ -764,8 +837,18 @@ angular.module('MoneyNetworkW2')
                             ZeroFrame.cmd("mergerSiteAdd", [my_wallet_data_hub], function (res) {
                                 var pgm = service + '.get_my_wallet_hub.get_and_add_default_wallet_hub mergerSiteAdd callback: ' ;
                                 console.log(pgm + 'res = '+ JSON.stringify(res));
-                                z_cache.my_wallet_data_hub = my_wallet_data_hub ;
-                                wallet_hub_selected() ;
+
+                                if (res == 'ok') {
+                                    console.log(pgm + 'new wallet hub ' + my_wallet_data_hub + ' was added. hub must be ready. wait for jsons (dbQuery) before first fileGet request to new wallet hub') ;
+                                    if (!new_wallet_hub_cbs[my_wallet_data_hub]) new_wallet_hub_cbs[my_wallet_data_hub] = [] ; // callbacks waiting for mergerSiteAdd operation to finish
+                                    // start demon process. waiting for new user data hub to be ready
+                                    $timeout(monitor_first_hub_event, 250) ;
+                                    z_cache.my_wallet_data_hub = my_wallet_data_hub ;
+                                    wallet_hub_selected() ;
+                                    return ;
+                                }
+
+                                console.log(pgm + 'mergerSiteAdd failed. hub = ' + my_wallet_data_hub + '. error = ' + res) ;
                             }) ; // mergerSiteAdd callback 3
                         }; // get_and_add_default_wallet_hub
 
@@ -873,7 +956,7 @@ angular.module('MoneyNetworkW2')
                 get_user_path(function (user_path) {
                     var inner_path ;
                     inner_path = user_path + 'content.json' ;
-                    ZeroFrame.cmd("fileGet", {inner_path: inner_path, required: false}, function (content_str) {
+                    z_file_get(pgm, {inner_path: inner_path, required: false}, function (content_str) {
                         var content ;
                         if (!content_str) content = {} ;
                         else {
@@ -886,7 +969,7 @@ angular.module('MoneyNetworkW2')
                         z_cache.content_json = content ;
                         cb(z_cache.content_json) ;
                         while (get_content_json_cbs.length) { cb = get_content_json_cbs.shift() ; cb(z_cache.content_json)} ;
-                    }) ; // fileGet callback 2
+                    }) ; // z_file_get callback 2
                 }) ; // get_user_path callback 1
             } // get_content_json
 
@@ -917,7 +1000,7 @@ angular.module('MoneyNetworkW2')
                 get_user_path(function (user_path) {
                     var inner_path ;
                     inner_path = user_path + 'wallet.json' ;
-                    ZeroFrame.cmd("fileGet", {inner_path: inner_path, required: false}, function (wallet_str) {
+                    z_file_get(pgm, {inner_path: inner_path, required: false}, function (wallet_str) {
                         var wallet ;
                         if (!wallet_str) wallet = {} ;
                         else {
@@ -932,7 +1015,7 @@ angular.module('MoneyNetworkW2')
                         z_cache.wallet_json = wallet ;
                         cb(z_cache.wallet_json) ;
                         while (get_wallet_json_cbs.length) { cb = get_wallet_json_cbs.shift() ; cb(z_cache.wallet_json)}
-                    }) ; // fileGet callback 2
+                    }) ; // z_file_get callback 2
                 }) ; // get_user_path callback 1
             } // get_wallet_json
 
@@ -1092,11 +1175,11 @@ angular.module('MoneyNetworkW2')
                     file_timestamp = parseInt(inner_path.substr(pos+1)) ;
                     console.log(pgm + 'file_timestamp = ' + file_timestamp) ;
 
-                    ZeroFrame.cmd("fileGet", {inner_path: inner_path, required: false}, function (json_str) {
+                    z_file_get(pgm, {inner_path: inner_path, required: false}, function (json_str) {
                         var pgm = service + '.process_incoming_message fileGet callback 1: ';
                         var encrypted_json ;
                         if (!json_str) {
-                            console.log(pgm + 'fileGet ' + inner_path + ' failed') ;
+                            console.log(pgm + 'z_file_get ' + inner_path + ' failed') ;
                             return ;
                         }
                         try {
@@ -1364,7 +1447,7 @@ angular.module('MoneyNetworkW2')
                             send_response() ;
 
                         }) ; // decrypt_json callback 2
-                    }); // fileGet callback 1
+                    }); // z_file_get callback 1
 
                 } // try
                 catch (e) {
@@ -1445,9 +1528,9 @@ angular.module('MoneyNetworkW2')
 
                         // read file
                         inner_path = other_user_path + res[0].filename ;
-                        // console.log(pgm +  inner_path + ' fileGet start') ;
-                        ZeroFrame.cmd("fileGet", [inner_path, true], function (pubkeys_str) {
-                            var pgm = service + '.read_pubkeys fileGet callback 3: ' ;
+                        // console.log(pgm +  inner_path + ' z_file_get start') ;
+                        z_file_get(pgm, {inner_path: inner_path, required: true}, function (pubkeys_str) {
+                            var pgm = service + '.read_pubkeys z_file_get callback 3: ' ;
                             var pubkeys, now, content_signed, elapsed, error ;
                             // console.log(pgm + 'pubkeys_str = ' + pubkeys_str) ;
                             if (!pubkeys_str) {
@@ -1499,7 +1582,7 @@ angular.module('MoneyNetworkW2')
                             console.log(pgm + 'Return W2 public keys to MN for full end-2-end encryption') ;
                             write_pubkeys(cb) ;
 
-                        }) ; // fileGet callback 3
+                        }) ; // z_file_get callback 3
 
                     }) ; // dbQuery callback 2
 
@@ -1851,7 +1934,7 @@ angular.module('MoneyNetworkW2')
                 encrypt2.setup_encryption({sessionid: status.sessionid, debug: true}) ;
                 console.log(pgm + 'encrypt2.other_session_filename = ' + encrypt2.other_session_filename) ;
                 console.log(pgm + 'sessionid              = ' + status.sessionid) ;
-                // read MN public keys message using dbQuery loop and fileGet operations
+                // read MN public keys message using dbQuery loop and z_file_get operations
                 read_pubkeys(function (ok) {
                     var pgm = service + '.is_new_session read_pubkeys callback: ' ;
                     console.log(pgm + 'ok = ' + JSON.stringify(ok)) ;

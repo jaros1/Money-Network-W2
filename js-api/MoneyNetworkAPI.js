@@ -955,7 +955,8 @@ var MoneyNetworkAPILib = (function () {
                         },
                         "required": ['action', 'code', 'amount'],
                         "additionalProperties": false
-                    }
+                    },
+                    "minItems": 1
                 }
             },
             "required": ['msgtype', 'contact', 'money_transactions'],
@@ -976,6 +977,49 @@ var MoneyNetworkAPILib = (function () {
             "required": ['msgtype', 'jsons'],
             "additionalProperties": false
         }, // prepare_mt_response
+
+        "execute_mt_request": {
+            "type": 'object',
+            "title": 'execute money transactions received from contact in chat message',
+            "description": 'See prepare_mt_request and prepare_mt_response for details.',
+            "properties": {
+                "msgtype": { "type": 'string', "pattern": '^execute_mt_request$'},
+                "contact": {
+                    "description": 'Info about sender of chat message / money transactions request. auth_address is the actual contact id and should be unique. alias and cert_user_id are human text info only and are not unique / secure contact info',
+                    "type": 'object',
+                    "properties": {
+                        "alias": { "type": 'string'},
+                        "cert_user_id": { "type": 'string'},
+                        "auth_address": { "type": 'string'}
+                    },
+                    "required": ['alias', 'cert_user_id', 'auth_address'],
+                    "additionalProperties": false
+                },
+                "open_wallet": {"type": 'boolean'},
+                "close_wallet": {"type": 'boolean'},
+                "money_transactions": {
+                    "type": 'array',
+                    "items": {
+                        "type": 'object',
+                        "properties": {
+                            "action": { "type": 'string', "pattern": '^(Send|Request)$'},
+                            "code": {"type": 'string', "minLength": 2, "maxLength": 5},
+                            "amount": {"type": 'number'},
+                            "json": {}
+                        },
+                        "required": ['action', 'code', 'amount', 'json'],
+                        "additionalProperties": false
+                    },
+                    "minItems": 1
+                }
+            },
+            "required": ['msgtype', 'contact', 'money_transactions'],
+            "additionalProperties": false
+        }, // execute_mt_request
+
+        "execute_mt_response": {
+
+        }, // execute_mt_response
 
         "notification" : {
             "type": 'object',
@@ -1031,10 +1075,20 @@ var MoneyNetworkAPILib = (function () {
 
     // helper. calculate wallet_sha256 from other wallet fields (minimize wallet.json disk usage)
     // wallet must be valid json (see validate_json). return null if doublet code or doublet units
+    var pseudo_wallet_sha256 = '0000000000000000000000000000000000000000000000000000000000000000' ;
     function calc_wallet_sha256 (wallet) {
         var pgm = module + '.calc_wallet_sha256: ';
-        var new_wallet, wallet_sha256, i, codes, currency, new_currency, j, unit, units ;
-        if (validate_json(pgm, wallet)) return null ; // wallet is invalid
+        var new_wallet, wallet_sha256, i, codes, currency, new_currency, j, unit, units, pseudo_wallet_sha256_added ;
+        if (!wallet.wallet_sha256) {
+            wallet.wallet_sha256 = pseudo_wallet_sha256 ;
+            pseudo_wallet_sha256_added = true ;
+        }
+        if (validate_json(pgm, wallet)) {
+            // wallet is invalid. abort wallet_sha256 calc
+            if (pseudo_wallet_sha256_added) delete wallet.wallet_sha256 ;
+            return null ;
+        }
+        if (pseudo_wallet_sha256_added) delete wallet.wallet_sha256 ;
         if (debug) console.log(pgm + 'todo: normalize currencies list. sort and  fixed order of properties. see wallet schema definition');
         new_wallet = {
             wallet_address: wallet.wallet_address,
