@@ -1049,12 +1049,14 @@ angular.module('MoneyNetworkW2')
                         console.log(pgm + 'wallet = ' + JSON.stringify(wallet));
                         old_wallet_str = JSON.stringify(wallet) ;
                         old_wallet_json = JSON.parse(old_wallet_str) ;
-                        // validate after read
-                        error = MoneyNetworkAPILib.validate_json(pgm, wallet) ;
-                        if (error) {
-                            // old wallet info is invalid. delete all
-                            console.log(pgm + 'deleting invalid wallet.json. error = ' + error) ;
-                            for (key in wallet) delete wallet[key]
+                        if (wallet) {
+                            // validate after read
+                            error = MoneyNetworkAPILib.validate_json(pgm, wallet) ;
+                            if (error) {
+                                // old wallet info is invalid. delete all
+                                console.log(pgm + 'deleting invalid wallet.json. error = ' + error) ;
+                                for (key in wallet) delete wallet[key]
+                            }
                         }
                         wallet.msgtype = 'wallet' ;
                         wallet.wallet_address = ZeroFrame.site_info.address;

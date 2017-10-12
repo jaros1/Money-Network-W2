@@ -266,28 +266,33 @@ var MoneyNetworkAPILib = (function () {
         if (keys.length == 1) return '1 pending ZeroNet API operation (' + keys[0] + ')' ;
         return keys.length + ' pending ZeroNet API operations (' + keys.join(',') + ')' ;
     }
-    function debug_z_api_operation_start (pgm, inner_path, cmd) {
+    // debug: "global" MoneyNetworkAPI debug option (null, true, false or a string)
+    // debug_this: null, true or false. debug option only for this call
+    // cmd: ZeroFrame cmd
+    function debug_z_api_operation_start (pgm, inner_path, cmd, debug_this) {
         debug_seq++ ;
         debug_operations[debug_seq] = {
             pgm: pgm,
             inner_path: inner_path,
             cmd: cmd,
+            debug_this: debug_this,
             started_at: new Date().getTime()
         } ;
-        if (debug) console.log(pgm + inner_path + ' ' + cmd + ' started (' + debug_seq + '). ' + debug_z_api_operation_pending()) ;
+        if (debug || debug_this) console.log(pgm + (inner_path ? inner_path + ' ' : '') + cmd + ' started (' + debug_seq + '). ' + debug_z_api_operation_pending()) ;
         return debug_seq ;
     } // debug_z_api_operation_start
     function debug_z_api_operation_end (debug_seq, res) {
-        var pgm, inner_path, cmd, started_at, finished_at, elapsed_time ;
+        var pgm, inner_path, cmd, debug_this, started_at, finished_at, elapsed_time ;
         if (!debug_operations[debug_seq]) throw pgm + 'error. ZeroNet API operation with seq ' + debug_seq + ' was not found' ;
         pgm = debug_operations[debug_seq].pgm ;
         inner_path = debug_operations[debug_seq].inner_path ;
         cmd = debug_operations[debug_seq].cmd ;
+        debug_this = debug_operations[debug_seq].debug_this ;
         started_at = debug_operations[debug_seq].started_at ;
         delete debug_operations['' + debug_seq] ;
         finished_at = new Date().getTime() ;
         elapsed_time = finished_at - started_at ;
-        if (debug) console.log(pgm + inner_path + ' ' + cmd + ' finished' + (res ? '. res = ' + JSON.stringify(res) : '') + '. elapsed time ' + elapsed_time + ' ms (' + debug_seq + '). ' + debug_z_api_operation_pending()) ;
+        if (debug || debug_this) console.log(pgm + (inner_path ? inner_path + ' ' : '') + cmd + ' finished' + (res ? '. res = ' + JSON.stringify(res) : '') + '. elapsed time ' + elapsed_time + ' ms (' + debug_seq + '). ' + debug_z_api_operation_pending()) ;
     } // debug_z_api_operation_end
 
     // wallet:
@@ -964,7 +969,7 @@ var MoneyNetworkAPILib = (function () {
                 "wallet_sha256": {"type": 'string', "pattern": '^[0-9a-f]{64}$'},
                 "hub": {"type": 'string'}
             },
-            "required": ['msgtype', 'wallet_sha256', 'currencies'],
+            "required": ['msgtype', 'wallet_sha256'],
             "additionalProperties": false
         }, // wallet
 
@@ -1237,7 +1242,7 @@ var MoneyNetworkAPILib = (function () {
         ZeroFrame.cmd("dbQuery", [query], function (wallets) {
             var pgm = module + '.get_wallet_info dbQuery callback: ' ;
             var error, check_wallet ;
-            debug_z_api_operation_end(debug_seq, !res || res.error ? 'Failed' : 'OK') ;
+            debug_z_api_operation_end(debug_seq, !wallets || wallets.error ? 'Failed' : 'OK') ;
             if (wallets.error) {
                 error = 'failed to find full wallet information. error = ' + wallets.error ;
                 console.log(pgm + error);
@@ -2114,16 +2119,52 @@ MoneyNetworkAPI.prototype.send_message = function (request, options, cb) {
                                 if (offline_transaction || (!response && !request.request)) return cb({}); // exit. offline transaction or not response and no request cleanup job
 
                                 // delete request file. submit cleanup job
-                                delete_request = function() {
-                                    var pgm = self.module + '.send_message.delete_request callback: ';
-                                    var debug_seq ;
-                                    cleanup_job_id = null ;
-                                    debug_seq = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path4, 'fileDelete');
-                                    ZeroFrame.cmd("fileDelete", inner_path4, function (res) {
-                                        var pgm = self.module + '.send_message.delete_request fileDelete callback: ';
-                                        MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq, res == 'ok' ? 'OK' : 'Failed. error = ' + JSON.stringify(res));
-                                        // no need for siteSign. file will be removed from content.json at next sign/publish
-                                    }) ; // deleteDelete
+                                delete_request = function () {
+                                    var pgm = self.module + '.send_message.delete_request callback 0: ';
+                                    var debug_seq1;
+                                    if (!cleanup_job_id) return; // already run
+                                    cleanup_job_id = null;
+                                    // problem with fileDelete: Delete error: [Errno 2] No such file or directory. checking file before fileDelete operation
+                                    // step 1: check file before fileDelete
+                                    debug_seq1 = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path4, 'fileGet');
+                                    self.ZeroFrame.cmd("fileGet", {inner_path: inner_path4, required: false, timeout: 1}, function (res1) {
+                                        var pgm = self.module + '.send_message.delete_request fileGet callback 1: ';
+                                        var debug_seq2;
+                                        MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq1, res1 ? 'OK' : 'Not found');
+                                        if (!res1) {
+                                            console.log(pgm + 'warning. optional file ' + inner_path4 + ' was not found');
+                                            return;
+                                        }
+                                        // step 2: fileDelete
+                                        debug_seq2 = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path4, 'fileDelete');
+                                        ZeroFrame.cmd("fileDelete", inner_path4, function (res2) {
+                                            var pgm = self.module + '.send_message.delete_request fileDelete callback 2: ';
+                                            var debug_seq3;
+                                            self.log(pgm, 'res2 = ' + JSON.stringify(res2));
+                                            if ((res2 == 'ok') || (!res2.error.match(/No such file or directory/))) {
+                                                MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq2, res2 == 'ok' ? 'OK' : 'Failed. error = ' + JSON.stringify(res2));
+                                                return;
+                                            }
+                                            // step 3: check file after fileDelete
+                                            // fileDelete returned No such file or directory. Recheck that file has been deleted
+                                            self.log(pgm, 'issue 1140. https://github.com/HelloZeroNet/ZeroNet/issues/1140. step 2 FileDelete returned No such file or directory');
+                                            debug_seq3 = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path4, 'fileGet');
+                                            self.ZeroFrame.cmd("fileGet", {inner_path: inner_path4, required: false, timeout: 1}, function (res3) {
+                                                var pgm = self.module + '.send_message.delete_request fileGet callback 3: ';
+                                                MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq3, res3 ? 'OK' : 'Not found');
+                                                if (!res3) {
+                                                    // everything is fine. request file was deleted correct in step 2
+                                                    MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq2, 'OK');
+                                                }
+                                                else {
+                                                    self.log(pgm, 'issue 1140. something is very wrong. first fileGet returned OK, fileDelete returned No such file or directory and last fileGet returned OK');
+                                                    MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq2, res2 == 'ok' ? 'OK' : 'Failed. error = ' + JSON.stringify(res2));
+                                                }
+                                            });
+                                        }); // fileDelete callback
+
+                                    }); // z_file_get callback
+
                                 }; // delete_request
                                 self.log(pgm, 'Submit delete_request job for ' + inner_path4 + '. starts delete_request job in ' + (cleanup_in || default_timeout) + ' milliseconds' ) ;
                                 cleanup_job_id = setTimeout(delete_request, (cleanup_in || default_timeout)) ;
@@ -2152,8 +2193,10 @@ MoneyNetworkAPI.prototype.send_message = function (request, options, cb) {
                                             encrypted_response = JSON.parse(response_str);
                                             self.log(pgm, 'encrypted_response = ' + response_str + ', sessionid = ' + self.sessionid) ;
                                             // read response. run cleanup job now
-                                            if (cleanup_job_id) clearTimeout(cleanup_job_id);
-                                            setTimeout(delete_request, 0) ;
+                                            if (cleanup_job_id) {
+                                                clearTimeout(cleanup_job_id);
+                                                setTimeout(delete_request, 0) ;
+                                            }
                                             // decrypt response
                                             self.decrypt_json(encrypted_response, function (response) {
                                                 var pgm = self.module + '.send_message.get_and_decrypt decrypt_json callback 8.2: ';
