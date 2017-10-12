@@ -1872,7 +1872,7 @@ angular.module('MoneyNetworkW2')
                         console.log(pgm + 'found old session. sending get_password request to MN. request = ' + JSON.stringify(request)) ;
                         encrypt2.send_message(request, {encryptions:[1,2], response:10000}, function (response) {
                             var pgm = service + '.is_old_session send_message callback 3: ' ;
-                            var temp_pwd2, temp_pwd, temp_prvkey, temp_sessionid, encrypted_pwd2 ;
+                            var temp_pwd2, temp_pwd, temp_prvkey, temp_sessionid, encrypted_pwd2, request ;
                             if (response && response.error && response.error.match(/^Timeout /)) {
                                 // OK. timeout after 5 seconds. MN session not running or not logged in
                                 // error = "Timeout while waiting for response. Request was {\"msgtype\":\"get_password\",\"pubkey\":\"-----BEGIN PUBLIC KEY-----\\nMIGeMA0GCSqGSIb3DQEBAQUAA4GMADCBiAKBgHkYQzcBcq7nc8ktXslYyhkZrlja\\n7fGxu5cxqGVhp/w+905YT4jriF0IosiBeDyPGCJdQCS0IfJ9wMHP1rSIJ7KvLI5R\\nzfFcdqOMliMzEeTva29rkCmZSNw++2x7aIJQO9aExp03bm/l49zh/MbwFnZmrmS7\\nAOGgDzFPapIUQXenAgMBAAE=\\n-----END PUBLIC KEY-----\",\"pubkey2\":\"Ahn94vCUvT+S/nefej83M02n/hP8Jvqc8KbxMtdSsT8R\",\"unlock_pwd2\":\"280eab8147\",\"response\":1469138736361}. Expected response filename was 3253c3b046.1469138736361"
@@ -1907,7 +1907,29 @@ angular.module('MoneyNetworkW2')
                                 user_path: user_path,
                                 cb: process_incoming_message
                             }) ;
-                            cb(status.sessionid) ;
+
+                            // https://github.com/jaros1/Money-Network/issues/208
+                            // todo: loaded old session from Ls. No pubkeys message to MN. Send ping to MN instead so that MN known that session is up and running
+                            // send ping. timeout max 5 seconds. Expects Timeout ... or OK response
+                            request = { msgtype: 'ping' };
+                            console.log(pgm + 'restored old session. send ping to MN session with old sessionid ' + status.sessionid) ;
+                            encrypt2.send_message(request, {response: 5000}, function (response) {
+                                var pgm = service + '.is_old_session send_message callback 4: ' ;
+                                if (response && response.error && response.error.match(/^Timeout /)) {
+                                    // OK. Timeout. Continue with next session
+                                    console.log(pgm + 'ping old sessionid ' + status.sessionid + ' timeout');
+                                }
+                                else if (!response || response.error) {
+                                    // Unexpected error.
+                                    console.log(pgm + 'ping old sessionid ' + status.sessionid + ' returned ' + JSON.stringify(response));
+                                    info.status = 'Test failed';
+                                    info.disabled = true;
+                                    return test2_open_url.run();
+                                }
+                                else console.log(pgm + 'ping old sessionid ' + status.sessionid + ' OK') ;
+                                cb(status.sessionid) ;
+                            }) ;
+
                         }) ; // send_message callback 3
 
                     }) ; // decrypt_2 callback 2
