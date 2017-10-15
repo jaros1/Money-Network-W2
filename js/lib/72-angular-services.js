@@ -1149,6 +1149,8 @@ angular.module('MoneyNetworkW2')
                 }) ; // get_my_wallet_hub callback 1
             } // update_wallet_json
 
+            // temporary save money transactions in memory and wait for send_mt request
+            var new_money_transactions = {} ; // money_transactionid =>
 
             // listen for incoming messages from MN. called from MoneyNetworkAPILib.demon
             // params:
@@ -1211,16 +1213,17 @@ angular.module('MoneyNetworkW2')
                             console.log(pgm + 'request = ' + JSON.stringify(request)) ;
                             response = { msgtype: 'response' } ;
 
-                            send_response = function (error) {
+                            send_response = function (error, cb) {
                                 if (!response_timestamp) return ; // no response was requested
                                 if (error) response.error = error ;
+                                if (!cb) cb = function() {} ;
 
                                 // send response to other session
                                 encrypt2.send_message(response, {timestamp: response_timestamp, msgtype: request.msgtype, request: file_timestamp, timeout_at: request_timeout_at}, function (res)  {
                                     var pgm = service + '.process_incoming_message send_message callback 3: ';
                                     console.log(pgm + 'res = ' + JSON.stringify(res)) ;
+                                    cb() ;
                                 }) ; // send_message callback 3
-
 
                             }; // send_response
 
@@ -1287,6 +1290,7 @@ angular.module('MoneyNetworkW2')
 
                             }
                             else if (request.msgtype == 'prepare_mt_request') {
+                                // step 1 in send money transaction(s) to contact
                                 // got a prepare money transactions request from MN. Return error message or json to be included in chat message for each money transaction
                                 (function() {
                                     var send_money, request_money, i, money_transaction, jsons, step_1_confirm,
@@ -1336,9 +1340,43 @@ angular.module('MoneyNetworkW2')
                                     step_n_more = function () {
                                         var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_n_more: ';
                                         console.log(pgm + 'jsons = ' + JSON.stringify(jsons)) ;
+
+                                        // ready to send OK response with jsons to MN
                                         // jsons = [{"return_address":"2N23sTaKZT4SG1veLHrAxR1WLfNeqnBE4tT"}]
                                         response.msgtype = 'prepare_mt_response' ;
                                         response.jsons = jsons ;
+                                        // remember transactions and wait for send_mt request (chat msg has been sent)
+                                        new_money_transactions[request.money_transactionid] = {
+                                            timestamp: new Date().getTime(),
+                                            request: request,
+                                            response: response
+                                        } ;
+                                        console.log(pgm + 'new_money_transactions = ' + JSON.stringify(new_money_transactions));
+                                        //new_money_transactions = {
+                                        //    "vjbhtHwEfZUY4iF01hLHH9QBrm02pzslSqshK0Pu6G1QLEoKsFaJcwKiKvef": {
+                                        //        "timestamp": 1508082035393,
+                                        //        "request": {
+                                        //            "msgtype": "prepare_mt_request",
+                                        //            "contact": {
+                                        //                "alias": "jro test",
+                                        //                "cert_user_id": "jro@zeroid.bit",
+                                        //                "auth_address": "18DbeZgtVCcLghmtzvg4Uv8uRQAwR8wnDQ"
+                                        //            },
+                                        //            "open_wallet": true,
+                                        //            "money_transactions": [{
+                                        //                "action": "Send",
+                                        //                "code": "tBTC",
+                                        //                "amount": 0.0001
+                                        //            }],
+                                        //            "money_transactionid": "vjbhtHwEfZUY4iF01hLHH9QBrm02pzslSqshK0Pu6G1QLEoKsFaJcwKiKvef"
+                                        //        },
+                                        //        "response": {
+                                        //            "msgtype": "prepare_mt_response",
+                                        //            "jsons": [{"return_address": "2N7YjtMs4irTnudkKwzxBMBaimhiKCuEKK4"}]
+                                        //        }
+                                        //    }
+                                        //};
+
                                         send_response();
                                     } ; // step_n_more
 
@@ -1442,6 +1480,35 @@ angular.module('MoneyNetworkW2')
                                 })() ;
                                 // wait for callback chain to finish
                                 return ;
+                            }
+                            else if (request.msgtype == 'send_mt') {
+                                // step 2 in send money transaction(s) to contact
+                                // MN has just sent chat msg with money transaction(s) to contact.
+                                (function(){
+                                    var now, elapsed ;
+                                    now = new Date().getTime() ;
+                                    if (!new_money_transactions[request.money_transactionid]) {
+                                        response.error = 'Unknown money transactionid' ;
+                                        return
+                                    }
+                                    // max 10 seconds between prepare_mt_response and send_mt requests
+                                    elapsed = now - new_money_transactions[request.money_transactionid].timestamp ;
+                                    if (elapsed > 10000) response.error = 'Timeout. Waited ' + Math.round(elapsed/1000) + ' seconds' ;
+                                    else {
+                                        // OK send_mt request
+                                        send_response(null, function() {
+                                            console.log(pgm + 'todo: send_mt post processing in wallet:') ;
+                                            // 1: generate a short jsencrypt key (1024) bits
+                                            // 2: select random index for cryptmessage public key
+                                            // 3: find public cryptmessage key
+                                            // 4: send offline pubkey message to other session encrypted with money_transactionid
+                                            // 5: create a <session filename>.0000000000001 file with transaction status
+                                            // 6: save transaction in ls
+                                            // 7: publish so that other MN and W2 session can see new optional files
+                                        }) ;
+                                        return ;
+                                    }
+                                })() ;
                             }
                             else response.error = 'Unknown msgtype ' + request.msgtype ;
                             console.log(pgm + 'response = '  + JSON.stringify(response)) ;
@@ -2101,7 +2168,7 @@ angular.module('MoneyNetworkW2')
                                                 inner_path = 'merged-MoneyNetwork/' + z_cache.my_wallet_data_hub + '/data/users/' + ZeroFrame.site_info.auth_address + '/content.json' ;
                                                 self.ZeroFrame.cmd("siteSign", {inner_path: inner_path}, function (res) {
                                                     var pgm = service + '.create_sessions.step_3_find_old_outgoing_files.delete_file siteSign callback: ';
-                                                    if (res != 'ok') console.log(pgm + inner_path + ' siteSign failed. error = ' + res) ;
+                                                    if (res != 'ok') console.log(pgm + inner_path + ' siteSign failed. error = ' + JSON.stringify(res)) ;
                                                     // done with or without errors
                                                     cb(sessionid, save_wallet_login) ;
                                                     console.log('content.json file was updated (files_optional). publish to distribute info to other users') ;
@@ -2114,7 +2181,8 @@ angular.module('MoneyNetworkW2')
                                             ZeroFrame.cmd("fileDelete", inner_path, function (res) {
                                                 if (res == 'ok') delete_ok.push(filename) ;
                                                 else {
-                                                    console.log(pgm + inner_path + ' fileDelete failed. error = ' + res) ;
+                                                    console.log(pgm + inner_path + ' fileDelete failed. error = ' + JSON.stringify(res)) ;
+                                                    console.log(pgm + 'todo: see MoneyNetworkAPI.send_message.delete_request. Maybe same deleteFile error as in issue 1140. https://github.com/HelloZeroNet/ZeroNet/issues/1140');
                                                     delete_failed.push(filename) ;
                                                 }
                                                 // continue with next file
