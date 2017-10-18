@@ -1483,7 +1483,7 @@ angular.module('MoneyNetworkW2')
                             }
                             else if (request.msgtype == 'send_mt') {
                                 // step 2 in send money transaction(s) to contact
-                                // MN has just sent chat msg with money transaction(s) to contact.
+                                // MN session has just sent chat msg with money transaction(s) to contact.
                                 (function(){
                                     var now, elapsed ;
                                     now = new Date().getTime() ;
@@ -1497,14 +1497,70 @@ angular.module('MoneyNetworkW2')
                                     else {
                                         // OK send_mt request
                                         send_response(null, function() {
-                                            console.log(pgm + 'todo: send_mt post processing in wallet:') ;
-                                            // 1: generate a short jsencrypt key (1024) bits
-                                            // 2: select random index for cryptmessage public key
-                                            // 3: find public cryptmessage key
-                                            // 4: send offline pubkey message to other session encrypted with money_transactionid
-                                            // 5: create a <session filename>.0000000000001 file with transaction status
-                                            // 6: save transaction in ls
-                                            // 7: publish so that other MN and W2 session can see new optional files
+                                            var step_1_check_port, step_2_get_pubkey, step_3_get_pubkey2, step_4_save_pubkeys_msg, status;
+                                            console.log(pgm + 'todo: send_mt post processing in wallet') ;
+
+                                            status = {} ;
+
+                                            // 1: warning if ZeroNet port is closed. optional files are not distributed. maybe use small normal files as a backup?
+                                            // 2: encryption layer 1. jsencrypt. generate a short jsencrypt key (1024) bits. only used for this transaction
+                                            // 3: encryption layer 2. select random index for cryptmessage public key and find public cryptmessage key
+                                            // 4: send offline pubkeys message to other wallet session encrypted with money_transactionid (encryption layer 3)
+                                            // 5: create a <session filename>.0000000000001 file with transaction status encrypted with money_transactionid (encryption layer 3)
+                                            // 6: save transaction in ls?
+                                            // 7: publish so that other MN and W2 sessions can new the new optional files
+
+                                            step_4_save_pubkeys_msg = function () {
+                                                var request ;
+
+                                                request = {
+                                                    msgtype: 'pubkeys',
+                                                    pubkey: status.pubkey, // for JSEncrypt
+                                                    pubkey2: status.pubkey2 // for cryptMessage
+                                                } ;
+                                                console.log(pgm + 'request = ' + JSON.stringify(request)) ;
+                                                // see https://github.com/jaros1/Money-Network/issues/230
+                                                // MoneyNetworkAPI should also be used for wallet to wallet communication
+                                                // old behavior: wallet = true for all sites except MN (1JeHa67QEvrrFpsSow82fLypw8LoRcmCXk)
+                                                // new behavior: master=true for MN. master=false (=client) for wallets. also used in W2W communication where starter of W2W communication is master
+                                                var encrypt3 = new MoneyNetworkAPI({debug: 'encrypt3', sessionid: request.money_transactionid, master: true}) ;
+                                            } ;
+
+                                            step_3_get_pubkey2 = function () {
+                                                var r ;
+                                                r = Math.random() ;
+                                                status.prvkey2 = parseInt(('' + r).substr(2,3)) ; // 0-999
+                                                ZeroFrame.cmd("userPublickey", [status.prvkey2 ], function (pubkey2) {
+                                                    status.pubkey2 = pubkey2 ;
+                                                    console.log(pgm + 'status = ' + JSON.stringify(status)) ;
+                                                    //status = {
+                                                    //    "ip_external": true,
+                                                    //    "pubkey": "-----BEGIN PUBLIC KEY-----\nMIGeMA0GCSqGSIb3DQEBAQUAA4GMADCBiAKBgGVhj2Ibo5pfV3XEPDbqNcKW0HAa\nk7AaOcvZen3Qz//a2xvsCe+BjNPyLCCk53Tg+CC+8UlU9a9SkSTtBGkV9/AG6i2d\nNF4FdgWUKvIM3qFtabNFnTF7FTcTibQV1YyAMjtFDQYCQmRIClar/uY73gAw1dcx\nw1Hzbn3XasH1lIFRAgMBAAE=\n-----END PUBLIC KEY-----",
+                                                    //    "prvkey": "-----BEGIN RSA PRIVATE KEY-----\nMIICWwIBAAKBgGVhj2Ibo5pfV3XEPDbqNcKW0HAak7AaOcvZen3Qz//a2xvsCe+B\njNPyLCCk53Tg+CC+8UlU9a9SkSTtBGkV9/AG6i2dNF4FdgWUKvIM3qFtabNFnTF7\nFTcTibQV1YyAMjtFDQYCQmRIClar/uY73gAw1dcxw1Hzbn3XasH1lIFRAgMBAAEC\ngYBhNxhDP7W2Rk6bwzzqe9RpcC0YEqQkbkGV1Em9dArAkaEiOUmdvWDJrKPb+cVp\nMoE9BVxisXGWWVqNSiq8ijBhaTiLbh5acbIwq0+/M0CbrI8YRZkofjPsVeklK61f\nj/xDgmtWPHGmhHJEpFKCfeu1Py6nHMIZv83VX7PDmMnAQQJBAKiB4biUBc7cgQAC\n6zJmbgUhQn2Vto5h0vbyE2GgNXH45uUhar8x0ThjRx/fi09fR0vQnPRvObNkv8Ij\nyawgpE0CQQCaBTVEBbWQLukseVM+xzM1AoCAp3+Fr7bpdGc22IfeKAsawXNPJ9Sn\nTPLgBn6wJfAasb4L86edtz1V4Sp0cqMVAkEAo2/eS9WeUIaExEsQboD04xrgT8h/\nGVh+czBWZhEq5VGCOekQjUM3Z1a7bIm4qBKEp18+bMLYl0v3xchKWh4K3QJAF4GH\n+ZOtfA3MxF7X15LrO8Hf/sKRccO5dLOxNOujAMK3vyObB4+aotXZk1sqZpPDqy9J\nQ+WxxR48HCk7I36DaQJAbJNN0LiiPgz/NbEPWNuTksnkoOVoIvzP2Q/6UasaKgFp\ncy5C5tuU/NiUTCpAhhozOpg9hL4tuYs2Y+xXteKqFw==\n-----END RSA PRIVATE KEY-----",
+                                                    //    "prvkey2": 856,
+                                                    //    "pubkey2": "Ak+2Pp57QeaE2o3gSI9Do+RFD4oJbGD9tk0IIDaNgou2"
+                                                    //};
+                                                    step_4_save_pubkeys_msg() ;
+                                                }); // userPublickey
+                                            } ;
+
+                                            step_2_get_pubkey = function () {
+                                                var crypt ;
+                                                crypt = new JSEncrypt({default_key_size: 1024});
+                                                crypt.getKey();
+                                                status.pubkey = crypt.getPublicKey();
+                                                status.prvkey = crypt.getPrivateKey(); // todo: save prvkey in W2 lS encrypted with ...
+                                                step_3_get_pubkey2() ;
+                                            } ;
+                                            step_1_check_port = function () {
+                                                ZeroFrame.cmd("serverInfo", {}, function (server_info) {
+                                                    status.ip_external = server_info.ip_external ;
+                                                    if (!status.ip_external) console.log(pgm + 'warning. ZeroNet port is closed. Optional files (money transaction) will not be distributed on ZeroNet. Money transaction may fail')
+                                                    step_2_get_pubkey() ;
+                                                }) ;
+                                            } ;
+                                            step_1_check_port() ;
+
                                         }) ;
                                         return ;
                                     }
