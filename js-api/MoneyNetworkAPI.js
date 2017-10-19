@@ -1996,6 +1996,7 @@ MoneyNetworkAPI.prototype.send_message = function (request, options, cb) {
     self = this;
     this.check_destroyed(pgm) ;
 
+    this.log(pgm, 'request = ' + JSON.stringify(request)) ;
     request_at = new Date().getTime();
 
     // get params
@@ -2079,7 +2080,7 @@ MoneyNetworkAPI.prototype.send_message = function (request, options, cb) {
         var pgm = self.module + '.send_message siteInfo callback 1: ';
         var regexp ;
         MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq0, site_info ? 'OK' : 'Failed');
-        if (offline_transaction) self.log(pgm, 'offline_transaction = ' + JSON.stringify(offline_transaction)) ;
+        // if (offline_transaction) self.log(pgm, 'offline_transaction = ' + JSON.stringify(offline_transaction)) ;
         if (!site_info.cert_user_id) {
             self.destroy('User log out') ;
             return cb({error: 'invalid call. this_user_path must be null for a not logged in user'}) ;
@@ -2092,20 +2093,20 @@ MoneyNetworkAPI.prototype.send_message = function (request, options, cb) {
         // 2: get filenames
         self.get_session_filenames(function (this_session_filename, other_session_filename, unlock_pwd2) {
             var pgm = self.module + '.send_message get_session_filenames callback 2: ';
-            if (offline_transaction) self.log(pgm, 'offline_transaction = ' + JSON.stringify(offline_transaction)) ;
+            // if (offline_transaction) self.log(pgm, 'offline_transaction = ' + JSON.stringify(offline_transaction)) ;
 
             // 3: encrypt json
             self.encrypt_json(request, encryptions, function (encrypted_json) {
                 var pgm = self.module + '.send_message encrypt_json callback 3: ';
                 self.log(pgm, 'encrypted_json = ' + JSON.stringify(encrypted_json));
-                if (offline_transaction) self.log(pgm, 'offline_transaction = ' + JSON.stringify(offline_transaction)) ;
+                // if (offline_transaction) self.log(pgm, 'offline_transaction = ' + JSON.stringify(offline_transaction)) ;
 
                 // 4: add optional files support
                 self.add_optional_files_support(function (res) {
                     var pgm = self.module + '.send_message add_optional_files_support callback 4: ';
                     var inner_path4, json_raw, debug_seq4;
                     if (!res || res.error) return cb({error: 'Cannot send message. Add optional files support failed. ' + JSON.stringify(res)});
-                    if (offline_transaction) self.log(pgm, 'offline_transaction = ' + JSON.stringify(offline_transaction)) ;
+                    // if (offline_transaction) self.log(pgm, 'offline_transaction = ' + JSON.stringify(offline_transaction)) ;
                     // 5: write file
                     inner_path4 = self.this_user_path + this_session_filename + '.' + request_file_timestamp;
                     json_raw = unescape(encodeURIComponent(JSON.stringify(encrypted_json, null, "\t")));
@@ -2114,7 +2115,7 @@ MoneyNetworkAPI.prototype.send_message = function (request, options, cb) {
                         var pgm = self.module + '.send_message fileWrite callback 5: ';
                         var save_offline_transaction;
                         MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq4, res == 'ok' ? 'OK' : 'Failed. error = ' + JSON.stringify(res));
-                        if (offline_transaction) self.log(pgm, 'offline_transaction = ' + JSON.stringify(offline_transaction)) ;
+                        // if (offline_transaction) self.log(pgm, 'offline_transaction = ' + JSON.stringify(offline_transaction)) ;
                         // 6: offline transaction only. add timestamp to optional_transaction array and special file
                         save_offline_transaction = function (cb) {
                             var pgm = self.module + '.send_message.save_offline_transaction: ';
@@ -2122,7 +2123,7 @@ MoneyNetworkAPI.prototype.send_message = function (request, options, cb) {
                             // offline_transaction is an array
                             // add to array
                             if (offline_transaction.indexOf(request_file_timestamp) == -1) offline_transaction.push(request_file_timestamp) ;
-                            if (offline_transaction) self.log(pgm, 'offline_transaction = ' + JSON.stringify(offline_transaction)) ;
+                            // if (offline_transaction) self.log(pgm, 'offline_transaction = ' + JSON.stringify(offline_transaction)) ;
                             // add to file <this_session_filename>.0000000000000
                             self.encrypt_json(offline_transaction, encryptions, function (encrypted_offline_transaction) {
                                 var pgm = self.module + '.send_message.save_offline_transaction encrypt_json callback 6.1: ';

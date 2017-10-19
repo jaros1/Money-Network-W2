@@ -1213,6 +1213,7 @@ angular.module('MoneyNetworkW2')
                             console.log(pgm + 'request = ' + JSON.stringify(request)) ;
                             response = { msgtype: 'response' } ;
 
+                            // cb: post response processing. used in send_mt
                             send_response = function (error, cb) {
                                 if (!response_timestamp) return ; // no response was requested
                                 if (error) response.error = error ;
@@ -1496,10 +1497,11 @@ angular.module('MoneyNetworkW2')
                                     if (elapsed > 10000) response.error = 'Timeout. Waited ' + Math.round(elapsed/1000) + ' seconds' ;
                                     else {
                                         // OK send_mt request
+                                        console.log(pgm + 'sending OK response to ingoing send_mt request') ;
                                         send_response(null, function() {
                                             var step_1_check_port, step_2_get_pubkey, step_3_get_pubkey2,
                                                 step_4_save_pubkeys_msg, step_5_save_in_ls, step_6_publish, status;
-                                            console.log(pgm + 'todo: send_mt post processing in wallet') ;
+                                            console.log(pgm + 'OK send_mt response was send to MN. continue with mt_send post processing') ;
 
                                             status = {} ;
 
@@ -1580,10 +1582,10 @@ angular.module('MoneyNetworkW2')
                                             // start callback chain
                                             step_1_check_port() ;
 
-                                        }) ;
-                                        return ;
+                                        }) ; // send_response
                                     }
                                 })() ;
+                                if ((response.msgtype == 'response') && !response.error) return ; // stop. OK send_mt response has already been sent
                             }
                             else response.error = 'Unknown msgtype ' + request.msgtype ;
                             console.log(pgm + 'response = '  + JSON.stringify(response)) ;
