@@ -1497,7 +1497,8 @@ angular.module('MoneyNetworkW2')
                                     else {
                                         // OK send_mt request
                                         send_response(null, function() {
-                                            var step_1_check_port, step_2_get_pubkey, step_3_get_pubkey2, step_4_save_pubkeys_msg, status;
+                                            var step_1_check_port, step_2_get_pubkey, step_3_get_pubkey2,
+                                                step_4_save_pubkeys_msg, step_5_save_in_ls, step_6_publish, status;
                                             console.log(pgm + 'todo: send_mt post processing in wallet') ;
 
                                             status = {} ;
@@ -1505,27 +1506,43 @@ angular.module('MoneyNetworkW2')
                                             // 1: warning if ZeroNet port is closed. optional files are not distributed. maybe use small normal files as a backup?
                                             // 2: encryption layer 1. jsencrypt. generate a short jsencrypt key (1024) bits. only used for this transaction
                                             // 3: encryption layer 2. select random index for cryptmessage public key and find public cryptmessage key
-                                            // 4: send offline pubkeys message to other wallet session encrypted with money_transactionid (encryption layer 3)
-                                            // 5: create a <session filename>.0000000000001 file with transaction status encrypted with money_transactionid (encryption layer 3)
-                                            // 6: save transaction in ls?
-                                            // 7: publish so that other MN and W2 sessions can new the new optional files
+                                            // 4: send offline pubkeys message to other wallet session encrypted with money_transactionid (encryption layer 3) and
+                                            //    create a <session filename>.0000000000001 file with transaction status encrypted with money_transactionid (encryption layer 3)
+                                            // 5: save transaction in ls?
+                                            // 6: publish so that other MN and W2 sessions can new the new optional files
 
+                                            // create callback chain step 1-6
+                                            step_6_publish = function () {
+                                                console.log(pgm + 'todo: publish') ;
+                                            } ;
+                                            step_5_save_in_ls = function () {
+                                                console.log(pgm + 'todo: save in ls') ;
+                                                step_6_publish() ;
+                                            } ;
                                             step_4_save_pubkeys_msg = function () {
-                                                var request ;
+                                                var request2, offline, encrypt3;
 
-                                                request = {
+                                                request2 = {
                                                     msgtype: 'pubkeys',
                                                     pubkey: status.pubkey, // for JSEncrypt
                                                     pubkey2: status.pubkey2 // for cryptMessage
-                                                } ;
-                                                console.log(pgm + 'request = ' + JSON.stringify(request)) ;
-                                                // see https://github.com/jaros1/Money-Network/issues/230
-                                                // MoneyNetworkAPI should also be used for wallet to wallet communication
-                                                // old behavior: wallet = true for all sites except MN (1JeHa67QEvrrFpsSow82fLypw8LoRcmCXk)
-                                                // new behavior: master=true for MN. master=false (=client) for wallets. also used in W2W communication where starter of W2W communication is master
-                                                var encrypt3 = new MoneyNetworkAPI({debug: 'encrypt3', sessionid: request.money_transactionid, master: true}) ;
+                                                };
+                                                console.log(pgm + 'request2 = ' + JSON.stringify(request2));
+                                                // setup session instance.
+                                                // Only using symmetric encryption in first pubkeys message to other wallet session
+                                                // this wallet starts the transaction and is the master in wallet to wallet communication
+                                                encrypt3 = new MoneyNetworkAPI({
+                                                    debug: 'encrypt3',
+                                                    sessionid: request.money_transactionid,
+                                                    master: true
+                                                });
+                                                offline = [] ;
+                                                encrypt3.send_message(request2, {encryptions: [3], offline: offline}, function (response2) {
+                                                    console.log(pgm + 'response2 = ' + JSON.stringify(response2)) ;
+                                                    console.log(pgm + 'offline = ' + JSON.stringify(offline)) ;
+                                                    step_5_save_in_ls() ;
+                                                }); // encrypt_json callback
                                             } ;
-
                                             step_3_get_pubkey2 = function () {
                                                 var r ;
                                                 r = Math.random() ;
@@ -1543,7 +1560,6 @@ angular.module('MoneyNetworkW2')
                                                     step_4_save_pubkeys_msg() ;
                                                 }); // userPublickey
                                             } ;
-
                                             step_2_get_pubkey = function () {
                                                 var crypt ;
                                                 crypt = new JSEncrypt({default_key_size: 1024});
@@ -1555,10 +1571,13 @@ angular.module('MoneyNetworkW2')
                                             step_1_check_port = function () {
                                                 ZeroFrame.cmd("serverInfo", {}, function (server_info) {
                                                     status.ip_external = server_info.ip_external ;
-                                                    if (!status.ip_external) console.log(pgm + 'warning. ZeroNet port is closed. Optional files (money transaction) will not be distributed on ZeroNet. Money transaction may fail')
+                                                    if (!status.ip_external) console.log(pgm + 'warning. ZeroNet port is closed. Optional files (money transaction) will not be distributed on ZeroNet. Money transaction may fail');
+                                                    // warning. ZeroNet port is closed. Optional files (money transaction) will not be distributed on ZeroNet. Money transaction may fail
                                                     step_2_get_pubkey() ;
                                                 }) ;
                                             } ;
+
+                                            // start callback chain
                                             step_1_check_port() ;
 
                                         }) ;
