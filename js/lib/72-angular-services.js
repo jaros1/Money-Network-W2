@@ -225,6 +225,7 @@ angular.module('MoneyNetworkW2')
             // localStorage loaded
             function ls_loaded(res) {
                 // is siteInfo ready?
+                var pgm = service + '.ls_loaded: ' ;
                 var wait_for_site_info, key, cb ;
                 wait_for_site_info = function() { ls_loaded(res) };
                 if (!ZeroFrame.site_info) {
@@ -233,6 +234,54 @@ angular.module('MoneyNetworkW2')
                 }
                 // siteInfo is ready
                 for (key in res) ls[key] = res[key] ;
+                console.log(pgm + 'ls = ' + JSON.stringify(ls)) ;
+                // migrate to newest ls structure
+                if (ls.transactions) {
+                    // rename transactions to w_sessions
+                    ls.w_sessions = ls.transactions ;
+                    delete ls.transactions ;
+                }
+                if (ls.sessions) {
+                    // rename sessions to mn_sessions
+                    ls.mn_sessions = ls.sessions ;
+                    delete ls.sessions ;
+                }
+                //ls = {
+                //    "is_loading": true,
+                //    "save_login": {
+                //        "18DbeZgtVCcLghmtzvg4Uv8uRQAwR8wnDQ": {
+                //            "choice": "1",
+                //            "permissions": {
+                //                "encryption": 2,
+                //                "message": "[\"b/3l7U8pIt5bnJTc4bOohwLKACAMY5dg42XKaK4zcAF0tc23si69C6RAIzqksjNwxA0UqQAgtS+js0qGCx2oxSLutHZXyKcUrPv7tQCCh8PO8B4ViUSaKHvkeXvPFy6alSxpwUWc1j2cbhcc83qX9DsFyt3sFhnxd/TIzcr5TeUUC+jjVKeBmBWAAV22i5/Ngdv5eslD7Ha/V8+4UYFKZo7KZOjGRw==\",\"osQiwYyvmGU4jBMHpjvUDw==\",\"B+hy1k4kGDkMPi6Jw8W0xJw3DGInfXFFxZEWlgyCmi5/0nGlPvcb/wdWEapZ7geYKiz7MHm2Fl/QEmVKqOlq01jQMFJRA1VMzBWg15CEO8ZKQk+E4oaLim6XaSUdF45A+qjH7ItJNjVay5G/TTZIEHZVcs7bKNuvuHXKZ2qckbJz3yfXUiu7dQSakqUJYD6ppxcoNx0jgBozog0Vyff/AA==\"]"
+                //            },
+                //            "login": {
+                //                "encryption": 2,
+                //                "message": "[\"6n1bj8fVcDDsfieevqFxwALKACCJMCifjojRvLpxnnAzFlqdbRngr8xGeyYCQqwvZdMNWAAgj8QseOIdrp+xtb+9Szb8L99olhI20qQxGfSVTX4aPWMzWD4cQ2C6AeKHxGFaGirO48zWp6gfqIb0RrVxR0jMHL7nA/tlBjDgFwdu1gp9kVrcdIsDd18btRgiUNzULgd1+mzIRnhA9coKH+EJc2ss1g==\",\"DRbUxJjtaMJSSaK1jNpQ+Q==\",\"94+a1HgliFNJfYKpY7woNO1YHBxWM/C371cDV7IYETnsoToH0HUl5bWvosjW5vY9evMQTwLlTLPfgdTFnuaNZLRqNCzaT38xJhC8lHTsNxqIVWOU7LEXDfG17d/BINVEKf23bpjeOG7YC6SEJcmaOQ==\"]"
+                //            }
+                //        }
+                //    },
+                //    "sessions": {
+                //        "18DbeZgtVCcLghmtzvg4Uv8uRQAwR8wnDQ": {
+                //            "this_pubkey": "-----BEGIN PUBLIC KEY-----\nMIGeMA0GCSqGSIb3DQEBAQUAA4GMADCBiAKBgGIQnT7AZjmmKJswjbDYeSv4V3D6\n3oNGaMT24VFTwyksQAzV3L+ghC5jo/UjOshRM7QlNw+W9eTV5hNgzvQqxkj4BAiS\nEw81FfKxXy9+oPubTNXC8uaxaMr7W7EG5Edfj51PENyB58fMdIoy4D7QOB2sB7LV\nvYOTzldDfyAdC3PLAgMBAAE=\n-----END PUBLIC KEY-----",
+                //            "this_pubkey2": "Ahn94vCUvT+S/nefej83M02n/hP8Jvqc8KbxMtdSsT8R",
+                //            "other_pubkey": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0pMuMJyynH1BmhMJ6vvd\nQZplIBgiiOQSqwu2SpYKICm+P1gGNHnICQic/Nuqi9t93rxJLfWCsl0+lCtoJLen\nf78xz4XzEcGPBeBFn2TbQqPO9loylNlaOgiqDG5qcSc9n7yEF0xmpReDGATwzECi\nJrpZBImwhUMO48iS08b4IfQaMsbnUVY8hdUeJiQ831kMkNQLtxWaeRiyn8cTbKQ6\nLXCDG7GDaFN6t+x3cv/xBX06+ykuYQ0gNIBySiIz69RYzhvOkqOQggLWPF+NMW1J\nO6VRqvX7Sybwm51v3kGGKWeX4znvGY+GwVCpwiH+b2hbGZHIqFp9ogimGVE0WPgu\nnwIDAQAB\n-----END PUBLIC KEY-----",
+                //            "other_pubkey2": "A4RQ77ia8qK1b3FW/ERL2HdW33jwCyKqxRwKQLzMw/yu",
+                //            "encrypted_info": "[\"sn53LVGGihpV2d8drGWuwALKACC0v1nnRX3J/7RndNzgY0mf1Iscvh4Qu1sbYvA9a2hTJwAgDznVN4TeSgnY0b0St3ONhVcqTB14IZBT8nEauiG/UrEkZKPIY602dAmztkrnE5TlVhKp5i9+1MqZveQ+tzl1G4HI//mXOPF/xA583Z1IF/ZFbZnygHP8w1nsjmGKsTqzb/zHjL20m42fXyNA1lGx1Q==\",\"2GyYG+cI/1xKV23IthSMCg==\",\"he0SPrDzG0iBh+Vf3xiuxtKejb3Ennjw0yRpD5XfQYlnUE9csHfcd9LzhwPJabnvedkb/L1DahNE9aH21ovhCMzS4gQlsv5WkTouu8ONt05ZOEk8hjnu8hFtX80WGRcy\"]",
+                //            "prvkey": "U2FsdGVkX18dRxJbzKepCZLCm1y+Vb7BX6ty/NxLYRiYGVuu4q9TU7csFcu6PhoGr9IFGpH8CpIc24uqEOWQz3TpLqen6gTP7tCMHhfpyariODvHR5HAuOQeNVZHCXRwello6A9pmaq2iRXWmOXu53veYejV9dsqPlEGGBOxPWauiCCJDpnX7LCOKv4sep8InhlxeJvIxJncRugH+F6ZvNSNx6JCFHFmnqm7+nAbtbjja2FvCQ5ZhinC4PCS/pVJQsuEKRqek3IEpHO2eE+Hz0AKezDiuKiG3ifIaXdp9d5E99JdkABDQRZrYJtotukLOKBrNCPaVehRFVP4Z8LornSmot+01uKYOmtYwvoBsAHD3yPA4YF+N+8L7VJxA79lHXbXPIPV2wQZVs0Y00r6Q9upiU20nKopcRT84hcbv1BLQ0YE1gk7Ojx1Rjm/dEEgAGrKZJBI+JJjqgYCjxR7H3BQh2N3y8jY5xXWoH+wvbqANqI1ZmLXBOgzeE6wnBM+8O23ShfRw/v9W4dFdEFY4lIaH7I7hI6lzrWcfHh9AW19ntokmSM5C88Hg/BF20vvXLZgQLV+fV0IrlN0goRKDRpvL/yb4CR4VcK581bEV1iQZhMcRAubaYB8WFkk245ALPzngEyNJK4MMdgOMbbBkCi404l+X1Z1IZ6nusC8EAXeqYuTZqh2qvUTbFe+JFcZCMjCqkIvAKX9H0gfRLKhTajDxI2llKhJ0HMQS/VFcwZzsSH6gVO/N+yNQu5zBQzl9Qh3+F9EatZgVYuc1gQHObR8/lbJieTBcsF4PCP1WBDM/KN6RTOH0TKzZD/x8cDjnVDlLtNy6/hFPMmft8nBYn10kaNPg5Ho0lWljOBFYDcWWsNpvB4AHDArJ4UsiS0E9rSramA0+xgTO7QVkNokBuLge9ihJ2Rop55GCmIt3Y8NY7fKiagy5WFZNtiCtHCQc5MJO12Jvqg76lq2rlptzXlzhtpgVJhvZvKfu6RQFDQn4gNnmxG4penVBU5y2N69612HFi2BTB5RICkN+6tjS07lf2Ets+f7nFTqN+xJ4rV4bKO3mNkOQKoTn3a0rRHO7GefLqnomRufaCrteISbGIy7KIXJWR4B7xSDQC1skMO063YkCrJu7NpTlzThJa0jwM2peMMpWCDFx+YQjU+6qQak9mdLGA4tZcvtPz8RFyEGKJ1jlEv+cRyEYOBeoq3w",
+                //            "sessionid": "U2FsdGVkX1/eobzTw2IF55TPF1Wy21wSqyYN6Jlx7T3iSmiUZP23r93gbcq8LvgyF+VyzafV331MDXkOfhqo4vPS2vWzCkGex6I4pU1DXfo="
+                //        }
+                //    },
+                //    "transactions": {
+                //        "18DbeZgtVCcLghmtzvg4Uv8uRQAwR8wnDQ": {
+                //            "1a85fd6465e75f61656c08ccc2c21b6feaa09b41fb25afe20dd8677da751f590": {
+                //                "encryption": 2,
+                //                "message": "[\"7aKr3+VWui7XRWnVgddu9wLKACDrXUVe0cv7Y6z07vmbyBV01855YoJEfvYioTX4mM1YNwAgssK7M0FR/JP9ybH6KOJVq4sIPiNlTJQzIzqan5aKL1besed7FLoVIxkhs/zNGVxQp1YRFR+gllB9dnQPSQGgSXduX2IATj2pGzy6PoxAfPBhciDdyrv+fv1ARwFMhcMm9J2/wBFrQAH7G3ITp38/QA==\",\"ntFOD3S/czU4CQ4tp5lXBw==\",\"xQmB2Uy9Cea6Cxbt2wZgNzpeiP7ZdANOdF0nWsHY+g3Bv3SP/8r6X8LJ07ybhmM10at6HfEJhonzYJxZOkItTYF+HH49fUwjbAmUxhU301GE+h1V9cqrro8aqfgjvA9WjIIl02uXfxoAOH8F5ZOKAkoABaRoOvSj+8ZlVeQeNW9joFuA3hyNP3LqbT5pJCrWfSuVd5CxqkiRN6Za3fxIhnXQvC6FXMFe5gv2yX6bL3EfbliImh+F/n6C6BwA5mbNAgYo4QEK3BevFbqB4DQdVwFb0CymOIscqDOOmBKEhhJQtXoGBqvu7R5zTe/FiJuCEuuHoDUUXaQYcwvBgVHxCawTGwtcKdUQkYKqYXAwPK4B3sAbNU0qlhGCDkrn7PgwOL0otht2EWP4fmX6v1QWAEJgboowpsExk5ISB9OixUw5C7dE1nMtKzUDHAHPRwCheIjlPYSAKzI7/2/+XGzpgk1TjIQE3l3OimA1+pt4WmOFjEOj4cTebqEg5vjoUCI+IY/eslXD3dxhIzJWys4dn7FDLPzWQV7D3iaYX/6m3YY+iDYeZUXr2go3aETu69Z2nFcicjUk6j2OrWo939T7uPO9V4j9Tvg1dioujYRPob6Li2WjpD1HwJVm4fAQUYkE9c5Btd5VkN0OwivW1hoQVHZb6B9uRFtpf4UQjXVgfg4c2huerJiMkG5fYfiLK6pn1QUlBfAFHdRrZZdis7jvC2fYXyK0TPqV7nnuejfuLvqWHsbu6AlhNIIjesG4pz1yU/gJmazKzbiL47AE5FEjsukuuvnFcwkVdivc9VRiBPci1nJe0IFhKgmsuRHoGv1Su67tP3VG7jbazRTfI6IAqO5ge7+q1nRLh4tvqw+7Q1z6TqATxfKQWfdVnUz9c8o/mv8P5uYE9J0V1OK9IFgu5n8dF2+nI23Oa81lUji5Ig5+3VZ38MeSRVL/veGHRNdHmGKKRCmtQDLqX6bEFfWONGZlPd0IaTyIcq9zPnjA7qQxwSQKeFYrMBHk5l4g6O+NGklJdsNisCGrkgMQruqxmpxyo0IsLglyGq4lMW+VJ4t9oJrl1T2KRgFIqmUYVQVQs/4FEJyR9hsj6m6rTjPQDvT0iBvJd53cxnv/5/ugS9nPlO0Dfv5GzI6rjBQFFAwEkwklGEvIWcYkzDIVIGrRBLNbYuZK8cZh7XwPIiFejFEMm/wpbO+jYOLrKbIzh5OAeUc0YIJQk4zWILYWkOySyXt2dPn6Z1lkNA562Hfoj1k9/inDYT4HL+SrvQCgAmBgDT8qRpdDVo1paFgoQSWnXjMpn2KbjNPPF5tpZmb8HsPBHXAQ6a/mcWGjaDXLtLPzN3USDFwvJ1zQMd+med/PWmaSc4maG2UjLafj4AXY+ugq6sRnVvotCxhCMSGY032g\"]"
+                //            }
+                //        }
+                //    }
+                //};
+
                 delete ls.is_loading ;
                 // run callbacks waiting for ls and site_info to be ready. see ls_bind
                 while (ls_cbs.length) {
@@ -1565,9 +1614,9 @@ angular.module('MoneyNetworkW2')
                                                 //    "pubkey2": "An7QFpYPqg7c88OnNeKi6+HMde+zhBDT9XyytAZuZmNX",
                                                 //    "offline": [1508407373616]
                                                 //};
-                                                if (!ls.transactions) ls.transactions = {} ;
+                                                if (!ls.w_sessions) ls.w_sessions = {} ;
                                                 auth_address = ZeroFrame.site_info.auth_address ;
-                                                if (!ls.transactions[auth_address]) ls.transactions[auth_address] = {} ;
+                                                if (!ls.w_sessions[auth_address]) ls.w_sessions[auth_address] = {} ;
                                                 // cryptMessage encrypt session information
                                                 session_info = {
                                                     money_transactionid: status.money_transactionid,
@@ -1581,7 +1630,7 @@ angular.module('MoneyNetworkW2')
                                                     encrypt1.encrypt_json(session_info, [2], function(encrypted_session_info) {
                                                         var sha256 ;
                                                         sha256 = CryptoJS.SHA256(status.money_transactionid).toString();
-                                                        ls.transactions[auth_address][sha256] = encrypted_session_info ;
+                                                        ls.w_sessions[auth_address][sha256] = encrypted_session_info ;
                                                         ls_save() ;
                                                         step_6_publish() ;
                                                     }) ;
@@ -1903,10 +1952,10 @@ angular.module('MoneyNetworkW2')
                     encrypt1.encrypt_2(JSON.stringify(array), function(encrypted_info) {
                         var pgm = service + '.save_mn_session encrypt_2 callback 2: ' ;
                         var auth_address, info, prvkey, password ;
-                        if (!ls.sessions) ls.sessions = {} ;
+                        if (!ls.mn_sessions) ls.mn_sessions = {} ;
                         auth_address = ZeroFrame.site_info.auth_address ;
-                        if (!ls.sessions[auth_address]) ls.sessions[auth_address] = {} ;
-                        info = ls.sessions[auth_address] ; // sessions = MN sessions. One for each auth_address
+                        if (!ls.mn_sessions[auth_address]) ls.mn_sessions[auth_address] = {} ;
+                        info = ls.mn_sessions[auth_address] ; // sessions = MN sessions. One for each auth_address
                         info.this_pubkey = this_pubkey ; // W2 (clear text)
                         info.this_pubkey2 = this_pubkey2 ; // W2 (clear text)
                         info.other_pubkey = encrypt2.other_session_pubkey ; // MN (clear text)
@@ -2012,7 +2061,7 @@ angular.module('MoneyNetworkW2')
             function is_old_session (cb) {
                 var pgm = service + '.is_old_session: ' ;
                 var auth_address, info, encrypted_session_pwd1 ;
-                if (!ls.sessions) {
+                if (!ls.mn_sessions) {
                     console.log(pgm + 'no old sesions found in ls. ls = ' + JSON.stringify(ls)) ;
                     return cb() ;
                 } // no saved sessions
@@ -2025,14 +2074,14 @@ angular.module('MoneyNetworkW2')
                     return cb() ;
                 }
                 auth_address = ZeroFrame.site_info.auth_address ;
-                info = ls.sessions[auth_address] ;
+                info = ls.mn_sessions[auth_address] ;
                 if (!info) {
                     console.log(pgm + 'no old session was found for ' + auth_address) ;
                     return cb() ;
                 }
                 if (!info.encrypted_info) {
                     console.log(pgm + 'error in saved session for ' + auth_address + '. no encrypted_info. info = ' + JSON.stringify(info)) ;
-                    delete ls.sessions[auth_address] ;
+                    delete ls.mn_sessions[auth_address] ;
                     ls_save() ;
                     return cb() ;
                 }
@@ -2050,14 +2099,14 @@ angular.module('MoneyNetworkW2')
                         array = JSON.parse(decrypted_info) ; // [ session_pwd1, unlock_pwd2, this_session_filename, other_session_filename]
                         if (array.length != array_names.length) {
                             console.log(pgm + 'error in saved session for ' + auth_address + '. Expected encrypted_info array.length = ' + array_names.length + '. Found length = ' + array.length) ;
-                            delete ls.sessions[auth_address] ;
+                            delete ls.mn_sessions[auth_address] ;
                             ls_save() ;
                             return cb() ;
                         }
                         for (i=0; i<array_names.length ; i++) {
                             if (typeof array[i] != 'string') {
                                 console.log(pgm + 'error in saved session for ' + auth_address + '. Expected ' + array_names[i] + ' to be a string. array[' + i + '] = "' + JSON.stringify(array[i]) + '"') ;
-                                delete ls.sessions[auth_address] ;
+                                delete ls.mn_sessions[auth_address] ;
                                 ls_save() ;
                                 return cb() ;
                             }
