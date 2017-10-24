@@ -1215,7 +1215,7 @@ angular.module('MoneyNetworkW2')
                         console.log(pgm + 'ignoring incoming message ' + inner_path + '. session has been destroyed. reason = ' + encrypt2.destroyed) ;
                         return ;
                     }
-                    console.log(pgm + 'inner_path = ' + inner_path);
+                    console.log(pgm + 'processing inner_path = ' + inner_path + (encrypt2.debug ? ' with ' + encrypt2.debug : ''));
 
                     // check other_user_path. all messages for this session must come from same user directory
                     pos = inner_path.lastIndexOf('/') ;
