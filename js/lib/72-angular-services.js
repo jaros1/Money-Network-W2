@@ -1342,7 +1342,8 @@ angular.module('MoneyNetworkW2')
                                 // got a prepare money transactions request from MN. Return error message or json to be included in chat message for each money transaction
                                 (function() {
                                     var send_money, request_money, i, money_transaction, jsons, step_1_confirm,
-                                        step_2_open_wallet, step_3_get_new_address, step_4_close_wallet, step_n_more ;
+                                        step_2_open_wallet, step_3_check_balance, step_4_get_new_address,
+                                        step_5_close_wallet, step_6_done_ok ;
 
                                     // check permissions
                                     send_money = false ;
@@ -1350,8 +1351,8 @@ angular.module('MoneyNetworkW2')
                                     jsons = [] ;
                                     for (i=0 ; i<request.money_transactions.length ; i++) {
                                         money_transaction = request.money_transactions[i] ;
-                                        if (money_transaction.action == 'Send') send_money = true ;
-                                        if (money_transaction.action == 'Request') request_money = true ;
+                                        if (money_transaction.action == 'Send') send_money = send_money + money_transaction.amount ;
+                                        if (money_transaction.action == 'Request') request_money = request_money + money_transaction.amount ;
                                         jsons.push({}) ;
                                     }
                                     console.log(pgm + 'send_money = ' + send_money + ', request_money = ' + request_money) ;
@@ -1385,8 +1386,8 @@ angular.module('MoneyNetworkW2')
                                     //    - request money: address for send money operation
 
                                     // callback chain definitions
-                                    step_n_more = function () {
-                                        var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_n_more: ';
+                                    step_6_done_ok = function () {
+                                        var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_6_done_ok: ';
                                         console.log(pgm + 'jsons = ' + JSON.stringify(jsons)) ;
 
                                         // ready to send OK response with jsons to MN
@@ -1426,43 +1427,53 @@ angular.module('MoneyNetworkW2')
                                         //};
 
                                         send_response();
-                                    } ; // step_n_more
+                                    } ; // step_6_done_ok
 
-                                    // step 4: optional close wallet. only if wallet has been opened in step 2
-                                    step_4_close_wallet = function() {
-                                        if (request.close_wallet) btcService.close_wallet(function (res){ step_n_more() }) ;
-                                        else return step_n_more() ;
-                                    } ; // step_4_close_wallet
+                                    // step 5: optional close wallet. only if wallet has been opened in step 2
+                                    step_5_close_wallet = function() {
+                                        if (request.close_wallet) btcService.close_wallet(function (res){ step_6_done_ok() }) ;
+                                        else return step_6_done_ok() ;
+                                    } ; // step_5_close_wallet
 
-                                    // step 3: get new bitcoin address
+                                    // step 4: get new bitcoin address
                                     // - send money - get return address to be used in case of a partly failed money transaction (multiple money transactions)
                                     // - request money - address to be used in send money operation
-                                    step_3_get_new_address = function (i) {
-                                        var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_3_get_new_address: ';
+                                    step_4_get_new_address = function (i) {
+                                        var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_4_get_new_address: ';
                                         if (!i) i = 0 ;
                                         console.log(pgm + 'i = ' + i) ;
-                                        if (i >= request.money_transactions.length) return step_4_close_wallet() ;
+                                        if (i >= request.money_transactions.length) return step_5_close_wallet() ;
                                         btcService.get_new_address(function (error, address) {
                                             var money_transaction ;
                                             if (error) return send_response('Could not get a new bitcoin address. error = ' + error) ;
                                             money_transaction = request.money_transactions[i] ;
                                             if (money_transaction.action == 'Send') jsons[i].return_address = address ;
                                             else jsons[i].address = address ;
-                                            step_3_get_new_address(i+1) ;
+                                            step_4_get_new_address(i+1) ;
                                         }) ; // get_new_address
-                                    } ; // step_3_get_new_address
+                                    } ; // step_4_get_new_address
+
+                                    // step 3: optional check balance. Only for send money operations
+                                    step_3_check_balance = function() {
+                                        var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_3_check_balance: ';
+                                        if (!send_money) return step_4_get_new_address() ;
+                                        console.log(pgm + 'sending money. check wallet balance. send_money = ' + send_money + ', balance: ', wallet_info.confirmed_balance + ', unconfirmed Balance: ', wallet_info.unconfirmed_balance);
+                                        if (wallet_info.confirmed_balance >= send_money) return step_4_get_new_address() ; // OK
+                                        if (wallet_info.unconfirmed_balance < send_money) send_response('insufficient balance for send money operation(s)') ;
+                                        else send_response('insufficient balance confirmed balance for send money operation(s)') ;
+                                    }; // step_3_check_balance
 
                                     // step 2: optional open wallet. wallet must be open before get new address request
                                     step_2_open_wallet = function() {
                                         if (wallet_info.status == 'Open') {
                                             // bitcoin wallet is already open. never close an already open wallet
                                             request.close_wallet = false ;
-                                            // check balance. only for send money requests
-                                            if (!send_money) return step_3_get_new_address() ;
+                                            // refresh balance. only for send money requests
+                                            if (!send_money) return step_3_check_balance() ;
                                             // sending money. refresh balance.
                                             btcService.get_balance(function (error) {
                                                 if (error) console.log(pgm + 'warning. sending money and get_balance request failed with error = ' + error);
-                                                return step_3_get_new_address();
+                                                step_3_check_balance();
                                             }) ;
                                         }
                                         else {
@@ -1470,7 +1481,7 @@ angular.module('MoneyNetworkW2')
                                             btcService.init_wallet(save_wallet_id, save_wallet_password, function (error) {
                                                 if (error && (wallet_info.status != 'Open')) return send_response('Open wallet request failed with error = ' + error);
                                                 if (error && send_money) console.log(pgm + 'warning. sending money and get_balance request failed with error = ' + error);
-                                                step_3_get_new_address();
+                                                step_3_check_balance();
                                             }) ;
                                         }
                                     } ; // step_2_open_wallet
@@ -1690,8 +1701,8 @@ angular.module('MoneyNetworkW2')
                                 // MN session has received chat msg with money transaction(s) from contact and user has clicked Approve.
                                 // Check if incoming money transaction is OK
                                 (function() {
-                                    var send_money, request_money, i, money_transaction, step_1_confirm,
-                                        step_2_open_wallet, step_3_more ;
+                                    var send_money, request_money, jsons, i, money_transaction, step_1_confirm,
+                                        step_2_open_wallet, step_3_check_balance, step_4_get_new_address, step_5_more ;
 
                                     console.log(pgm + 'request = ' + JSON.stringify(request)) ;
                                     //request = {
@@ -1711,22 +1722,141 @@ angular.module('MoneyNetworkW2')
                                     //    "money_transactionid": "3R1R46sRFEal8zWx0wYvYyo6VDLJmpFzVNsyIOhglPV4bcUgXqUDLOWrOkZA"
                                     //};
 
-                                    // check permissions (reverse action from incoming money transaction)
+                                    // check permissions. reverse action from incoming money transaction (send <=> request)
                                     send_money = false ;
                                     request_money = false ;
+                                    jsons = [] ;
                                     for (i=0 ; i<request.money_transactions.length ; i++) {
                                         money_transaction = request.money_transactions[i] ;
-                                        if (money_transaction.action == 'Send') request_money = true ; // reverse action
-                                        if (money_transaction.action == 'Request') send_money = true ; // reverse action
+                                        if (!money_transaction.json) return send_response('Invalid money transaction without json') ;
+                                        if (money_transaction.action == 'Send') {
+                                            if (!money_transaction.json.return_address) return send_response('Invalid send money transaction without a return address') ;
+                                            request_money = request_money + money_transaction.amount ;
+                                        } // reverse action
+                                        if (money_transaction.action == 'Request') {
+                                            if (!money_transaction.json.address) return send_response('Invalid request money transaction without an address') ;
+                                            send_money = send_money + money_transaction.amount ;
+                                        } // reverse action
+                                        jsons.push({}) ;
                                     }
                                     console.log(pgm + 'send_money = ' + send_money + ', request_money = ' + request_money) ;
                                     if (send_money && (!status.permissions || !status.permissions.send_money)) return send_response('send_money operation is not authorized');
                                     if (request_money && (!status.permissions || !status.permissions.receive_money)) return send_response('receive_money operation is not authorized');
 
-                                    step_3_more = function() {
-                                        return send_response('check_mt: step_3_more is not yet implemented') ;
+                                    step_5_more = function() {
+                                        var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_5_more: ';
+                                        var error, i, money_transaction ;
+                                        console.log(pgm + 'request = ' + JSON.stringify(request)) ;
+                                        //request = {
+                                        //    "msgtype": "check_mt",
+                                        //    "contact": {
+                                        //        "alias": "1MirY1KnJK3MK",
+                                        //        "cert_user_id": "1MirY1KnJK3MK@moneynetwork.bit",
+                                        //        "auth_address": "1MirY1KnJK3MKzgZiyZZM8FkyzHRJgmMh8"
+                                        //    },
+                                        //    "open_wallet": true,
+                                        //    "money_transactions": [{
+                                        //        "action": "Send",
+                                        //        "code": "tBTC",
+                                        //        "amount": 0.0001,
+                                        //        "json": {"return_address": "2Mxufcnyzo8GvTGHqYfzS862ZqYaFYjxo5V"}
+                                        //    }],
+                                        //    "money_transactionid": "3R1R46sRFEal8zWx0wYvYyo6VDLJmpFzVNsyIOhglPV4bcUgXqUDLOWrOkZA"
+                                        //};
+                                        console.log(pgm + 'jsons = ' + JSON.stringify(jsons)) ;
+                                        //jsons = [{"address": "2MtDgneBKY5AaiJBEFWQFnACu9kuNqLCpNG"}];
 
-                                    } ; // step_3_more
+                                        // control. there should be an address and a return_address for each money transaction
+                                        // address: for send money operation
+                                        // return_address: used in case of partial failed money transactions (multiple money transaction in a chat message)
+                                        if (jsons.length != request.money_transactions.length) {
+                                            error = 'System error in check_mt processing. Expected request.money_transactions.length = ' + request.money_transactions.length + '. found jsons.length = ' + jsons.length ;
+                                            console.log(pgm + error) ;
+                                            return send_response(error) ;
+                                        }
+                                        for (i=0 ; i<request.money_transactions.length ; i++) {
+                                            money_transaction = request.money_transactions[i] ;
+                                            if (money_transaction.action == 'Send') {
+                                                // received a send money transaction from other contact
+                                                // expects a return_address in request and expects an address in jsons
+                                                if (!money_transaction.json || !money_transaction.json.return_address || !jsons[i].address) {
+                                                    error = 'System error in check_mt processing. Expected addresses were not found. Action = ' + money_transaction.action + ', money_transaction.json = ' + JSON.stringify(money_transaction.json) + ', jsons[' + i + '] = ' + JSON.stringify(jsons[i]);
+                                                    console.log(pgm + error) ;
+                                                    return send_response(error) ;
+                                                }
+                                            }
+                                            else {
+                                                // received a request money transaction from other contact
+                                                // expects an address in request and a return_address in jsons
+                                                if (!money_transaction.json || !money_transaction.json.address || !jsons[i].return_address) {
+                                                    error = 'System error in check_mt processing. Expected addresses were not found. Action = ' + money_transaction.action + ', money_transaction.json = ' + JSON.stringify(money_transaction.json) + ', jsons[' + i + '] = ' + JSON.stringify(jsons[i]);
+                                                    console.log(pgm + error) ;
+                                                    return send_response(error) ;
+                                                }
+                                            }
+                                        }
+
+                                        // ready to send OK response to MN
+                                        // remember transactions and wait for start_mt request (all validations OK and ready to execute money transactions)
+                                        new_money_transactions[request.money_transactionid] = {
+                                            timestamp: new Date().getTime(),
+                                            request: request,
+                                            jsons: jsons
+                                        } ;
+                                        console.log(pgm + 'new_money_transactions = ' + JSON.stringify(new_money_transactions));
+                                        //new_money_transactions = {
+                                        //    "3R1R46sRFEal8zWx0wYvYyo6VDLJmpFzVNsyIOhglPV4bcUgXqUDLOWrOkZA": {
+                                        //        "timestamp": 1508858239692,
+                                        //        "request": {
+                                        //            "msgtype": "check_mt",
+                                        //            "contact": {
+                                        //                "alias": "1MirY1KnJK3MK",
+                                        //                "cert_user_id": "1MirY1KnJK3MK@moneynetwork.bit",
+                                        //                "auth_address": "1MirY1KnJK3MKzgZiyZZM8FkyzHRJgmMh8"
+                                        //            },
+                                        //            "open_wallet": true,
+                                        //            "money_transactions": [{
+                                        //                "action": "Send",
+                                        //                "code": "tBTC",
+                                        //                "amount": 0.0001,
+                                        //                "json": {"return_address": "2Mxufcnyzo8GvTGHqYfzS862ZqYaFYjxo5V"}
+                                        //            }],
+                                        //            "money_transactionid": "3R1R46sRFEal8zWx0wYvYyo6VDLJmpFzVNsyIOhglPV4bcUgXqUDLOWrOkZA"
+                                        //        },
+                                        //        "jsons": [{"address": "2Myvri78Uh6aTXsVT9u3qELwqbuQ5sU2WCF"}]
+                                        //    }
+                                        //};
+                                        send_response(null) ;
+
+                                    } ; // step_5_more
+
+                                    // step 4: get new bitcoin address
+                                    // - send money - address to be used in send money operation (return_address is already in request)
+                                    // - request money - return address to be used in case of a partly failed money transaction (address is already in request)
+                                    step_4_get_new_address = function (i) {
+                                        var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_4_get_new_address: ';
+                                        if (!i) i = 0 ;
+                                        console.log(pgm + 'i = ' + i) ;
+                                        if (i >= request.money_transactions.length) return step_5_more() ;
+                                        btcService.get_new_address(function (error, address) {
+                                            var money_transaction ;
+                                            if (error) return send_response('Could not get a new bitcoin address. error = ' + error) ;
+                                            money_transaction = request.money_transactions[i] ;
+                                            if (money_transaction.action == 'Send') jsons[i].address = address ; // ingoing send money: other wallet must send test bitcoins to this address
+                                            else jsons[i].return_address = address ; // ingoing request money. address is already in request. other wallet must use return_address in case of a failed money transfer operation
+                                            step_4_get_new_address(i+1) ;
+                                        }) ; // get_new_address
+                                    } ; // step_4_get_new_address
+
+                                    // step 3: optional check balance. Only for request money operations
+                                    step_3_check_balance = function() {
+                                        var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_3_check_balance: ';
+                                        if (!send_money) return step_4_get_new_address() ;
+                                        console.log(pgm + 'sending money. check wallet balance. send_money = ' + send_money + ', balance: ', wallet_info.confirmed_balance + ', unconfirmed Balance: ', wallet_info.unconfirmed_balance);
+                                        if (wallet_info.confirmed_balance >= send_money) return step_4_get_new_address() ; // OK
+                                        if (wallet_info.unconfirmed_balance < send_money) send_response('insufficient balance for money request(s)') ;
+                                        else send_response('insufficient balance confirmed balance for money request(s)') ;
+                                    }; // step_3_check_balance
 
                                     // step 2: optional open wallet. wallet must be open before processing incoming money transaction(s)
                                     step_2_open_wallet = function() {
@@ -1735,19 +1865,19 @@ angular.module('MoneyNetworkW2')
                                             // bitcoin wallet is already open. never close an already open wallet
                                             request.close_wallet = false ;
                                             // check balance. only incoming request money transactions
-                                            if (!send_money) return step_3_more() ;
+                                            if (!send_money) return step_3_check_balance() ;
                                             // sending money. refresh balance.
                                             btcService.get_balance(function (error) {
-                                                if (error) console.log(pgm + 'warning. sending money and get_balance request failed with error = ' + error);
-                                                return step_3_more();
+                                                if (error) console.log(pgm + 'warning. money request and get_balance request failed with error = ' + error);
+                                                return step_3_check_balance();
                                             }) ;
                                         }
                                         else {
                                             // open test bitcoin wallet (also get_balance request)
                                             btcService.init_wallet(save_wallet_id, save_wallet_password, function (error) {
                                                 if (error && (wallet_info.status != 'Open')) return send_response('Open wallet request failed with error = ' + error);
-                                                if (error && send_money) console.log(pgm + 'warning. sending money and get_balance request failed with error = ' + error);
-                                                step_3_more();
+                                                if (error && send_money) console.log(pgm + 'warning. money request and get_balance request failed with error = ' + error);
+                                                step_3_check_balance();
                                             }) ;
                                         }
                                     }; // step_2_open_wallet
