@@ -1335,9 +1335,7 @@ angular.module('MoneyNetworkW2')
                                     }) ;
                                     return ;
                                 }
-
-                                // wallet_info.status = 'Open' ;
-
+                                // end get_balance
                             }
                             else if (request.msgtype == 'prepare_mt_request') {
                                 // step 1 in send money transaction(s) to contact
@@ -1481,16 +1479,15 @@ angular.module('MoneyNetworkW2')
                                     step_1_confirm = function () {
                                         var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_1_confirm: ';
                                         var request2 ;
-                                        console.log(pgm + 'todo: check open/close wallet permissions');
                                         if (wallet_info.status != 'Open') {
                                             // wallet not open (not created, not logged in etc)
-                                            if (!status.permissions.open_wallet) return send_response('Cannot start money transaction. Open wallet operation is not authorized');
-                                            if (!request.open_wallet) return send_response('Cannot start money transaction. Wallet is not open and open_wallet was not requested');
-                                            else if (!save_wallet_id || !save_wallet_password) return send_response('Cannot start money transaction. Wallet is not open and no wallet login was found');
+                                            if (!status.permissions.open_wallet) return send_response('Cannot send money transaction. Open wallet operation is not authorized');
+                                            if (!request.open_wallet) return send_response('Cannot send money transaction. Wallet is not open and open_wallet was not requested');
+                                            else if (!save_wallet_id || !save_wallet_password) return send_response('Cannot send money transaction. Wallet is not open and no wallet login was found');
                                         }
-                                        if (request.close_wallet && !status.permissions.close_wallet) return send_response('Cannot start money transaction. Close wallet operation was requested but is not authorized');
+                                        if (request.close_wallet && !status.permissions.close_wallet) return send_response('Cannot send money transaction. Close wallet operation was requested but is not authorized');
                                         console.log(pgm + 'todo: add transactions details in confirm dialog') ;
-                                        if (!status.permissions && !status.permissions.confirm) return step_2_open_wallet() ;
+                                        if (!status.permissions.confirm) return step_2_open_wallet() ;
                                         // send confirm notification to MN
                                         request2 = {
                                             msgtype: 'notification',
@@ -1512,11 +1509,12 @@ angular.module('MoneyNetworkW2')
                                             } ;
                                             setTimeout(confirm_timeout_fnk, 12000) ;
                                             // todo: 1) add transaction details to confirm text
-                                            message = 'Send .... money transaction to ' + request.contact.alias + '?' ;
+                                            // todo: 2) add plural to message: transaction(s)
+                                            message = 'Send todo: more text money transaction(s) to ' + request.contact.alias + '?' ;
                                             ZeroFrame.cmd('wrapperConfirm', [message, 'OK'], function (confirm) {
                                                 if (confirm_status.done) return ; // confirm dialog timeout
                                                 confirm_status.done = true ;
-                                                if (!confirm) return send_response('money transaction was rejected');
+                                                if (!confirm) return send_response('money transaction(s) was/were rejected');
                                                 // Money transaction was confirmed. continue
                                                 step_2_open_wallet() ;
                                             }) ; // wrapperConfirm callback 2
@@ -1530,6 +1528,7 @@ angular.module('MoneyNetworkW2')
                                 })() ;
                                 // wait for callback chain to finish
                                 return ;
+                                // end prepare_mt_request
                             }
                             else if (request.msgtype == 'send_mt') {
                                 // step 2 in send money transaction(s) to contact
@@ -1684,6 +1683,127 @@ angular.module('MoneyNetworkW2')
                                     }
                                 })() ;
                                 if ((response.msgtype == 'response') && !response.error) return ; // stop. OK send_mt response has already been sent
+                                // end send_mt
+                            }
+                            else if (request.msgtype == 'check_mt') {
+                                // step 3 in send money transaction(s) to contact
+                                // MN session has received chat msg with money transaction(s) from contact and user has clicked Approve.
+                                // Check if incoming money transaction is OK
+                                (function() {
+                                    var send_money, request_money, i, money_transaction, step_1_confirm,
+                                        step_2_open_wallet, step_3_more ;
+
+                                    console.log(pgm + 'request = ' + JSON.stringify(request)) ;
+                                    //request = {
+                                    //    "msgtype": "check_mt",
+                                    //    "contact": {
+                                    //        "alias": "1MirY1KnJK3MK",
+                                    //        "cert_user_id": "1MirY1KnJK3MK@moneynetwork.bit",
+                                    //        "auth_address": "1MirY1KnJK3MKzgZiyZZM8FkyzHRJgmMh8"
+                                    //    },
+                                    //    "open_wallet": true,
+                                    //    "money_transactions": [{
+                                    //        "action": "Send",
+                                    //        "code": "tBTC",
+                                    //        "amount": 0.0001,
+                                    //        "json": {"return_address": "2Mxufcnyzo8GvTGHqYfzS862ZqYaFYjxo5V"}
+                                    //    }],
+                                    //    "money_transactionid": "3R1R46sRFEal8zWx0wYvYyo6VDLJmpFzVNsyIOhglPV4bcUgXqUDLOWrOkZA"
+                                    //};
+
+                                    // check permissions (reverse action from incoming money transaction)
+                                    send_money = false ;
+                                    request_money = false ;
+                                    for (i=0 ; i<request.money_transactions.length ; i++) {
+                                        money_transaction = request.money_transactions[i] ;
+                                        if (money_transaction.action == 'Send') request_money = true ; // reverse action
+                                        if (money_transaction.action == 'Request') send_money = true ; // reverse action
+                                    }
+                                    console.log(pgm + 'send_money = ' + send_money + ', request_money = ' + request_money) ;
+                                    if (send_money && (!status.permissions || !status.permissions.send_money)) return send_response('send_money operation is not authorized');
+                                    if (request_money && (!status.permissions || !status.permissions.receive_money)) return send_response('receive_money operation is not authorized');
+
+                                    step_3_more = function() {
+                                        return send_response('check_mt: step_3_more is not yet implemented') ;
+
+                                    } ; // step_3_more
+
+                                    // step 2: optional open wallet. wallet must be open before processing incoming money transaction(s)
+                                    step_2_open_wallet = function() {
+                                        var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_2_open_wallet: ';
+                                        if (wallet_info.status == 'Open') {
+                                            // bitcoin wallet is already open. never close an already open wallet
+                                            request.close_wallet = false ;
+                                            // check balance. only incoming request money transactions
+                                            if (!send_money) return step_3_more() ;
+                                            // sending money. refresh balance.
+                                            btcService.get_balance(function (error) {
+                                                if (error) console.log(pgm + 'warning. sending money and get_balance request failed with error = ' + error);
+                                                return step_3_more();
+                                            }) ;
+                                        }
+                                        else {
+                                            // open test bitcoin wallet (also get_balance request)
+                                            btcService.init_wallet(save_wallet_id, save_wallet_password, function (error) {
+                                                if (error && (wallet_info.status != 'Open')) return send_response('Open wallet request failed with error = ' + error);
+                                                if (error && send_money) console.log(pgm + 'warning. sending money and get_balance request failed with error = ' + error);
+                                                step_3_more();
+                                            }) ;
+                                        }
+                                    }; // step_2_open_wallet
+
+                                    // step 1: optional confirm money transaction (see permissions)
+                                    step_1_confirm = function () {
+                                        var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_1_confirm: ';
+                                        var request2 ;
+                                        if (wallet_info.status != 'Open') {
+                                            // wallet not open (not created, not logged in etc)
+                                            if (!status.permissions.open_wallet) return send_response('Cannot receive money transaction. Open wallet operation is not authorized');
+                                            if (!request.open_wallet) return send_response('Cannot receive money transaction. Wallet is not open and open_wallet was not requested');
+                                            else if (!save_wallet_id || !save_wallet_password) return send_response('Cannot receive money transaction. Wallet is not open and no wallet login was found');
+                                        }
+                                        if (request.close_wallet && !status.permissions.close_wallet) return send_response('Cannot receive money transaction. Close wallet operation was requested but is not authorized');
+                                        console.log(pgm + 'todo: add transactions details in confirm dialog') ;
+                                        if (!status.permissions.confirm) return step_2_open_wallet() ;
+                                        // send confirm notification to MN
+                                        request2 = {
+                                            msgtype: 'notification',
+                                            type: 'info',
+                                            message: 'Please confirm money transaction<br>todo: more text',
+                                            timeout: 10000
+                                        } ;
+                                        console.log(pgm + 'sending request2 = ' + JSON.stringify(request2)) ;
+                                        encrypt2.send_message(request2, {response: false}, function (response) {
+                                            var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_1_confirm send_message callback 1: ';
+                                            var message, confirm_status, confirm_timeout_fnk ;
+                                            if (response && response.error) return send_response('Confirm transaction failed. error = ' + response.error) ;
+                                            // open confirm dialog. handle confirm timeout. wait max 2+10 seconds for confirmation
+                                            confirm_status = { done: false } ;
+                                            confirm_timeout_fnk = function () {
+                                                if (confirm_status.done) return ; // confirm dialog done
+                                                confirm_status.done = true ;
+                                                send_response('Confirm transaction timeout')
+                                            } ;
+                                            setTimeout(confirm_timeout_fnk, 12000) ;
+                                            // todo: 1) add transaction details to confirm text
+                                            // todo: 2) add plural to message: transaction(s)
+                                            message = 'Receive todo: more text money transaction(s) from ' + request.contact.alias + '?' ;
+                                            ZeroFrame.cmd('wrapperConfirm', [message, 'OK'], function (confirm) {
+                                                if (confirm_status.done) return ; // confirm dialog timeout
+                                                confirm_status.done = true ;
+                                                if (!confirm) return send_response('money transaction(s) was rejected');
+                                                // Money transaction was confirmed. continue
+                                                step_2_open_wallet() ;
+                                            }) ; // wrapperConfirm callback 2
+                                        }) ; // send_message callback 1
+
+                                    } ; // step_1_confirm
+
+                                    // start callback chain
+                                    step_1_confirm() ;
+                                })() ;
+                                return ;
+                                // end check_mt
                             }
                             else response.error = 'Unknown msgtype ' + request.msgtype ;
                             console.log(pgm + 'response = '  + JSON.stringify(response)) ;
