@@ -265,41 +265,7 @@ angular.module('MoneyNetworkW2')
             function ls_get () { return ls }
             function ls_save() {
                 var pgm = service + '.ls_save: ' ;
-                console.log(pgm + 'ls = ' + JSON.stringify(ls)) ;
-                //ls = {
-                //    "save_login": {
-                //        "18DbeZgtVCcLghmtzvg4Uv8uRQAwR8wnDQ": {
-                //            "choice": "1",
-                //            "permissions": {
-                //                "encryption": 2,
-                //                "message": "[\"b/3l7U8pIt5bnJTc4bOohwLKACAMY5dg42XKaK4zcAF0tc23si69C6RAIzqksjNwxA0UqQAgtS+js0qGCx2oxSLutHZXyKcUrPv7tQCCh8PO8B4ViUSaKHvkeXvPFy6alSxpwUWc1j2cbhcc83qX9DsFyt3sFhnxd/TIzcr5TeUUC+jjVKeBmBWAAV22i5/Ngdv5eslD7Ha/V8+4UYFKZo7KZOjGRw==\",\"osQiwYyvmGU4jBMHpjvUDw==\",\"B+hy1k4kGDkMPi6Jw8W0xJw3DGInfXFFxZEWlgyCmi5/0nGlPvcb/wdWEapZ7geYKiz7MHm2Fl/QEmVKqOlq01jQMFJRA1VMzBWg15CEO8ZKQk+E4oaLim6XaSUdF45A+qjH7ItJNjVay5G/TTZIEHZVcs7bKNuvuHXKZ2qckbJz3yfXUiu7dQSakqUJYD6ppxcoNx0jgBozog0Vyff/AA==\"]"
-                //            },
-                //            "login": {
-                //                "encryption": 2,
-                //                "message": "[\"6n1bj8fVcDDsfieevqFxwALKACCJMCifjojRvLpxnnAzFlqdbRngr8xGeyYCQqwvZdMNWAAgj8QseOIdrp+xtb+9Szb8L99olhI20qQxGfSVTX4aPWMzWD4cQ2C6AeKHxGFaGirO48zWp6gfqIb0RrVxR0jMHL7nA/tlBjDgFwdu1gp9kVrcdIsDd18btRgiUNzULgd1+mzIRnhA9coKH+EJc2ss1g==\",\"DRbUxJjtaMJSSaK1jNpQ+Q==\",\"94+a1HgliFNJfYKpY7woNO1YHBxWM/C371cDV7IYETnsoToH0HUl5bWvosjW5vY9evMQTwLlTLPfgdTFnuaNZLRqNCzaT38xJhC8lHTsNxqIVWOU7LEXDfG17d/BINVEKf23bpjeOG7YC6SEJcmaOQ==\"]"
-                //            }
-                //        }
-                //    },
-                //    "sessions": {
-                //        "18DbeZgtVCcLghmtzvg4Uv8uRQAwR8wnDQ": {
-                //            "this_pubkey": "-----BEGIN PUBLIC KEY-----\nMIGeMA0GCSqGSIb3DQEBAQUAA4GMADCBiAKBgGIQnT7AZjmmKJswjbDYeSv4V3D6\n3oNGaMT24VFTwyksQAzV3L+ghC5jo/UjOshRM7QlNw+W9eTV5hNgzvQqxkj4BAiS\nEw81FfKxXy9+oPubTNXC8uaxaMr7W7EG5Edfj51PENyB58fMdIoy4D7QOB2sB7LV\nvYOTzldDfyAdC3PLAgMBAAE=\n-----END PUBLIC KEY-----",
-                //            "this_pubkey2": "Ahn94vCUvT+S/nefej83M02n/hP8Jvqc8KbxMtdSsT8R",
-                //            "other_pubkey": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0pMuMJyynH1BmhMJ6vvd\nQZplIBgiiOQSqwu2SpYKICm+P1gGNHnICQic/Nuqi9t93rxJLfWCsl0+lCtoJLen\nf78xz4XzEcGPBeBFn2TbQqPO9loylNlaOgiqDG5qcSc9n7yEF0xmpReDGATwzECi\nJrpZBImwhUMO48iS08b4IfQaMsbnUVY8hdUeJiQ831kMkNQLtxWaeRiyn8cTbKQ6\nLXCDG7GDaFN6t+x3cv/xBX06+ykuYQ0gNIBySiIz69RYzhvOkqOQggLWPF+NMW1J\nO6VRqvX7Sybwm51v3kGGKWeX4znvGY+GwVCpwiH+b2hbGZHIqFp9ogimGVE0WPgu\nnwIDAQAB\n-----END PUBLIC KEY-----",
-                //            "other_pubkey2": "A4RQ77ia8qK1b3FW/ERL2HdW33jwCyKqxRwKQLzMw/yu",
-                //            "encrypted_info": "[\"sn53LVGGihpV2d8drGWuwALKACC0v1nnRX3J/7RndNzgY0mf1Iscvh4Qu1sbYvA9a2hTJwAgDznVN4TeSgnY0b0St3ONhVcqTB14IZBT8nEauiG/UrEkZKPIY602dAmztkrnE5TlVhKp5i9+1MqZveQ+tzl1G4HI//mXOPF/xA583Z1IF/ZFbZnygHP8w1nsjmGKsTqzb/zHjL20m42fXyNA1lGx1Q==\",\"2GyYG+cI/1xKV23IthSMCg==\",\"he0SPrDzG0iBh+Vf3xiuxtKejb3Ennjw0yRpD5XfQYlnUE9csHfcd9LzhwPJabnvedkb/L1DahNE9aH21ovhCMzS4gQlsv5WkTouu8ONt05ZOEk8hjnu8hFtX80WGRcy\"]",
-                //            "prvkey": "U2FsdGVkX18dRxJbzKepCZLCm1y+Vb7BX6ty/NxLYRiYGVuu4q9TU7csFcu6PhoGr9IFGpH8CpIc24uqEOWQz3TpLqen6gTP7tCMHhfpyariODvHR5HAuOQeNVZHCXRwello6A9pmaq2iRXWmOXu53veYejV9dsqPlEGGBOxPWauiCCJDpnX7LCOKv4sep8InhlxeJvIxJncRugH+F6ZvNSNx6JCFHFmnqm7+nAbtbjja2FvCQ5ZhinC4PCS/pVJQsuEKRqek3IEpHO2eE+Hz0AKezDiuKiG3ifIaXdp9d5E99JdkABDQRZrYJtotukLOKBrNCPaVehRFVP4Z8LornSmot+01uKYOmtYwvoBsAHD3yPA4YF+N+8L7VJxA79lHXbXPIPV2wQZVs0Y00r6Q9upiU20nKopcRT84hcbv1BLQ0YE1gk7Ojx1Rjm/dEEgAGrKZJBI+JJjqgYCjxR7H3BQh2N3y8jY5xXWoH+wvbqANqI1ZmLXBOgzeE6wnBM+8O23ShfRw/v9W4dFdEFY4lIaH7I7hI6lzrWcfHh9AW19ntokmSM5C88Hg/BF20vvXLZgQLV+fV0IrlN0goRKDRpvL/yb4CR4VcK581bEV1iQZhMcRAubaYB8WFkk245ALPzngEyNJK4MMdgOMbbBkCi404l+X1Z1IZ6nusC8EAXeqYuTZqh2qvUTbFe+JFcZCMjCqkIvAKX9H0gfRLKhTajDxI2llKhJ0HMQS/VFcwZzsSH6gVO/N+yNQu5zBQzl9Qh3+F9EatZgVYuc1gQHObR8/lbJieTBcsF4PCP1WBDM/KN6RTOH0TKzZD/x8cDjnVDlLtNy6/hFPMmft8nBYn10kaNPg5Ho0lWljOBFYDcWWsNpvB4AHDArJ4UsiS0E9rSramA0+xgTO7QVkNokBuLge9ihJ2Rop55GCmIt3Y8NY7fKiagy5WFZNtiCtHCQc5MJO12Jvqg76lq2rlptzXlzhtpgVJhvZvKfu6RQFDQn4gNnmxG4penVBU5y2N69612HFi2BTB5RICkN+6tjS07lf2Ets+f7nFTqN+xJ4rV4bKO3mNkOQKoTn3a0rRHO7GefLqnomRufaCrteISbGIy7KIXJWR4B7xSDQC1skMO063YkCrJu7NpTlzThJa0jwM2peMMpWCDFx+YQjU+6qQak9mdLGA4tZcvtPz8RFyEGKJ1jlEv+cRyEYOBeoq3w",
-                //            "sessionid": "U2FsdGVkX1/eobzTw2IF55TPF1Wy21wSqyYN6Jlx7T3iSmiUZP23r93gbcq8LvgyF+VyzafV331MDXkOfhqo4vPS2vWzCkGex6I4pU1DXfo="
-                //        }
-                //    },
-                //    "transactions": {
-                //        "18DbeZgtVCcLghmtzvg4Uv8uRQAwR8wnDQ": {
-                //            "1a85fd6465e75f61656c08ccc2c21b6feaa09b41fb25afe20dd8677da751f590": {
-                //                "encryption": 2,
-                //                "message": "[\"7aKr3+VWui7XRWnVgddu9wLKACDrXUVe0cv7Y6z07vmbyBV01855YoJEfvYioTX4mM1YNwAgssK7M0FR/JP9ybH6KOJVq4sIPiNlTJQzIzqan5aKL1besed7FLoVIxkhs/zNGVxQp1YRFR+gllB9dnQPSQGgSXduX2IATj2pGzy6PoxAfPBhciDdyrv+fv1ARwFMhcMm9J2/wBFrQAH7G3ITp38/QA==\",\"ntFOD3S/czU4CQ4tp5lXBw==\",\"xQmB2Uy9Cea6Cxbt2wZgNzpeiP7ZdANOdF0nWsHY+g3Bv3SP/8r6X8LJ07ybhmM10at6HfEJhonzYJxZOkItTYF+HH49fUwjbAmUxhU301GE+h1V9cqrro8aqfgjvA9WjIIl02uXfxoAOH8F5ZOKAkoABaRoOvSj+8ZlVeQeNW9joFuA3hyNP3LqbT5pJCrWfSuVd5CxqkiRN6Za3fxIhnXQvC6FXMFe5gv2yX6bL3EfbliImh+F/n6C6BwA5mbNAgYo4QEK3BevFbqB4DQdVwFb0CymOIscqDOOmBKEhhJQtXoGBqvu7R5zTe/FiJuCEuuHoDUUXaQYcwvBgVHxCawTGwtcKdUQkYKqYXAwPK4B3sAbNU0qlhGCDkrn7PgwOL0otht2EWP4fmX6v1QWAEJgboowpsExk5ISB9OixUw5C7dE1nMtKzUDHAHPRwCheIjlPYSAKzI7/2/+XGzpgk1TjIQE3l3OimA1+pt4WmOFjEOj4cTebqEg5vjoUCI+IY/eslXD3dxhIzJWys4dn7FDLPzWQV7D3iaYX/6m3YY+iDYeZUXr2go3aETu69Z2nFcicjUk6j2OrWo939T7uPO9V4j9Tvg1dioujYRPob6Li2WjpD1HwJVm4fAQUYkE9c5Btd5VkN0OwivW1hoQVHZb6B9uRFtpf4UQjXVgfg4c2huerJiMkG5fYfiLK6pn1QUlBfAFHdRrZZdis7jvC2fYXyK0TPqV7nnuejfuLvqWHsbu6AlhNIIjesG4pz1yU/gJmazKzbiL47AE5FEjsukuuvnFcwkVdivc9VRiBPci1nJe0IFhKgmsuRHoGv1Su67tP3VG7jbazRTfI6IAqO5ge7+q1nRLh4tvqw+7Q1z6TqATxfKQWfdVnUz9c8o/mv8P5uYE9J0V1OK9IFgu5n8dF2+nI23Oa81lUji5Ig5+3VZ38MeSRVL/veGHRNdHmGKKRCmtQDLqX6bEFfWONGZlPd0IaTyIcq9zPnjA7qQxwSQKeFYrMBHk5l4g6O+NGklJdsNisCGrkgMQruqxmpxyo0IsLglyGq4lMW+VJ4t9oJrl1T2KRgFIqmUYVQVQs/4FEJyR9hsj6m6rTjPQDvT0iBvJd53cxnv/5/ugS9nPlO0Dfv5GzI6rjBQFFAwEkwklGEvIWcYkzDIVIGrRBLNbYuZK8cZh7XwPIiFejFEMm/wpbO+jYOLrKbIzh5OAeUc0YIJQk4zWILYWkOySyXt2dPn6Z1lkNA562Hfoj1k9/inDYT4HL+SrvQCgAmBgDT8qRpdDVo1paFgoQSWnXjMpn2KbjNPPF5tpZmb8HsPBHXAQ6a/mcWGjaDXLtLPzN3USDFwvJ1zQMd+med/PWmaSc4maG2UjLafj4AXY+ugq6sRnVvotCxhCMSGY032g\"]"
-                //            }
-                //        }
-                //    }
-                //};
+                // console.log(pgm + 'ls = ' + JSON.stringify(ls)) ;
                 ZeroFrame.cmd("wrapperSetLocalStorage", [ls], function () {}) ;
             } // ls_save
 
@@ -1544,155 +1510,157 @@ angular.module('MoneyNetworkW2')
                             else if (request.msgtype == 'send_mt') {
                                 // step 2 in send money transaction(s) to contact
                                 // MN session has just sent chat msg with money transaction(s) to contact.
-                                (function(){
-                                    var now, elapsed ;
-                                    now = new Date().getTime() ;
-                                    if (!new_money_transactions[request.money_transactionid]) {
-                                        response.error = 'Unknown money transactionid' ;
-                                        return
-                                    }
-                                    // max 10 seconds between prepare_mt_response and send_mt requests
-                                    elapsed = now - new_money_transactions[request.money_transactionid].timestamp ;
-                                    if (elapsed > 10000) response.error = 'Timeout. Waited ' + Math.round(elapsed/1000) + ' seconds' ;
-                                    else {
-                                        // OK send_mt request
-                                        console.log(pgm + 'sending OK response to ingoing send_mt request') ;
-                                        send_response(null, function() {
-                                            var step_1_check_port, step_2_get_pubkey, step_3_get_pubkey2,
-                                                step_4_save_pubkeys_msg, step_5_save_in_ls, step_6_publish, session_info, i;
-                                            console.log(pgm + 'OK send_mt response was send to MN. continue with mt_send post processing') ;
+                                (function () {
+                                    var now, elapsed;
+                                    now = new Date().getTime();
+                                    if (!new_money_transactions[request.money_transactionid]) return send_response('Unknown money transactionid');
+                                    // max 60 seconds between prepare_mt_response and send_mt requests
+                                    elapsed = now - new_money_transactions[request.money_transactionid].timestamp;
+                                    if (elapsed > 60000) return send_response('Timeout. Waited ' + Math.round(elapsed / 1000) + ' seconds');
 
-                                            // capture details for new wallet to wallet money transaction
-                                            // must be temporary saved in localStorage until money transaction is processed
-                                            session_info = {
-                                                money_transactionid: request.money_transactionid,
-                                                master: true,
-                                                money_transactions: []
-                                            } ;
-                                            for (i=0 ; i<new_money_transactions[request.money_transactionid].request.money_transactions.length ; i++) {
-                                                session_info.money_transactions.push({
-                                                    action: new_money_transactions[request.money_transactionid].request.money_transactions[i].action,
-                                                    code: new_money_transactions[request.money_transactionid].request.money_transactions[i].code,
-                                                    amount: new_money_transactions[request.money_transactionid].request.money_transactions[i].amount,
-                                                    json: new_money_transactions[request.money_transactionid].response.jsons[i]
-                                                }) ;
-                                            }
+                                    // OK send_mt request
+                                    console.log(pgm + 'sending OK response to ingoing send_mt request');
+                                    send_response(null, function () {
+                                        var step_1_check_port, step_2_get_pubkey, step_3_get_pubkey2,
+                                            step_4_save_pubkeys_msg, step_5_save_in_ls, step_6_publish, session_info, i,
+                                            money_transactions ;
+                                        console.log(pgm + 'OK send_mt response was send to MN. continue with send_mt post processing');
 
-                                            // post send_mt tasks:
-                                            // 1: warning if ZeroNet port is closed. optional files are not distributed. maybe use small normal files as a backup?
-                                            // 2: encryption layer 1. jsencrypt. generate a short jsencrypt key (1024) bits. only used for this transaction
-                                            // 3: encryption layer 2. select random index for cryptmessage public key and find public cryptmessage key
-                                            // 4: send offline pubkeys message to other wallet session encrypted with money_transactionid (encryption layer 3) and
-                                            //    create a <session filename>.0000000000001 file with transaction status encrypted with money_transactionid (encryption layer 3)
-                                            // 5: save transaction in ls
-                                            // 6: publish so that other MN and W2 sessions can new the new optional files
+                                        // capture details for new wallet to wallet money transaction
+                                        // must be temporary saved in localStorage until money transaction is processed
+                                        session_info = {
+                                            money_transactionid: request.money_transactionid,
+                                            master: true,
+                                            contact: new_money_transactions[request.money_transactionid].request.contact,
+                                            money_transactions: []
+                                        };
+                                        money_transactions = new_money_transactions[request.money_transactionid].request.money_transactions ;
+                                        for (i = 0; i < money_transactions.length; i++) {
+                                            session_info.money_transactions.push({
+                                                action: money_transactions[i].action,
+                                                code: money_transactions[i].code,
+                                                amount: money_transactions[i].amount,
+                                                json: new_money_transactions[request.money_transactionid].response.jsons[i]
+                                            });
+                                        }
 
-                                            // create callback chain step 1-6
-                                            step_6_publish = function () {
-                                                z_publish (true) ;
-                                            } ;
-                                            step_5_save_in_ls = function () {
-                                                var auth_address ;
-                                                delete session_info.pubkey ;
-                                                delete session_info.pubkey2 ;
-                                                console.log(pgm + 'todo: save in ls. session_info = ' + JSON.stringify(session_info)) ;
-                                                if (!ls.w_sessions) ls.w_sessions = {} ;
-                                                auth_address = ZeroFrame.site_info.auth_address ;
-                                                if (!ls.w_sessions[auth_address]) ls.w_sessions[auth_address] = {} ;
-                                                // cryptMessage encrypt session information
-                                                //session_info = {
-                                                //    "money_transactionid": "gEBJnfARCq7OCixABrBifae9iZVmDg4sAgBH7iWsPV0dCVG4ca0ob1ZPyVYT",
-                                                //    "master": true,
-                                                //    "money_transactions": [{
-                                                //        "action": "Send",
-                                                //        "code": "tBTC",
-                                                //        "amount": 0.0001,
-                                                //        "json": {"return_address": "2N1pCBZrpYXHV51C6CTGnHUajcUURmdbJfi"}
-                                                //    }],
-                                                //    "ip_external": false,
-                                                //    "prvkey": "-----BEGIN RSA PRIVATE KEY-----\nMIICXQIBAAKBgQC5nSiCH+1rn+5M5BfSvWks7JXM2Ot5/W8fR4F/Cp6n1GpiVYGa\nB86qHoj26RO1K2Mj1c58Ovr0r5qaJukRnmv2LtmtybIgkX48f6SR+u7ZaLvI9Ey7\nxLHAcGOJ6bGxRLhSRCjmeGXnmdEn8+gh2enx2Q/PgOlBBgXMxIoK2MLnqQIDAQAB\nAoGAIb+deetsM8Fkhr6CRmMCGJT7t79JMWkPJ1TNCthXeJR6s15wrhz1SqE6rgo6\n9xnocL+TR6tBrfOv3I9umTGA13Yob4ef31eGeknSHnta9qes5qEumM5k20E7XaXp\n3+v6xX6ex7ZzeW53sGvqE5cshP2bK0r6opd1vZEgPwKq+jECQQD6zNVWaiqjwXKr\ncMf2RKKO4EKm5tL8m79nGQbC/Cji7IG5zpfZDZDI+pwgkz4VSLAYG8Pcfx/pxRA2\nS63JESBbAkEAvXZWV/d2PgwnO9S9GKgbz44MOuVO2da4dl8/JjQpTFcrV/0whM8E\niMzyArbHufi8Kk5X/gDTS1aKvN4HEFbXSwJBALOnu0K1tmmrj1rj5TmyHMhAOT6Z\nppWxc8CEmuVeAGPdi2fwZ7HiF88ARorHLvfMI+iBKyJuJgwtT9m1CH45uHUCQAbR\n1qPN9YSgPV1K+A+GJZIgA9Ku5Fq0/ujL3uMKJ55m2NmO9IsjRH+EGQX9/Ex2ZpeD\nQGmVMAXbNJ09xLVS2ucCQQCVvJZ8Iv/07eAo8WbsAtqOwnT/567Oj+vu3GOzwRlA\nXemngpR8aUBDonTF1fAXxU2IwXg+Efgvq4pZxif/pGte\n-----END RSA PRIVATE KEY-----",
-                                                //    "userid2": 56,
-                                                //    "offline": [1508494633596]
-                                                //};
-                                                get_my_pubkey2(function (pubkey2) {
-                                                    encrypt1.encrypt_json(session_info, [2], function(encrypted_session_info) {
-                                                        var sha256 ;
-                                                        sha256 = CryptoJS.SHA256(session_info.money_transactionid).toString();
-                                                        ls.w_sessions[auth_address][sha256] = encrypted_session_info ;
-                                                        ls_save() ;
-                                                        step_6_publish() ;
-                                                    }) ;
-                                                }) ;
-                                            } ;
-                                            step_4_save_pubkeys_msg = function () {
-                                                var request2, offline, encrypt3;
-                                                request2 = {
-                                                    msgtype: 'pubkeys',
-                                                    pubkey: session_info.pubkey, // for JSEncrypt
-                                                    pubkey2: session_info.pubkey2 // for cryptMessage
-                                                };
-                                                console.log(pgm + 'request2 = ' + JSON.stringify(request2));
-                                                // setup session instance.
-                                                // Only using symmetric encryption in first pubkeys message to other wallet session
-                                                // this wallet starts the transaction and is the master in wallet to wallet communication
-                                                // todo: 1) add this session keys information to encrypt3
-                                                // todo: 2) encrypt3 instance should be saved in ls and should be restored after page reload (step_5_save_in_ls)
-                                                session_info.offline = [] ;
-                                                encrypt3 = new MoneyNetworkAPI({
-                                                    debug: 'encrypt3',
-                                                    sessionid: session_info.money_transactionid,
-                                                    master: true,
-                                                    prvkey: session_info.prvkey,
-                                                    userid2: session_info.userid2,
-                                                    cb: process_incoming_message,
-                                                    extra: { offline: session_info.offline }
+                                        // post send_mt tasks:
+                                        // 1: warning if ZeroNet port is closed. optional files are not distributed. maybe use small normal files as a backup?
+                                        // 2: encryption layer 1. jsencrypt. generate a short jsencrypt key (1024) bits. only used for this transaction
+                                        // 3: encryption layer 2. select random index for cryptmessage public key and find public cryptmessage key
+                                        // 4: send offline pubkeys message to other wallet session encrypted with money_transactionid (encryption layer 3) and
+                                        //    create a <session filename>.0000000000001 file with transaction status encrypted with money_transactionid (encryption layer 3)
+                                        // 5: save transaction in ls
+                                        // 6: publish so that other MN and W2 sessions can new the new optional files
+
+                                        // create callback chain step 1-6
+                                        step_6_publish = function () {
+                                            z_publish(true);
+                                        };
+                                        step_5_save_in_ls = function () {
+                                            var auth_address;
+                                            delete session_info.pubkey;
+                                            delete session_info.pubkey2;
+                                            console.log(pgm + 'todo: save in ls. session_info = ' + JSON.stringify(session_info));
+                                            if (!ls.w_sessions) ls.w_sessions = {};
+                                            auth_address = ZeroFrame.site_info.auth_address;
+                                            if (!ls.w_sessions[auth_address]) ls.w_sessions[auth_address] = {};
+                                            // cryptMessage encrypt session information
+                                            //session_info = {
+                                            //    "money_transactionid": "gEBJnfARCq7OCixABrBifae9iZVmDg4sAgBH7iWsPV0dCVG4ca0ob1ZPyVYT",
+                                            //    "master": true,
+                                            //    "money_transactions": [{
+                                            //        "action": "Send",
+                                            //        "code": "tBTC",
+                                            //        "amount": 0.0001,
+                                            //        "json": {"return_address": "2N1pCBZrpYXHV51C6CTGnHUajcUURmdbJfi"}
+                                            //    }],
+                                            //    "ip_external": false,
+                                            //    "prvkey": "-----BEGIN RSA PRIVATE KEY-----\nMIICXQIBAAKBgQC5nSiCH+1rn+5M5BfSvWks7JXM2Ot5/W8fR4F/Cp6n1GpiVYGa\nB86qHoj26RO1K2Mj1c58Ovr0r5qaJukRnmv2LtmtybIgkX48f6SR+u7ZaLvI9Ey7\nxLHAcGOJ6bGxRLhSRCjmeGXnmdEn8+gh2enx2Q/PgOlBBgXMxIoK2MLnqQIDAQAB\nAoGAIb+deetsM8Fkhr6CRmMCGJT7t79JMWkPJ1TNCthXeJR6s15wrhz1SqE6rgo6\n9xnocL+TR6tBrfOv3I9umTGA13Yob4ef31eGeknSHnta9qes5qEumM5k20E7XaXp\n3+v6xX6ex7ZzeW53sGvqE5cshP2bK0r6opd1vZEgPwKq+jECQQD6zNVWaiqjwXKr\ncMf2RKKO4EKm5tL8m79nGQbC/Cji7IG5zpfZDZDI+pwgkz4VSLAYG8Pcfx/pxRA2\nS63JESBbAkEAvXZWV/d2PgwnO9S9GKgbz44MOuVO2da4dl8/JjQpTFcrV/0whM8E\niMzyArbHufi8Kk5X/gDTS1aKvN4HEFbXSwJBALOnu0K1tmmrj1rj5TmyHMhAOT6Z\nppWxc8CEmuVeAGPdi2fwZ7HiF88ARorHLvfMI+iBKyJuJgwtT9m1CH45uHUCQAbR\n1qPN9YSgPV1K+A+GJZIgA9Ku5Fq0/ujL3uMKJ55m2NmO9IsjRH+EGQX9/Ex2ZpeD\nQGmVMAXbNJ09xLVS2ucCQQCVvJZ8Iv/07eAo8WbsAtqOwnT/567Oj+vu3GOzwRlA\nXemngpR8aUBDonTF1fAXxU2IwXg+Efgvq4pZxif/pGte\n-----END RSA PRIVATE KEY-----",
+                                            //    "userid2": 56,
+                                            //    "offline": [1508494633596]
+                                            //};
+                                            get_my_pubkey2(function (pubkey2) {
+                                                encrypt1.encrypt_json(session_info, [2], function (encrypted_session_info) {
+                                                    var sha256;
+                                                    sha256 = CryptoJS.SHA256(session_info.money_transactionid).toString();
+                                                    ls.w_sessions[auth_address][sha256] = encrypted_session_info;
+                                                    ls_save();
+                                                    step_6_publish();
                                                 });
-                                                encrypt3.send_message(request2, {encryptions: [3], offline: session_info.offline}, function (response2) {
-                                                    console.log(pgm + 'response2 = ' + JSON.stringify(response2)) ;
-                                                    console.log(pgm + 'offline = ' + JSON.stringify(offline)) ;
-                                                    step_5_save_in_ls() ;
-                                                }); // encrypt_json callback
-                                            } ;
-                                            step_3_get_pubkey2 = function () {
-                                                var r ;
-                                                r = Math.random() ;
-                                                session_info.userid2 = parseInt(('' + r).substr(2,3)) ; // 0-999
-                                                ZeroFrame.cmd("userPublickey", [session_info.userid2 ], function (pubkey2) {
-                                                    session_info.pubkey2 = pubkey2 ;
-                                                    console.log(pgm + 'status = ' + JSON.stringify(session_info)) ;
-                                                    //status = {
-                                                    //    "ip_external": true,
-                                                    //    "pubkey": "-----BEGIN PUBLIC KEY-----\nMIGeMA0GCSqGSIb3DQEBAQUAA4GMADCBiAKBgGVhj2Ibo5pfV3XEPDbqNcKW0HAa\nk7AaOcvZen3Qz//a2xvsCe+BjNPyLCCk53Tg+CC+8UlU9a9SkSTtBGkV9/AG6i2d\nNF4FdgWUKvIM3qFtabNFnTF7FTcTibQV1YyAMjtFDQYCQmRIClar/uY73gAw1dcx\nw1Hzbn3XasH1lIFRAgMBAAE=\n-----END PUBLIC KEY-----",
-                                                    //    "prvkey": "-----BEGIN RSA PRIVATE KEY-----\nMIICWwIBAAKBgGVhj2Ibo5pfV3XEPDbqNcKW0HAak7AaOcvZen3Qz//a2xvsCe+B\njNPyLCCk53Tg+CC+8UlU9a9SkSTtBGkV9/AG6i2dNF4FdgWUKvIM3qFtabNFnTF7\nFTcTibQV1YyAMjtFDQYCQmRIClar/uY73gAw1dcxw1Hzbn3XasH1lIFRAgMBAAEC\ngYBhNxhDP7W2Rk6bwzzqe9RpcC0YEqQkbkGV1Em9dArAkaEiOUmdvWDJrKPb+cVp\nMoE9BVxisXGWWVqNSiq8ijBhaTiLbh5acbIwq0+/M0CbrI8YRZkofjPsVeklK61f\nj/xDgmtWPHGmhHJEpFKCfeu1Py6nHMIZv83VX7PDmMnAQQJBAKiB4biUBc7cgQAC\n6zJmbgUhQn2Vto5h0vbyE2GgNXH45uUhar8x0ThjRx/fi09fR0vQnPRvObNkv8Ij\nyawgpE0CQQCaBTVEBbWQLukseVM+xzM1AoCAp3+Fr7bpdGc22IfeKAsawXNPJ9Sn\nTPLgBn6wJfAasb4L86edtz1V4Sp0cqMVAkEAo2/eS9WeUIaExEsQboD04xrgT8h/\nGVh+czBWZhEq5VGCOekQjUM3Z1a7bIm4qBKEp18+bMLYl0v3xchKWh4K3QJAF4GH\n+ZOtfA3MxF7X15LrO8Hf/sKRccO5dLOxNOujAMK3vyObB4+aotXZk1sqZpPDqy9J\nQ+WxxR48HCk7I36DaQJAbJNN0LiiPgz/NbEPWNuTksnkoOVoIvzP2Q/6UasaKgFp\ncy5C5tuU/NiUTCpAhhozOpg9hL4tuYs2Y+xXteKqFw==\n-----END RSA PRIVATE KEY-----",
-                                                    //    "prvkey2": 856,
-                                                    //    "pubkey2": "Ak+2Pp57QeaE2o3gSI9Do+RFD4oJbGD9tk0IIDaNgou2"
-                                                    //};
-                                                    step_4_save_pubkeys_msg() ;
-                                                }); // userPublickey
-                                            } ;
-                                            step_2_get_pubkey = function () {
-                                                var crypt ;
-                                                crypt = new JSEncrypt({default_key_size: 1024});
-                                                crypt.getKey();
-                                                session_info.pubkey = crypt.getPublicKey();
-                                                session_info.prvkey = crypt.getPrivateKey(); // todo: save prvkey in W2 lS encrypted with ...
-                                                step_3_get_pubkey2() ;
-                                            } ;
-                                            step_1_check_port = function () {
-                                                ZeroFrame.cmd("serverInfo", {}, function (server_info) {
-                                                    session_info.ip_external = server_info.ip_external ;
-                                                    if (!session_info.ip_external) console.log(pgm + 'warning. ZeroNet port is closed. Optional files (money transaction) will not be distributed on ZeroNet. Money transaction may fail');
-                                                    // warning. ZeroNet port is closed. Optional files (money transaction) will not be distributed on ZeroNet. Money transaction may fail
-                                                    step_2_get_pubkey() ;
-                                                }) ;
-                                            } ;
+                                            });
+                                        };
+                                        step_4_save_pubkeys_msg = function () {
+                                            var request2, offline, encrypt3;
+                                            request2 = {
+                                                msgtype: 'pubkeys',
+                                                pubkey: session_info.pubkey, // for JSEncrypt
+                                                pubkey2: session_info.pubkey2 // for cryptMessage
+                                            };
+                                            console.log(pgm + 'request2 = ' + JSON.stringify(request2));
+                                            // setup session instance.
+                                            // Only using symmetric encryption in first pubkeys message to other wallet session
+                                            // this wallet starts the transaction and is the master in wallet to wallet communication
+                                            // todo: 1) add this session keys information to encrypt3
+                                            // todo: 2) encrypt3 instance should be saved in ls and should be restored after page reload (step_5_save_in_ls)
+                                            session_info.offline = [];
+                                            encrypt3 = new MoneyNetworkAPI({
+                                                debug: 'encrypt3',
+                                                sessionid: session_info.money_transactionid,
+                                                master: true,
+                                                prvkey: session_info.prvkey,
+                                                userid2: session_info.userid2,
+                                                cb: process_incoming_message,
+                                                extra: {offline: session_info.offline}
+                                            });
+                                            encrypt3.send_message(request2, {
+                                                encryptions: [3],
+                                                offline: session_info.offline
+                                            }, function (response2) {
+                                                console.log(pgm + 'response2 = ' + JSON.stringify(response2));
+                                                console.log(pgm + 'offline = ' + JSON.stringify(offline));
+                                                step_5_save_in_ls();
+                                            }); // encrypt_json callback
+                                        };
+                                        step_3_get_pubkey2 = function () {
+                                            var r;
+                                            r = Math.random();
+                                            session_info.userid2 = parseInt(('' + r).substr(2, 3)); // 0-999
+                                            ZeroFrame.cmd("userPublickey", [session_info.userid2], function (pubkey2) {
+                                                session_info.pubkey2 = pubkey2;
+                                                console.log(pgm + 'status = ' + JSON.stringify(session_info));
+                                                //status = {
+                                                //    "ip_external": true,
+                                                //    "pubkey": "-----BEGIN PUBLIC KEY-----\nMIGeMA0GCSqGSIb3DQEBAQUAA4GMADCBiAKBgGVhj2Ibo5pfV3XEPDbqNcKW0HAa\nk7AaOcvZen3Qz//a2xvsCe+BjNPyLCCk53Tg+CC+8UlU9a9SkSTtBGkV9/AG6i2d\nNF4FdgWUKvIM3qFtabNFnTF7FTcTibQV1YyAMjtFDQYCQmRIClar/uY73gAw1dcx\nw1Hzbn3XasH1lIFRAgMBAAE=\n-----END PUBLIC KEY-----",
+                                                //    "prvkey": "-----BEGIN RSA PRIVATE KEY-----\nMIICWwIBAAKBgGVhj2Ibo5pfV3XEPDbqNcKW0HAak7AaOcvZen3Qz//a2xvsCe+B\njNPyLCCk53Tg+CC+8UlU9a9SkSTtBGkV9/AG6i2dNF4FdgWUKvIM3qFtabNFnTF7\nFTcTibQV1YyAMjtFDQYCQmRIClar/uY73gAw1dcxw1Hzbn3XasH1lIFRAgMBAAEC\ngYBhNxhDP7W2Rk6bwzzqe9RpcC0YEqQkbkGV1Em9dArAkaEiOUmdvWDJrKPb+cVp\nMoE9BVxisXGWWVqNSiq8ijBhaTiLbh5acbIwq0+/M0CbrI8YRZkofjPsVeklK61f\nj/xDgmtWPHGmhHJEpFKCfeu1Py6nHMIZv83VX7PDmMnAQQJBAKiB4biUBc7cgQAC\n6zJmbgUhQn2Vto5h0vbyE2GgNXH45uUhar8x0ThjRx/fi09fR0vQnPRvObNkv8Ij\nyawgpE0CQQCaBTVEBbWQLukseVM+xzM1AoCAp3+Fr7bpdGc22IfeKAsawXNPJ9Sn\nTPLgBn6wJfAasb4L86edtz1V4Sp0cqMVAkEAo2/eS9WeUIaExEsQboD04xrgT8h/\nGVh+czBWZhEq5VGCOekQjUM3Z1a7bIm4qBKEp18+bMLYl0v3xchKWh4K3QJAF4GH\n+ZOtfA3MxF7X15LrO8Hf/sKRccO5dLOxNOujAMK3vyObB4+aotXZk1sqZpPDqy9J\nQ+WxxR48HCk7I36DaQJAbJNN0LiiPgz/NbEPWNuTksnkoOVoIvzP2Q/6UasaKgFp\ncy5C5tuU/NiUTCpAhhozOpg9hL4tuYs2Y+xXteKqFw==\n-----END RSA PRIVATE KEY-----",
+                                                //    "prvkey2": 856,
+                                                //    "pubkey2": "Ak+2Pp57QeaE2o3gSI9Do+RFD4oJbGD9tk0IIDaNgou2"
+                                                //};
+                                                step_4_save_pubkeys_msg();
+                                            }); // userPublickey
+                                        };
+                                        step_2_get_pubkey = function () {
+                                            var crypt;
+                                            crypt = new JSEncrypt({default_key_size: 1024});
+                                            crypt.getKey();
+                                            session_info.pubkey = crypt.getPublicKey();
+                                            session_info.prvkey = crypt.getPrivateKey(); // todo: save prvkey in W2 lS encrypted with ...
+                                            step_3_get_pubkey2();
+                                        };
+                                        step_1_check_port = function () {
+                                            ZeroFrame.cmd("serverInfo", {}, function (server_info) {
+                                                session_info.ip_external = server_info.ip_external;
+                                                if (!session_info.ip_external) console.log(pgm + 'warning. ZeroNet port is closed. Optional files (money transaction) will not be distributed on ZeroNet. Money transaction may fail');
+                                                // warning. ZeroNet port is closed. Optional files (money transaction) will not be distributed on ZeroNet. Money transaction may fail
+                                                step_2_get_pubkey();
+                                            });
+                                        };
 
-                                            // start callback chain
-                                            step_1_check_port() ;
+                                        // start callback chain
+                                        step_1_check_port();
 
-                                        }) ; // send_response
-                                    }
-                                })() ;
+                                    }); // send_response callback
+                                })();
                                 if ((response.msgtype == 'response') && !response.error) return ; // stop. OK send_mt response has already been sent
                                 // end send_mt
                             }
@@ -1934,6 +1902,197 @@ angular.module('MoneyNetworkW2')
                                 })() ;
                                 return ;
                                 // end check_mt
+                            }
+                            else if (request.msgtype == 'start_mt') {
+                                // step 4 in send money transaction(s) to contact
+                                // received money transaction(s) nhas been checked by wallet(s) with OK response
+                                // MN session sends start money transaction signal to wallet(s)
+                                // rest of money transaction process should be 100% wallet to wallet communication
+                                // MN clients should be informed about status changes in money transactions
+                                // MN clients may send a cancel signal to wallet(s)
+                                // wallets may allow a MN cancel signal to abort money transaction processing
+                                (function () {
+                                    var now, elapsed;
+                                    now = new Date().getTime();
+                                    if (!new_money_transactions[request.money_transactionid]) return send_response('Unknown money transactionid');
+                                    // max 60 seconds between check_mt and send_mt requests
+                                    elapsed = now - new_money_transactions[request.money_transactionid].timestamp;
+                                    if (elapsed > 60000) return send_response('Timeout. Waited ' + Math.round(elapsed / 1000) + ' seconds');
+                                    // OK send_mt request
+                                    console.log(pgm + 'sending OK response to ingoing start_mt request');
+                                    send_response(null, function () {
+                                        var step_1_check_port, step_2_get_pubkey, step_3_get_pubkey2, step_4_create_session,
+                                            step_5_save_in_ls, step_6_publish, session_info, i, money_transactions, jsons,
+                                            money_transaction, key;
+                                        console.log(pgm + 'OK start_mt response was send to MN. continue with start_mt post processing');
+
+                                        // capture details for new wallet to wallet money transaction
+                                        // must be temporary saved in localStorage until money transaction is processed
+                                        // request.contact = {"alias":"1MirY1KnJK3MK","cert_user_id":"1MirY1KnJK3MK@moneynetwork.bit","auth_address":"1MirY1KnJK3MKzgZiyZZM8FkyzHRJgmMh8"}
+                                        session_info = {
+                                            money_transactionid: request.money_transactionid,
+                                            master: false,
+                                            contact: new_money_transactions[request.money_transactionid].request.contact,
+                                            money_transactions: []
+                                        };
+                                        money_transactions = new_money_transactions[request.money_transactionid].request.money_transactions ;
+                                        jsons = new_money_transactions[request.money_transactionid].jsons ;
+                                        for (i = 0; i < money_transactions.length; i++) {
+                                            money_transaction = {
+                                                action: money_transactions[i].action,
+                                                code: money_transactions[i].code,
+                                                amount: money_transactions[i].amount,
+                                                json: {}
+                                            };
+                                            for (key in money_transactions[i].json)  money_transaction.json[key] = money_transactions[i].json[key] ;
+                                            for (key in jsons[i]) money_transaction.json[key] = jsons[i][key] ;
+                                            session_info.money_transactions.push(money_transaction) ;
+                                        }
+                                        console.log(pgm + 'session_info = ' + JSON.stringify(session_info)) ;
+                                        //session_info = {
+                                        //    "money_transactionid": "3R1R46sRFEal8zWx0wYvYyo6VDLJmpFzVNsyIOhglPV4bcUgXqUDLOWrOkZA",
+                                        //    "master": false,
+                                        //    "money_transactions": [{
+                                        //        "action": "Send",
+                                        //        "code": "tBTC",
+                                        //        "amount": 0.0001,
+                                        //        "json": {
+                                        //            "return_address": "2Mxufcnyzo8GvTGHqYfzS862ZqYaFYjxo5V",
+                                        //            "address": "2NAXS7epN81nEH3XC37shuvH6uSjrdqvhNY"
+                                        //        }
+                                        //    }]
+                                        //};
+
+                                        // post start_mt tasks:
+                                        // 1: warning if ZeroNet port is closed. optional files are not distributed. maybe use small normal files as a backup?
+                                        // 2: encryption layer 1. jsencrypt. generate a short jsencrypt key (1024) bits. only used for this transaction
+                                        // 3: encryption layer 2. select random index for cryptmessage public key and find public cryptmessage key
+                                        // 4: read offline pubkeys message from other wallet
+                                        // 5: create session
+                                        // 6: create a <session filename>.0000000000001 file with transaction status encrypted with money_transactionid (encryption layer 3)
+                                        // 7: save transaction in ls
+                                        // 8: publish so that other MN and W2 sessions can new the new optional files
+
+                                        // create callback chain step 1-5
+                                        step_5_save_in_ls = function () {
+                                            var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_5_save_in_ls: ';
+                                            var auth_address;
+                                            console.log(pgm + 'save in ls. session_info = ' + JSON.stringify(session_info));
+                                            //session_info = {
+                                            //    "money_transactionid": "3R1R46sRFEal8zWx0wYvYyo6VDLJmpFzVNsyIOhglPV4bcUgXqUDLOWrOkZA",
+                                            //    "master": false,
+                                            //    "contact": {
+                                            //        "alias": "1MirY1KnJK3MK",
+                                            //        "cert_user_id": "1MirY1KnJK3MK@moneynetwork.bit",
+                                            //        "auth_address": "1MirY1KnJK3MKzgZiyZZM8FkyzHRJgmMh8"
+                                            //    },
+                                            //    "money_transactions": [{
+                                            //        "action": "Send",
+                                            //        "code": "tBTC",
+                                            //        "amount": 0.0001,
+                                            //        "json": {
+                                            //            "return_address": "2Mxufcnyzo8GvTGHqYfzS862ZqYaFYjxo5V",
+                                            //            "address": "2MviUBv8rEJEcTotDgNUrcw3wTyagjQf3Fr"
+                                            //        }
+                                            //    }],
+                                            //    "ip_external": true,
+                                            //    "pubkey": "-----BEGIN PUBLIC KEY-----\nMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCeX+TnBi9EEKAzqyd9GNf8dWO/\n6FOgJt4aoGfD7GZU1GmlhgJhveAdXetxcW9DG6mFsSOIiXh5XuaWgz81QVa+jVJv\nLac1oK/wfufvIGRFhpQhcr1Spew0eAFt0nR+DwYfW8I2rPxvp5wli79425ysaF9L\nPg+T0F+74vd6wPpewwIDAQAB\n-----END PUBLIC KEY-----",
+                                            //    "prvkey": "-----BEGIN RSA PRIVATE KEY-----\nMIICXAIBAAKBgQCeX+TnBi9EEKAzqyd9GNf8dWO/6FOgJt4aoGfD7GZU1GmlhgJh\nveAdXetxcW9DG6mFsSOIiXh5XuaWgz81QVa+jVJvLac1oK/wfufvIGRFhpQhcr1S\npew0eAFt0nR+DwYfW8I2rPxvp5wli79425ysaF9LPg+T0F+74vd6wPpewwIDAQAB\nAoGAeEIQqmxDz8dgHlvEbHVE7GqnB73+YgmhdU5//IGxYpC4d/u+K0Hmv+XlNgsQ\nlUCYBPBxLuhUFrU9GuUmReYLWwkgEq6P+z8iR5+L24eX1jMlXuuesGyKad4tH9bB\nwuzQ6E4wb3n79ii1diBYkynJfgTggERezKtYvKPVo4h4j6ECQQDo9Zf0QNEHfDPA\nw7F8HwJRsa438dqiP13zFkxpM7TU3z0fwaYVivREwIefjTexaNCskRsB+hvBt76J\npQNPEn7NAkEArgnaqukHHwHdXmDYXSjGScCB/7rssMvlo+7yjsHGf2pUa+blhYC/\n3Qa2HK7E7bkYoTTx1yMlvNrbOqaHAs8zzwJASJ0k/FGn1jl0uEVHcXUI+AX2VCHj\nEGfIFRmCP9iKKUBcgSWPa2+grD2HCMiv73DIesHQNVGMjVmE3sq8uUz+kQJBAJM/\nExr2/WdmlHx9Q5HOJbXQgixzYj5SxH/mcqIFoIO82qBQQnCpdarzOrEZzNO0fvol\naVe0DQGzyTfeHOxrklECQBdS4GNR0EzxpoDHaZmY8lAXLryePFD0XWbyH+4CPiwY\nbGWnU/zTioQfLfb52rrZgtAMRrRC9TAX1f/Dr+hhx5I=\n-----END RSA PRIVATE KEY-----",
+                                            //    "userid2": 778,
+                                            //    "pubkey2": "A6TgIaT0aZi0cakr5ZqA2ch2xnKA6ameEI+KzSo4IrGF",
+                                            //    "offline": []
+                                            //};
+                                            if (!ls.w_sessions) ls.w_sessions = {};
+                                            auth_address = ZeroFrame.site_info.auth_address;
+                                            if (!ls.w_sessions[auth_address]) ls.w_sessions[auth_address] = {};
+                                            // cryptMessage encrypt session information
+                                            get_my_pubkey2(function (pubkey2) {
+                                                encrypt1.encrypt_json(session_info, [2], function (encrypted_session_info) {
+                                                    var sha256;
+                                                    sha256 = CryptoJS.SHA256(session_info.money_transactionid).toString();
+                                                    ls.w_sessions[auth_address][sha256] = encrypted_session_info;
+                                                    ls_save();
+                                                }); // encrypt_json callback 2
+                                            }); // get_my_pubkey2 callback 1
+                                        }; // step_5_save_in_ls
+                                        step_4_create_session = function () {
+                                            var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_4_create_session: ';
+                                            var encrypt4 ;
+                                            // create new session. demon process should read offline pubkeys message from other wallet session
+                                            session_info.offline = [] ;
+                                            encrypt4 = new MoneyNetworkAPI({
+                                                debug: 'encrypt4',
+                                                sessionid: session_info.money_transactionid,
+                                                master: false,
+                                                prvkey: session_info.prvkey,
+                                                userid2: session_info.userid2,
+                                                cb: process_incoming_message,
+                                                extra: {offline: session_info.offline}
+                                            });
+                                            // MoneyNetworkAPI.js:309 MoneyNetworkAPILib.add_session: monitoring other_session_filename e1af7946c6, sessionid = 3R1R46sRFEal8zWx0wYvYyo6VDLJmpFzVNsyIOhglPV4bcUgXqUDLOWrOkZA
+                                            // MoneyNetworkAPI.js:327 MoneyNetworkAPILib.add_session: other_session_filename e1af7946c6 should be processed by encrypt4
+                                            // MoneyNetworkAPI.js:1420 new MoneyNetworkAPI: encrypt4: Encryption setup: waiting for other_session_pubkey, other_session_pubkey2
+                                            step_5_save_in_ls() ;
+                                        } ; // step_4_create_session
+                                        step_3_get_pubkey2 = function () {
+                                            var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_3_get_pubkey2: ';
+                                            var r;
+                                            r = Math.random();
+                                            session_info.userid2 = parseInt(('' + r).substr(2, 3)); // 0-999
+                                            ZeroFrame.cmd("userPublickey", [session_info.userid2], function (pubkey2) {
+                                                session_info.pubkey2 = pubkey2;
+                                                console.log(pgm + 'session_info = ' + JSON.stringify(session_info));
+                                                //session_info = {
+                                                //    "money_transactionid": "3R1R46sRFEal8zWx0wYvYyo6VDLJmpFzVNsyIOhglPV4bcUgXqUDLOWrOkZA",
+                                                //    "master": false,
+                                                //    "contact": {
+                                                //        "alias": "1MirY1KnJK3MK",
+                                                //        "cert_user_id": "1MirY1KnJK3MK@moneynetwork.bit",
+                                                //        "auth_address": "1MirY1KnJK3MKzgZiyZZM8FkyzHRJgmMh8"
+                                                //    },
+                                                //    "money_transactions": [{
+                                                //        "action": "Send",
+                                                //        "code": "tBTC",
+                                                //        "amount": 0.0001,
+                                                //        "json": {
+                                                //            "return_address": "2Mxufcnyzo8GvTGHqYfzS862ZqYaFYjxo5V",
+                                                //            "address": "2N9m5nkaTG427EsZC4CZW24o43uBdj7cFJf"
+                                                //        }
+                                                //    }],
+                                                //    "ip_external": true,
+                                                //    "pubkey": "-----BEGIN PUBLIC KEY-----\nMIGeMA0GCSqGSIb3DQEBAQUAA4GMADCBiAKBgG9BtmBQ5Ps2AH3esqDvaIDLJkAf\n7AK5hJT3pXY00uzGxR/ZTvmQTKjiFuK1AtDPUEtWXLFS7YjQ4sm0XSCfzOnScBrr\n3aq9S1Uja9/g4KzdEwivpduD4TahgSWGh1pTRSnR4ymepPxRRc28SoSV61b25IPF\n1YMTyVH/V9IC84SjAgMBAAE=\n-----END PUBLIC KEY-----",
+                                                //    "prvkey": "-----BEGIN RSA PRIVATE KEY-----\nMIICWwIBAAKBgG9BtmBQ5Ps2AH3esqDvaIDLJkAf7AK5hJT3pXY00uzGxR/ZTvmQ\nTKjiFuK1AtDPUEtWXLFS7YjQ4sm0XSCfzOnScBrr3aq9S1Uja9/g4KzdEwivpduD\n4TahgSWGh1pTRSnR4ymepPxRRc28SoSV61b25IPF1YMTyVH/V9IC84SjAgMBAAEC\ngYAR5r/ilYGSjijcF+YkEQF+n7Fi5gACnDkiAwrjjzJVGNKFAmE7tKUxE1fdWITA\ndmsUBCxb99zyg7HKBLRrWGsPCUQaHavWHDJ2yLAaSbvGdiNasQdEACc+6JrKpc42\nBx9CK3tbBDUvha4izEzrQhMn+Mc1u3NGUGIOlyoJ9BszOQJBAMjRgjnufin94Le2\n8W138qzsaVPpktFHCd6IoMMgPGsPDrPM95tuZLKUppqPqcHGn8rYjuoaO7q9dZrt\ndL2/lhUCQQCN1AVKikKkbZkNB5IUxrLPXQHEhAJn5W6ICKHhjuLuLTBwX2cFB3P8\nEb0zdXtrq3m6knArQzX5UD/l3nQiudXXAkBg8SqRdrz23nTdmvXfJ3lB2vpZpLbY\nShfMkl4w893WvLUXPQoGwXrg7nuiv1lujsjSrkoHXtSYqB8exCSH+PWlAkBtQjNd\nTAuwzfmE7xsbREMFuhmdgTC1RysSQswqjj/FyiwxtV0Qo8A3JJdDqDKPLIdXMm6U\n9W8EBE1lUSzYf577AkEAu3/Fnwhf916Mk9rupiDjpMuLdEaQO+O03qemiDxR6fRm\nP0hsVfDRWlk5qR3Fbu3p6seD8jMnIiSITAN+EgFODA==\n-----END RSA PRIVATE KEY-----",
+                                                //    "userid2": 769,
+                                                //    "pubkey2": "AuUVNhIwj005MRlvHB1qvAIFZdH9/eOZQPM18v1puocL"
+                                                //};
+                                                step_4_create_session();
+                                            }); // userPublickey
+                                        }; // step_3_get_pubkey2
+                                        step_2_get_pubkey = function () {
+                                            var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_2_get_pubkey: ';
+                                            var crypt;
+                                            crypt = new JSEncrypt({default_key_size: 1024});
+                                            crypt.getKey();
+                                            session_info.pubkey = crypt.getPublicKey();
+                                            session_info.prvkey = crypt.getPrivateKey(); // todo: save prvkey in W2 lS encrypted with ...
+                                            step_3_get_pubkey2();
+                                        } ;
+                                        step_1_check_port = function () {
+                                            var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_1_check_port: ';
+                                            ZeroFrame.cmd("serverInfo", {}, function (server_info) {
+                                                session_info.ip_external = server_info.ip_external;
+                                                if (!session_info.ip_external) console.log(pgm + 'warning. ZeroNet port is closed. Optional files (money transaction) will not be distributed on ZeroNet. Money transaction may fail');
+                                                // warning. ZeroNet port is closed. Optional files (money transaction) will not be distributed on ZeroNet. Money transaction may fail
+                                                step_2_get_pubkey();
+                                            });
+                                        };
+                                        // start callback chain
+                                        step_1_check_port();
+
+                                    }); // send_response callback
+                                })();
+                                return ;
+                                // end start_mt
                             }
                             else response.error = 'Unknown msgtype ' + request.msgtype ;
                             console.log(pgm + 'response = '  + JSON.stringify(response)) ;
