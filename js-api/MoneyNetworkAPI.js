@@ -541,6 +541,7 @@ var MoneyNetworkAPILib = (function () {
                     if (!offline[session_filename]) {
                         offline[session_filename] = true ; // loading/global
                         loading_offline_transactions[session_filename] = true ; // loading/local
+                        // closure. secure parameters for load_offline_transactions task
                         (function(){
                             var directory2, filename2, start_load_offline_transactions ;
                             directory2 = '' + directory ;
@@ -618,11 +619,18 @@ var MoneyNetworkAPILib = (function () {
 
     } // demon
 
-    // load file <session_filename>.0000000000000 with offline transactions for this session.
+    // load file <session_filename>.0000000000000 with offline transactions for <session_filename> session.
     // that is messages with timestamp < session_at (session added/started) that must be read at startup
-    function load_offline_transactions(directory, filename1) {
+    // timeout_count: fileGet callback is not executed after timeout. Try 3 times with 60 seconds timeout
+    function load_offline_transactions(directory, filename1, timeout_count) {
         var pgm = module + '.load_offline_transactions: ' ;
-        var error, session_filename, encrypt, other_user_path, inner_path, debug_seq0, debug_seq1 ;
+        var error, session_filename, encrypt, other_user_path, inner_path, debug_seq0 ;
+        console.log(pgm + 'timeout_count = ' + timeout_count) ;
+        if (!timeout_count) timeout_count = 0 ;
+        if (timeout_count > 3) {
+            console.log(pgm + 'fileGet timeout 3 times. aborting fileGet operation for ' + filename1) ;
+            return ;
+        }
         session_filename = filename1.substr(0,10) ;
         error = function (text) {
             console.log(pgm + text) ;
@@ -636,44 +644,65 @@ var MoneyNetworkAPILib = (function () {
         if (!encrypt.other_user_path) encrypt.setup_encryption({other_user_path: other_user_path}) ;
         if (other_user_path != encrypt.other_user_path) return error('Rejected incoming message ' + inner_path + '. Expected incoming messages for this session to come from ' + encrypt.other_user_path) ;
 
-        // 1: optionalFileInfo. any peer serving file? (filename1)
+        // 1: check optionalFileInfo before optional fileGet operation.
+        // - check for deleted optional files (file_info = null)
+        // - check for optional files without any peer (write warning + add required and timeout)
+        // todo: optional file info check before fileGet is not working correct. cannot use peer=0 information. must use fileGet with required and a timeout
         debug_seq0 = debug_z_api_operation_start(pgm, inner_path, 'optionalFileInfo') ;
         ZeroFrame.cmd("optionalFileInfo", [inner_path], function (file_info) {
             var pgm = module + '.load_offline_transactions fileGet callback 1: ';
-            var debug_seq1, now, elapsed ;
+            var debug_seq1, options, warnings, old_options, file_get_timeout, check_file_get, process_id ;
             debug_z_api_operation_end(debug_seq0, file_info ? 'OK' : 'Failed') ;
             if (debug) console.log(pgm + 'file_info = ' + JSON.stringify(file_info));
+            if (!file_info) return error('No file_info. optional file must have been deleted') ;
+
+            options = {inner_path: inner_path, required: true} ;
             if (!file_info.is_downloaded && !file_info.peer) {
                 // no peers
-                if (debug) {
-                    console.log(pgm + 'abort optional file ' + inner_path + ' download. No peers. file_info = ' + JSON.stringify(file_info)) ;
-                    //file_info = {
-                    //    "inner_path": "data/users/18DbeZgtVCcLghmtzvg4Uv8uRQAwR8wnDQ/ce96214ffc.1508951493141",
-                    //    "uploaded": 0,
-                    //    "is_pinned": 1,
-                    //    "time_accessed": 0,
-                    //    "site_id": 38,
-                    //    "is_downloaded": 0,
-                    //    "file_id": 20370,
-                    //    "peer": 0,
-                    //    "time_added": 1508951557,
-                    //    "hash_id": 21822,
-                    //    "time_downloaded": 0,
-                    //    "size": 548
-                    //};
-                    // check timestamps. maybe there goes a few seconds before numbers of peer if updated
-                    now = new Date().getTime();
-                    elapsed = Math.floor(now/1000) - file_info.time_added ;
-                    console.log(pgm + 'now = ' + now + ', time_added = ' + file_info.time_added + ', elapsed = ' + elapsed) ;
+                if (debug) console.log(pgm + 'warning. starting fileGet operation for optional file without any peers. file_info = ' + JSON.stringify(file_info)) ;
+                warnings = [] ;
+                old_options = JSON.stringify(options) ;
+                if (!options.required) {
+                    options.required = true ;
+                    warnings.push('added required=true to fileGet operation') ;
                 }
-                return error('filename ' + inner_path + ' was not found') ;
+                if (!options.timeout) {
+                    options.timeout = 60 ;
+                    warnings.push('added timeout=60 to fileGet operation') ;
+                }
+                if (warnings.length && debug) console.log(pgm + 'Warning: ' + warnings.join('. ') + '. old options = ' + old_options + ', new_options = ' + JSON.stringify(options)) ;
             }
+
+            // check for fileGet timeout. ZeroNet may not run fileGet callback
+            file_get_timeout = null ; // null: running, false: OK fileGet. true: timeout (this)
+            check_file_get = function () {
+                var pgm = module + '.load_offline_transactions.check_file_get: ';
+                process_id = null ;
+                if (file_get_timeout != null) {
+                    console.log(pgm + 'done. file_get_timeout = ' + file_get_timeout) ;
+                    return ;
+                }
+                file_get_timeout = true ;
+                debug_z_api_operation_end(debug_seq1, 'Timeout') ;
+                timeout_count++ ;
+                if (debug) console.log(pgm + 'timeout. timeout count = ' + timeout_count) ;
+                load_offline_transactions(directory, filename1, timeout_count) ;
+            };
+            if (debug) console.log(pgm + 'submitted check_file_get task. start in ' + ((options.timeout || 300)*1000) + ' ms') ;
+            process_id = setTimeout(check_file_get, (options.timeout || 300)*1000) ;
+
             // 2: get file. todo: add timeout wrapper like in z_file_get?
             debug_seq1 = debug_z_api_operation_start(pgm, inner_path, 'fileGet') ;
-            ZeroFrame.cmd("fileGet", {inner_path: inner_path, required: true}, function (json_str) {
+            ZeroFrame.cmd("fileGet", options, function (json_str) {
                 var pgm = module + '.load_offline_transactions fileGet callback 2: ';
                 var encrypted_json ;
+                file_get_timeout = false ;
                 debug_z_api_operation_end(debug_seq1, json_str ? 'OK' : 'Failed') ;
+                if (process_id) {
+                    try {clearInterval(process_id) }
+                    catch (e) {}
+                    process_id = null ;
+                }
                 if (!json_str) return error('filename ' + inner_path + ' was not found') ;
                 encrypted_json = JSON.parse(json_str) ;
                 // 3: decrypt
@@ -1348,9 +1377,54 @@ var MoneyNetworkAPILib = (function () {
 
         }) ; // dbQuery callback 1
 
-
-
     } // get_wallet_info
+
+    // ZeroFrame fileWrite wrapper.
+    // inner_path must be a merger site path
+    // auth_address must be auth_address for current user
+    // max one fileWrite process. Other fileWrite processes must wait (This file still in sync, if you write is now, then the previous content may be lost)
+    var inner_path_re1 = /^data\/users\// ; // invalid inner_path. old before merger-site syntax
+    var inner_path_re2 = /^merged-MoneyNetwork\/.*?\/data\/users\/(.*?)\// ; // extract auth_address
+    var z_file_write_cbs = [] ; // cbs waiting for other fileWrite to finish
+    var z_file_write_running = false ;
+    function z_file_write (inner_path, content, cb) {
+        var pgm = module + '.z_file_write: ';
+        var match2, auth_address, this_file_write_cb ;
+        if (!ZeroFrame) throw pgm + 'fileWrite aborted. ZeroFrame is missing. Please use ' + module + '.init({ZeroFrame:xxx}) to inject ZeroFrame API into ' + module;
+        if (inner_path.match(inner_path_re1)) throw pgm + 'fileWrite Invalid fileWrite path. Not a merger-site path. inner_path = ' + inner_path ;
+        match2 = inner_path.match(inner_path_re2) ;
+        if (match2) {
+            auth_address = match2[1] ;
+            if (!ZeroFrame.site_info) throw pgm + 'fileWrite aborted. ZeroFrame is not yet ready' ;
+            if (!ZeroFrame.site_info.cert_user_id) throw pgm + 'fileWrite aborted. No ZeroNet certificate selected' ;
+            if (auth_address != ZeroFrame.site_info.auth_address) {
+                console.log(pgm + 'inner_path = ' + inner_path + ', auth_address = ' + auth_address + ', ZeroFrame.site_info.auth_address = ' + ZeroFrame.site_info.auth_address);
+                throw pgm + 'fileWrite aborted. Writing to an invalid user directory.' ;
+            }
+        }
+        else throw pgm + 'Invalid fileGet path. Not a merger-site path. inner_path = ' + inner_path ;
+
+        if (z_file_write_running) {
+            // wait for previous fileWrite process to finish
+            z_file_write_cbs.push({inner_path: inner_path, content: content, cb: cb}) ;
+            return ;
+        }
+        z_file_write_running = true ;
+
+        // extend cb.
+        this_file_write_cb = function(res) {
+            var next_file_write_cb, run_cb ;
+            z_file_write_running = false ;
+            run_cb = function () { cb(res)} ;
+            setTimeout(run_cb, 0) ;
+            if (!z_file_write_cbs.length) return ;
+            next_file_write_cb = z_file_write_cbs.shift() ;
+            z_file_write(next_file_write_cb.inner_path, next_file_write_cb.content, next_file_write_cb.cb) ;
+        }; // cb2
+        ZeroFrame.cmd("fileWrite", [inner_path, content], this_file_write_cb) ;
+
+    } ; // z_file_write
+
 
     // export MoneyNetworkAPILib
     return {
@@ -1375,7 +1449,8 @@ var MoneyNetworkAPILib = (function () {
         calc_wallet_sha256: calc_wallet_sha256,
         get_wallet_info: get_wallet_info,
         debug_z_api_operation_start:debug_z_api_operation_start,
-        debug_z_api_operation_end: debug_z_api_operation_end
+        debug_z_api_operation_end: debug_z_api_operation_end,
+        z_file_write: z_file_write
     };
 
 })(); // MoneyNetworkAPILib
@@ -1880,7 +1955,8 @@ MoneyNetworkAPI.prototype.get_content_json = function (cb) {
         // new content.json file and optional files support requested. write + sign + get
         json_raw = unescape(encodeURIComponent(JSON.stringify(content, null, "\t")));
         debug_seq1 = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path, 'fileWrite');
-        self.ZeroFrame.cmd("fileWrite", [inner_path, btoa(json_raw)], function (res) {
+        MoneyNetworkAPILib.z_file_write(inner_path, btoa(json_raw), function (res) {
+            //self.ZeroFrame.cmd("fileWrite", [inner_path, btoa(json_raw)], function (res) {
             var pgm = self.module + '.get_content_json fileWrite callback 2: ';
             var debug_seq2 ;
             MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq1, res == 'ok' ? 'OK' : 'Failed. error = ' + JSON.stringify(res));
@@ -1935,7 +2011,8 @@ MoneyNetworkAPI.prototype.add_optional_files_support = function (cb) {
         inner_path = self.this_user_path + 'content.json';
         json_raw = unescape(encodeURIComponent(JSON.stringify(content, null, "\t")));
         debug_seq1 = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path, 'fileWrite');
-        self.ZeroFrame.cmd("fileWrite", [inner_path, btoa(json_raw)], function (res) {
+        MoneyNetworkAPILib.z_file_write(inner_path, btoa(json_raw), function(res) {
+            //self.ZeroFrame.cmd("fileWrite", [inner_path, btoa(json_raw)], function (res) {
             var pgm = self.module + '.add_optional_files_support fileWrite callback 2: ';
             var debug_seq2 ;
             MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq1, res == 'ok' ? 'OK' : 'Failed. error = ' + JSON.stringify(res));
@@ -2090,7 +2167,8 @@ MoneyNetworkAPI.prototype.send_message = function (request, options, cb) {
                     inner_path4 = self.this_user_path + this_session_filename + '.' + request_file_timestamp;
                     json_raw = unescape(encodeURIComponent(JSON.stringify(encrypted_json, null, "\t")));
                     debug_seq4 = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path4, 'fileWrite') ;
-                    self.ZeroFrame.cmd("fileWrite", [inner_path4, btoa(json_raw)], function (res) {
+                    MoneyNetworkAPILib.z_file_write(inner_path4, btoa(json_raw), function (res) {
+                        //self.ZeroFrame.cmd("fileWrite", [inner_path4, btoa(json_raw)], function (res) {
                         var pgm = self.module + '.send_message fileWrite callback 5: ';
                         var save_offline_transaction;
                         MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq4, res == 'ok' ? 'OK' : 'Failed. error = ' + JSON.stringify(res));
@@ -2110,7 +2188,8 @@ MoneyNetworkAPI.prototype.send_message = function (request, options, cb) {
                                 inner_path1 = self.this_user_path + this_session_filename + '.0000000000000' ;
                                 json_raw = unescape(encodeURIComponent(JSON.stringify(encrypted_offline_transaction, null, "\t")));
                                 debug_seq6 = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path1, 'fileWrite');
-                                self.ZeroFrame.cmd("fileWrite", [inner_path1, btoa(json_raw)], function (res) {
+                                MoneyNetworkAPILib.z_file_write(inner_path1, btoa(json_raw), function (res) {
+                                    //self.ZeroFrame.cmd("fileWrite", [inner_path1, btoa(json_raw)], function (res) {
                                     var pgm = self.module + '.send_message.save_offline_transaction fileWrite callback 6.2: ';
                                     MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq6, res == 'ok' ? 'OK' : 'Failed. error = ' + JSON.stringify(res));
                                     // continue with sign

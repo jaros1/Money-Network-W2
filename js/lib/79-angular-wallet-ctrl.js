@@ -279,7 +279,7 @@ angular.module('MoneyNetworkW2')
                     console.log(pgm + 'err = ' + JSON.stringify(err)) ;
                     ZeroFrame.cmd("wrapperNotification", ["error", err]) ;
                 }
-                else ZeroFrame.cmd("wrapperNotification", ["done", "Money was send. result = " + JSON.stringify(result)]);
+                else ZeroFrame.cmd("wrapperNotification", ["done", "Money was send<br>result = " + JSON.stringify(result)]);
             }) ;
         }; // send_money
 

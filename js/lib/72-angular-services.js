@@ -945,6 +945,23 @@ angular.module('MoneyNetworkW2')
                 }) ;
             } // get_user_path
 
+            // before publish. update status.json timestamp. force ZeroNet to distribute content.json even if only changes in optional files list
+            function update_status_json(publish, cb) {
+                var pgm = service + '.update_status_json: ' ;
+                if (!publish) return cb() ;
+                get_user_path(function (user_path) {
+                    var inner_path, json, json_raw, debug_seq;
+                    inner_path = user_path + 'status.json';
+                    json = {timestamp: new Date().getTime()};
+                    json_raw = unescape(encodeURIComponent(JSON.stringify(json, null, "\t")));
+                    debug_seq = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path, 'fileWrite') ;
+                    ZeroFrame.cmd("fileWrite", [inner_path, btoa(json_raw)], function (res) {
+                        MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq, res == 'ok' ? 'OK' : 'Failed. error = ' + JSON.stringify(res));
+                        cb() ;
+                    });
+                }) ;
+            }
+
             // sign or publish
             var z_publish_interval = 0 ;
             var z_publish_pending = false ;
@@ -960,6 +977,12 @@ angular.module('MoneyNetworkW2')
                     // content.json file must have optional files support
                     encrypt1.add_optional_files_support(function() {
                         var debug_seq ;
+
+                        // publish. update status.json file and force zeronet to distribute changed content.json
+                        // issue with optional files changes that is not being distributed on Zeronet
+                        // https://github.com/jaros1/Money-Network/issues/199#issuecomment-340198657
+                        update_status_json(publish, function () {}) ;
+
                         // sign or publish
                         cmd = publish ? 'sitePublish' : 'siteSign' ;
                         if (publish) console.log(pgm + inner_path + ' sitePublish started') ;
