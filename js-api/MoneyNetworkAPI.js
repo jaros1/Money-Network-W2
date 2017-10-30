@@ -188,6 +188,7 @@ var MoneyNetworkAPILib = (function () {
 
     // debug ZeroFrame API calls.
     // call debug_z_api_operation_start before API call and debug_z_api_operation_end after API call
+    // todo: add check for long running ZeroFrame API operations. Publish can take some time. optional fileGet can take some time. Other operations should be fast
     function debug_z_api_operation_pending () {
         var keys = Object.keys(debug_operations) ;
         if (keys.length == 0) return 'No pending ZeroNet API operations' ;
@@ -703,7 +704,14 @@ var MoneyNetworkAPILib = (function () {
                     catch (e) {}
                     process_id = null ;
                 }
-                if (!json_str) return error('filename ' + inner_path + ' was not found') ;
+                if (!json_str) {
+                    if (timeout_count < 3) {
+                        timeout_count++ ;
+                        console.log(pgm + inner_path + ' was not returned. timeout_count = ' + timeout_count + ', rechecking')  ;
+                        return load_offline_transactions(directory, filename1, timeout_count) ;
+                    }
+                    else return error('filename ' + inner_path + ' was not found') ;
+                }
                 encrypted_json = JSON.parse(json_str) ;
                 // 3: decrypt
                 encrypt.decrypt_json(encrypted_json, function (array) {
@@ -711,6 +719,7 @@ var MoneyNetworkAPILib = (function () {
                     var query, debug_seq3 ;
                     if (!array) return error(inner_path + ' decrypt failed') ;
                     if (!Array.isArray(array)) return error(inner_path + '. expected an array. found ' + JSON.stringify(array)) ;
+                    if (debug) console.log(pgm + 'array = ' + JSON.stringify(array)) ;
                     // 3: dbQuery. find old incoming messages not in offline transactions array. must be marked as done
                     query =
                         "select json.directory, files_optional.filename " +
@@ -1379,22 +1388,208 @@ var MoneyNetworkAPILib = (function () {
 
     } // get_wallet_info
 
+
+    // ZeroFrame wrappers:
+    // - mergerSiteAdd
+    // - fileGet
+    // - fileWrite
+    var new_hub_file_get_cbs = {} ; // any fileGet callback waiting for hub to be ready?
+    function z_merger_site_add (hub, cb) {
+        var pgm = module + '.z_merger_site_add: ' ;
+        ZeroFrame.cmd("mergerSiteAdd", [hub], function (res) {
+            var pgm = module + '.z_merger_site_add mergerSiteAdd callback: ' ;
+            console.log(pgm + 'res = '+ JSON.stringify(res));
+            if (res == 'ok') {
+                console.log(pgm + 'new hub ' + hub + ' was added. hub must be ready. wait for jsons (dbQuery) before first fileGet request to new hub') ;
+                if (!new_hub_file_get_cbs[my_user_hub]) new_hub_file_get_cbs[my_user_hub] = [] ; // fileGet callbacks waiting for mergerSiteAdd operation to finish
+                // start demon process. waiting for new user data hub to be ready
+                setTimeout(monitor_first_hub_event, 250) ;
+            }
+            cb(res) ;
+        }) ; // mergerSiteAdd callback 3
+    } // z_merger_site_add
+
+    // demon. dbQuery. check for any json for new user data hub before running any fileGet operations
+    function monitor_first_hub_event () {
+        var pgm = module + '.monitor_first_hub_event: ' ;
+        var query, debug_seq ;
+        if (!Object.keys(new_hub_file_get_cbs).length) return ; // no new hubs to monitor
+
+        query =
+            "select substr(directory, 1, instr(directory,'/')-1) as hub, count(*) as rows " +
+            "from json " +
+            "group by substr(directory, 1, instr(directory,'/')-1);" ;
+        debug_seq = debug_z_api_operation_start(pgm, 'query ?', 'dbQuery', show_debug('z_db_query')) ;
+        ZeroFrame.cmd("dbQuery", [query], function (res) {
+            var pgm = service + '.monitor_first_hub_event dbQuery callback: ';
+            var hub, i, cbs, cb;
+            // if (detected_client_log_out(pgm)) return ;
+            debug_z_api_operation_end(debug_seq, (!res || res.error) ? 'Failed. error = ' + JSON.stringify(res) : 'OK');
+            if (res.error) {
+                console.log(pgm + "first hub lookup failed: " + res.error);
+                console.log(pgm + 'query = ' + query);
+                for (hub in new_hub_file_get_cbs) console.log(pgm + 'error: ' + new_hub_file_get_cbs[hub].length + ' callbacks are waiting forever for hub ' + hub) ;
+                return ;
+            }
+            for (i=0 ; i<res.length ; i++) {
+                hub = res[i].hub ;
+                if (!new_hub_file_get_cbs[hub]) continue ;
+                console.log(pgm + 'new user data hub ' + hub + ' is ready. ' + new_hub_file_get_cbs[hub].length + ' fileGet operations are waiting in callback queue. running callbacks now') ;
+                // move to temporary cbs array
+                cbs = [] ;
+                while (new_hub_file_get_cbs[hub].length) {
+                    cb = new_hub_file_get_cbs[hub].shift() ;
+                    cbs.push(cb) ;
+                }
+                delete new_hub_file_get_cbs[hub] ;
+                // run cbs
+                while (cbs.length) {
+                    cb = cbs.shift() ;
+                    cb() ;
+                }
+            }
+            setTimeout(monitor_first_hub_event, 250) ;
+        }) ; // dbQuery callback
+
+    } // monitor_first_hub_event
+
+    // todo: ZeroFrame fileGet wrapper. See MN z_file_get. Special fileGet workaround in both MoneyNetworkAPI, MN and W2
+    // https://github.com/jaros1/Money-Network/issues/252
+    // - copy/paste from MN MoneyNetworkHubService
+    // - add timeout count handling from load_offline_transactions
+    // - callback. add an extra parameter with not found info (timeout, real not found, file info)
+    // - migrate all fileGet operations (here, MN + W2) to use this function
+    // - add long running operation warning to debug_z_api_operation_pending
+    var inner_path_re1 = /data\/users\// ; // user directory?
+    var inner_path_re2 = /^data\/users\// ; // invalid inner_path. old before merger-site syntax
+    var inner_path_re3 = /^merged-MoneyNetwork\/(.*?)\/data\/users\/content\.json$/ ; // extract hub
+    var inner_path_re4 = /^merged-MoneyNetwork\/(.*?)\/data\/users\/(.*?)\// ; // extract hub and auth_address
+
+    function z_file_get (pgm, options, cb) {
+        var inner_path, match2, hub, pos, filename, extra, optional_file, get_optional_file_info ;
+
+        // Check ZeroFrame
+        if (!ZeroFrame) throw pgm + 'fileGet aborted. ZeroFrame is missing. Please use ' + module + '.init({ZeroFrame:xxx}) to inject ZeroFrame API into ' + module;
+
+        inner_path = options.inner_path ;
+        if (inner_path.match(inner_path_re1)) {
+            // path to user directory.
+            // check inner_path (old before merger site syntax data/users/<auth_address>/<filename>
+            if (inner_path.match(inner_path_re2)) throw pgm + 'Invalid fileGet path. Not a merger-site path. inner_path = ' + inner_path ;
+            // check new merger site syntax merged-MoneyNetwork/<hub>/data/users/<auth_address>/<filename>
+            match2 = inner_path.match(inner_path_re3) || inner_path.match(inner_path_re4);
+            if (match2) {
+                // check hub
+                hub = match2[1] ;
+                if (new_hub_file_get_cbs[hub]) {
+                    console.log(pgm + 'new hub ' + hub + '. waiting with fileGet request for ' + inner_path) ;
+                    new_hub_file_get_cbs[hub].push(function() { z_file_get (pgm, options, cb) }) ;
+                    return ;
+                }
+            }
+            else throw pgm + 'Invalid fileGet path. Not a merger-site path. inner_path = ' + inner_path ;
+        }
+        else optional_file = false ; // workaround for optional fileGet is not relevant outside user directories
+
+        // optional fileGet operation? Some issues with optional fileGet calls
+        // problem with hanging fileGet operation for delete optional files.
+        // and an issue with fileGet operation for optional files without any peer (peer information is not always 100% correct)
+        pos = inner_path.lastIndexOf('/') ;
+        filename = inner_path.substr(pos+1, inner_path.length-pos) ;
+
+        // todo: use files_allowed from content.json. not a hardcoded list of normal files
+        // todo: optional pattern. maybe optional files pattern overrules files_allowed pattern?
+        extra = {} ;
+        extra.optional_file = (['content.json', 'data.json', 'status.json', 'like.json', 'avatar.jpg', 'avatar.png', 'wallet.json'].indexOf(filename) == -1);
+        if (debug) console.log(pgm + 'filename = ' + JSON.stringify(filename) + ', optional_file = ' + extra.optional_file) ;
+
+        // optional step. get info about optional file before fileGet operation
+        // "!file_info.is_downloaded && !file_info.peer" should be not downloaded optional files without any peers
+        // but the information is not already correct. peer can be 0 and other client is ready to serve optional file.
+        // try a fileGet with required and a "short" timeout
+        get_optional_file_info = function (cb) {
+            if (!extra.optional_file) return cb(null) ;
+            ZeroFrame.cmd("optionalFileInfo", [inner_path], function (file_info) {
+                if (debug) console.log(pgm + 'file_info = ' + JSON.stringify(file_info)) ;
+                cb(file_info) ;
+            }) ; // optionalFileInfo
+        } ; // get_optional_file_info
+        get_optional_file_info(function(file_info) {
+            var cb2_done, cb2, cb2_timeout, timeout, process_id, debug_seq, warnings, old_options ;
+            extra.file_info = file_info ;
+            if (extra.optional_file && !file_info) {
+                if (debug) console.log(pgm + 'optional fileGet and no optional file info. must be a deleted optional file. abort fileGet operation') ;
+                return cb(null, extra) ;
+            }
+            if (extra.optional_file) {
+                // some additional checks and warnings.
+                if (!file_info) {
+                    if (debug) console.log(pgm + 'optional fileGet and no optional file info. must be a deleted optional file. abort fileGet operation') ;
+                    return cb(null, extra) ;
+                }
+                if (!file_info.is_downloaded && !file_info.peer) {
+                    // not downloaded optional files and (maybe) no peers! peer information is not always correct
+                    if (debug) console.log(pgm + 'warning. starting fileGet operation for optional file without any peers. file_info = ' + JSON.stringify(file_info)) ;
+                    warnings = [] ;
+                    old_options = JSON.stringify(options) ;
+                    if (!options.required) {
+                        options.required = true ;
+                        warnings.push('added required=true to fileGet operation') ;
+                    }
+                    if (!options.timeout) {
+                        options.timeout = 60 ;
+                        warnings.push('added timeout=60 to fileGet operation') ;
+                    }
+                    if (warnings.length && debug) console.log(pgm + 'Warning: ' + warnings.join('. ') + '. old options = ' + old_options + ', new_options = ' + JSON.stringify(options)) ;
+                }
+            }
+
+            // extend cb. add ZeroNet API debug messages + timeout processing.
+            // cb2 is run as fileGet callback or is run by setTimeout (sometimes problem with optional fileGet operation running forever)
+            cb2_done = false ;
+            cb2 = function (data, timeout) {
+                if (process_id) {
+                    try {$timeout.cancel(process_id)}
+                    catch (e) {}
+                    process_id = null ;
+                }
+                if (cb2_done) return ; // cb2 has already run
+                cb2_done = true ;
+                if (timeout) extra.timeout = timeout ;
+                // MoneyNetworkHelper.debug_z_api_operation_end(debug_seq);
+                debug_z_api_operation_end(debug_seq, data ? 'OK' : 'Not found');
+                cb(data, extra) ;
+            } ; // fileGet callback
+
+            // force timeout after timeout || 60 seconds
+            cb2_timeout = function () {
+                cb2(null, true) ;
+            };
+            timeout = options.timeout || 60 ; // timeout in seconds
+            process_id = setTimeout(cb2_timeout, timeout*1000) ;
+
+            // start fileGet
+            debug_seq = debug_z_api_operation_start(pgm, inner_path, 'fileGet') ;
+            ZeroFrame.cmd("fileGet", options, cb2) ;
+
+        }) ; // get_optional_file_info callback
+
+    } // z_file_get
+
     // ZeroFrame fileWrite wrapper.
     // inner_path must be a merger site path
     // auth_address must be auth_address for current user
     // max one fileWrite process. Other fileWrite processes must wait (This file still in sync, if you write is now, then the previous content may be lost)
-    var inner_path_re1 = /^data\/users\// ; // invalid inner_path. old before merger-site syntax
-    var inner_path_re2 = /^merged-MoneyNetwork\/.*?\/data\/users\/(.*?)\// ; // extract auth_address
     var z_file_write_cbs = [] ; // cbs waiting for other fileWrite to finish
     var z_file_write_running = false ;
     function z_file_write (inner_path, content, cb) {
         var pgm = module + '.z_file_write: ';
         var match2, auth_address, this_file_write_cb ;
         if (!ZeroFrame) throw pgm + 'fileWrite aborted. ZeroFrame is missing. Please use ' + module + '.init({ZeroFrame:xxx}) to inject ZeroFrame API into ' + module;
-        if (inner_path.match(inner_path_re1)) throw pgm + 'fileWrite Invalid fileWrite path. Not a merger-site path. inner_path = ' + inner_path ;
-        match2 = inner_path.match(inner_path_re2) ;
+        if (inner_path.match(inner_path_re2)) throw pgm + 'fileWrite Invalid fileWrite path. Not a merger-site path. inner_path = ' + inner_path ;
+        match2 = inner_path.match(inner_path_re4) ;
         if (match2) {
-            auth_address = match2[1] ;
+            auth_address = match2[2] ;
             if (!ZeroFrame.site_info) throw pgm + 'fileWrite aborted. ZeroFrame is not yet ready' ;
             if (!ZeroFrame.site_info.cert_user_id) throw pgm + 'fileWrite aborted. No ZeroNet certificate selected' ;
             if (auth_address != ZeroFrame.site_info.auth_address) {
@@ -1423,7 +1618,7 @@ var MoneyNetworkAPILib = (function () {
         }; // cb2
         ZeroFrame.cmd("fileWrite", [inner_path, content], this_file_write_cb) ;
 
-    } ; // z_file_write
+    } // z_file_write
 
 
     // export MoneyNetworkAPILib
@@ -1450,6 +1645,8 @@ var MoneyNetworkAPILib = (function () {
         get_wallet_info: get_wallet_info,
         debug_z_api_operation_start:debug_z_api_operation_start,
         debug_z_api_operation_end: debug_z_api_operation_end,
+        z_merger_site_add: z_merger_site_add,
+        z_file_get: z_file_get,
         z_file_write: z_file_write
     };
 
@@ -1941,7 +2138,7 @@ MoneyNetworkAPI.prototype.get_content_json = function (cb) {
     // 1: fileGet
     this.log(pgm, inner_path + ' fileGet started') ;
     debug_seq0 = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path, 'fileGet') ;
-    this.ZeroFrame.cmd("fileGet", {inner_path: inner_path, required: false}, function (content_str) {
+    MoneyNetworkAPILib.z_file_get(pgm, {inner_path: inner_path, required: false}, function (content_str) {
         var pgm = self.module + '.get_content_json fileGet callback 1: ';
         var content, json_raw, debug_seq1;
         MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq0, content_str ? 'OK' : 'Not found') ;
@@ -1972,7 +2169,7 @@ MoneyNetworkAPI.prototype.get_content_json = function (cb) {
                 if (res != 'ok') return cb(); // error: siteSign failed
                 // 4: fileGet
                 debug_seq3 = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path, 'fileGet') ;
-                self.ZeroFrame.cmd("fileGet", {inner_path: inner_path, required: true}, function (content_str) {
+                MoneyNetworkAPILib.z_file_get(pgm, {inner_path: inner_path, required: true}, function (content_str) {
                     var content;
                     MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq3, content_str ? 'OK' : 'Not found');
                     if (!content_str) return cb(); // error. second fileGet failed
@@ -2149,9 +2346,11 @@ MoneyNetworkAPI.prototype.send_message = function (request, options, cb) {
         // 2: get filenames
         self.get_session_filenames(function (this_session_filename, other_session_filename, unlock_pwd2) {
             var pgm = self.module + '.send_message get_session_filenames callback 2: ';
+            var encryptions_clone ;
             // if (offline_transaction) self.log(pgm, 'offline_transaction = ' + JSON.stringify(offline_transaction)) ;
 
             // 3: encrypt json
+            encryptions_clone = JSON.parse(JSON.stringify(encryptions)) ;
             self.encrypt_json(request, encryptions, function (encrypted_json) {
                 var pgm = self.module + '.send_message encrypt_json callback 3: ';
                 self.log(pgm, 'encrypted_json = ' + JSON.stringify(encrypted_json));
@@ -2168,7 +2367,6 @@ MoneyNetworkAPI.prototype.send_message = function (request, options, cb) {
                     json_raw = unescape(encodeURIComponent(JSON.stringify(encrypted_json, null, "\t")));
                     debug_seq4 = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path4, 'fileWrite') ;
                     MoneyNetworkAPILib.z_file_write(inner_path4, btoa(json_raw), function (res) {
-                        //self.ZeroFrame.cmd("fileWrite", [inner_path4, btoa(json_raw)], function (res) {
                         var pgm = self.module + '.send_message fileWrite callback 5: ';
                         var save_offline_transaction;
                         MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq4, res == 'ok' ? 'OK' : 'Failed. error = ' + JSON.stringify(res));
@@ -2182,7 +2380,8 @@ MoneyNetworkAPI.prototype.send_message = function (request, options, cb) {
                             if (offline_transaction.indexOf(request_file_timestamp) == -1) offline_transaction.push(request_file_timestamp) ;
                             // if (offline_transaction) self.log(pgm, 'offline_transaction = ' + JSON.stringify(offline_transaction)) ;
                             // add to file <this_session_filename>.0000000000000
-                            self.encrypt_json(offline_transaction, encryptions, function (encrypted_offline_transaction) {
+                            self.log(pgm, 'encrypting file wit offline timestamps. encryptions = ' + JSON.stringify(encryptions)) ;
+                            self.encrypt_json(offline_transaction, encryptions_clone, function (encrypted_offline_transaction) {
                                 var pgm = self.module + '.send_message.save_offline_transaction encrypt_json callback 6.1: ';
                                 var inner_path1, json_raw, debug_seq6 ;
                                 inner_path1 = self.this_user_path + this_session_filename + '.0000000000000' ;
@@ -2254,7 +2453,7 @@ MoneyNetworkAPI.prototype.send_message = function (request, options, cb) {
                                         // problem with fileDelete: Delete error: [Errno 2] No such file or directory. checking file before fileDelete operation
                                         // step 1: check file before fileDelete
                                         debug_seq1 = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path4, 'fileGet');
-                                        self.ZeroFrame.cmd("fileGet", {inner_path: inner_path4, required: false, timeout: 1}, function (res1) {
+                                        MoneyNetworkAPILib.z_file_get(pgm, {inner_path: inner_path4, required: false, timeout: 1}, function (res1) {
                                             var pgm = self.module + '.send_message.delete_request fileGet callback 1: ';
                                             var debug_seq2;
                                             MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq1, res1 ? 'OK' : 'Not found');
@@ -2275,7 +2474,7 @@ MoneyNetworkAPI.prototype.send_message = function (request, options, cb) {
                                                 // fileDelete returned No such file or directory. Recheck that file has been deleted
                                                 self.log(pgm, 'issue 1140. https://github.com/HelloZeroNet/ZeroNet/issues/1140. step 2 FileDelete returned No such file or directory');
                                                 debug_seq3 = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path4, 'fileGet');
-                                                self.ZeroFrame.cmd("fileGet", {inner_path: inner_path4, required: false, timeout: 1}, function (res3) {
+                                                MoneyNetworkAPILib.z_file_get(pgm, {inner_path: inner_path4, required: false, timeout: 1}, function (res3) {
                                                     var pgm = self.module + '.send_message.delete_request fileGet callback 3: ';
                                                     MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq3, res3 ? 'OK' : 'Not found');
                                                     if (!res3) {
@@ -2289,7 +2488,7 @@ MoneyNetworkAPI.prototype.send_message = function (request, options, cb) {
                                                 });
                                             }); // fileDelete callback
 
-                                        }); // z_file_get callback
+                                        }); // fileGet callback
 
                                     }; // delete_request
                                     self.log(pgm, 'Submit delete_request job for ' + inner_path4 + '. starts delete_request job in ' + (cleanup_in || default_timeout) + ' milliseconds');
@@ -2309,10 +2508,7 @@ MoneyNetworkAPI.prototype.send_message = function (request, options, cb) {
                                             self.log(pgm, 'todo: fileGet: add timeout to fileGet call. required must also be false. now = ' + now + ', timeout_at = ' + new Date().getTime() + ', timeout = ' + (timeout_at - now));
                                         }
                                         debug_seq0 = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path, 'fileGet');
-                                        self.ZeroFrame.cmd("fileGet", {
-                                            inner_path: inner_path,
-                                            required: true
-                                        }, function (response_str) {
+                                        MoneyNetworkAPILib.z_file_get(pgm, {inner_path: inner_path, required: true}, function (response_str) {
                                             var pgm = self.module + '.send_message.get_and_decrypt fileGet callback 8.1: ';
                                             var encrypted_response, error, request_timestamp;
                                             MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq0, response_str ? 'OK' : 'Not found');
