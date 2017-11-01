@@ -274,6 +274,31 @@ angular.module('MoneyNetworkW2')
             // MoneyNetworkAPILib.config({debug: true, ZeroFrame: ZeroFrame, optional: "^[0-9a-f]{10}.[0-9]{13}$"}) ; // global options
             MoneyNetworkAPILib.config({debug: true, ZeroFrame: ZeroFrame, optional: "^[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]$"}) ; // global options
 
+            // inject extra json schemas into MoneyNetworkAPI (internal wallet to wallet communication)
+            var extra_json_schemas = {
+                "addresses": {
+                    "type": 'object',
+                    "title": 'Bitcoin addresses (address or return_address) from receiver to sender',
+                    "description": 'After pubkeys handshake. sender has one bitcoin address for each money transaction. receiver have two bitcoin addresses for each money transaction. Send bitcoin addresses from receiver to sender',
+                    "properties": {
+                        "msgtype": { "type": 'string', "pattern": '^addresses$'},
+                        "jsons": { "type": 'array'},
+                        "items": {
+                            "type": 'object',
+                            "properties": {
+                                "address": { "type": 'string'},
+                                "return_address": { "type": 'string'}
+                            },
+                            "additionalProperties": false
+                        },
+                        "minItems": 1
+                    },
+                    "required": ['msgtype', 'jsons'],
+                    "additionalProperties": false
+                }
+            } ;
+            MoneyNetworkAPILib.add_json_schemas(extra_json_schemas) ;
+
             var encrypt1 = new MoneyNetworkAPI({debug: 'encrypt1'}) ; // encrypt1. no sessionid. self encrypt/decrypt data in W2 localStorage ;
 
             var save_wallet_id, save_wallet_password ; // last saved wallet id and password. For get_balance request
@@ -957,7 +982,8 @@ angular.module('MoneyNetworkW2')
                         cb() ;
                     });
                 }) ;
-            }
+            } // update_status_json
+
 
             // sign or publish
             var z_publish_interval = 0 ;
@@ -978,36 +1004,51 @@ angular.module('MoneyNetworkW2')
                         // publish. update status.json file and force zeronet to distribute changed content.json
                         // issue with optional files changes that is not being distributed on Zeronet
                         // https://github.com/jaros1/Money-Network/issues/199#issuecomment-340198657
-                        update_status_json(publish, function () {}) ;
+                        update_status_json(publish, function () {
+                            // sign or publish
+                            cmd = publish ? 'sitePublish' : 'siteSign' ;
+                            if (publish) {
+                                // long running operation. using z_site_publish ensure that content is not updated while publishing
+                                MoneyNetworkAPILib.z_site_publish({inner_path: inner_path}, function (res) {
+                                    var pgm = service + '.z_site_publish callback 4: ';
+                                    console.log(pgm + 'res = ' + res) ;
+                                    if (res != "ok") {
+                                        ZeroFrame.cmd("wrapperNotification", ["error", "Failed to " + (publish ? "publish" : "sign") + ": " + res.error, 5000]);
+                                        // error - repeat sitePublish in 30, 60, 120, 240 etc seconds (device maybe offline or no peers)
+                                        if (!z_publish_interval) z_publish_interval = 30;
+                                        else z_publish_interval = z_publish_interval * 2;
+                                        console.log(pgm + 'Error. Failed to publish: ' + res.error + '. Try again in ' + z_publish_interval + ' seconds');
+                                        var retry_zeronet_site_publish = function () {
+                                            z_publish(publish, cb);
+                                        };
+                                        $timeout(retry_zeronet_site_publish, z_publish_interval * 1000);
+                                        // continue processing while waiting for failed sitePublish to finish
+                                        return cb(res.error);
+                                    }
+                                    // sign/publish OK
+                                    z_publish_interval = 0 ;
+                                    cb();
 
-                        // sign or publish
-                        cmd = publish ? 'sitePublish' : 'siteSign' ;
-                        if (publish) console.log(pgm + inner_path + ' sitePublish started') ;
-                        debug_seq = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path, cmd) ;
-                        ZeroFrame.cmd(cmd, {inner_path: inner_path}, function (res) {
-                            var pgm = service + '.z_publish ' + cmd + ' callback 3: ';
-                            MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq, res == 'ok' ? 'OK' : 'Failed. error = ' + JSON.stringify(res));
-                            console.log(pgm + 'res = ' + res) ;
-                            if (res != "ok") {
-                                ZeroFrame.cmd("wrapperNotification", ["error", "Failed to " + (publish ? "publish" : "sign") + ": " + res.error, 5000]);
-                                if (!publish) return cb(res.error) ; // sign only. must be a serious error
-                                // error - repeat sitePublish in 30, 60, 120, 240 etc seconds (device maybe offline or no peers)
-                                if (!z_publish_interval) z_publish_interval = 30;
-                                else z_publish_interval = z_publish_interval * 2;
-                                console.log(pgm + 'Error. Failed to publish: ' + res.error + '. Try again in ' + z_publish_interval + ' seconds');
-                                var retry_zeronet_site_publish = function () {
-                                    z_publish(publish, cb);
-                                };
-                                $timeout(retry_zeronet_site_publish, z_publish_interval * 1000);
-                                // continue processing while waiting for sitePublish to finish
-                                return cb(res.error);
+                                }) ;
+                                return ;
                             }
-                            // sign/publish OK
-                            if (publish) z_publish_interval = 0 ;
-                            else z_publish_pending = true ;
-                            cb();
+                            // sign only. fast operationm
+                            debug_seq = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path, cmd) ;
+                            ZeroFrame.cmd(cmd, {inner_path: inner_path}, function (res) {
+                                var pgm = service + '.z_publish ' + cmd + ' callback 4: ';
+                                MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq, res == 'ok' ? 'OK' : 'Failed. error = ' + JSON.stringify(res));
+                                console.log(pgm + 'res = ' + res) ;
+                                if (res != "ok") {
+                                    ZeroFrame.cmd("wrapperNotification", ["error", "Failed to " + (publish ? "publish" : "sign") + ": " + res.error, 5000]);
+                                    return cb(res.error) ; // sign only. must be a serious error
+                                }
+                                // sign OK
+                                z_publish_pending = true ;
+                                cb();
 
-                        }) ; // sitePublish callback 3
+                            }) ; // sitePublish callback 4
+
+                        }) ; // update_status_json callback 3
 
                     }) ; // add_optional_files_support callback 2
 
@@ -2236,18 +2277,18 @@ angular.module('MoneyNetworkW2')
                                 (function (){
                                     var pgm = service + '.process_incoming_message.' + request.msgtype + ': ';
                                     var auth_address, sha256, encrypted_session_info, error ;
-                                    // received pubkeys message from other session
+                                    // received pubkeys message from other wallet session
                                     //request = {
                                     //    "msgtype": "pubkeys",
                                     //    "pubkey": "-----BEGIN PUBLIC KEY-----\nMIGeMA0GCSqGSIb3DQEBAQUAA4GMADCBiAKBgFvJDBhvZQoyjFoxQyk8xCzNi7Or\nMOrYqxRxfhhIS7DXnBeAUqGncteiNsZPaEDnDqPvMWo4M7PMTiORjIoKXUDsRbMi\nJnUIuJjsSqC8auARpFKK8Eq5OK7hFs7htwn4g9DPO3SeTQB5dzWcZx/owiKgL5At\nPry1u0EqYJvafatNAgMBAAE=\n-----END PUBLIC KEY-----",
                                     //    "pubkey2": "AksYe8aqkadPiM5833U/QOggr7dOrq8iwUxSpSpom5Oj"
                                     //}
                                     // check encrypt2 keys
-                                    console.log(pgm + 'encrypt2.debug               = ' + encrypt2.debug) ;
-                                    console.log(pgm + 'encrypt2.this_session_prvkey = ' + encrypt2.this_session_prvkey) ;
-                                    console.log(pgm + 'encrypt2.other_session_pubkey = ' + encrypt2.other_session_pubkey) ;
-                                    console.log(pgm + 'encrypt2.this_session_userid2 = ' + encrypt2.this_session_userid2) ;
-                                    console.log(pgm + 'encrypt2.other_session_pubkey2 = ' + encrypt2.other_session_pubkey) ;
+                                    //console.log(pgm + 'encrypt2.debug               = ' + encrypt2.debug) ;
+                                    //console.log(pgm + 'encrypt2.this_session_prvkey = ' + encrypt2.this_session_prvkey) ;
+                                    //console.log(pgm + 'encrypt2.other_session_pubkey = ' + encrypt2.other_session_pubkey) ;
+                                    //console.log(pgm + 'encrypt2.this_session_userid2 = ' + encrypt2.this_session_userid2) ;
+                                    //console.log(pgm + 'encrypt2.other_session_pubkey2 = ' + encrypt2.other_session_pubkey) ;
                                     // encrypt2.debug               = encrypt4
                                     // encrypt2.this_session_prvkey = -----BEGIN RSA PRIVATE KEY-----MIICWgIBAAKBgE+3QVjs8p8kfoUAavPGsdtwbjbM6y3eBpg9ruNJgbUK21FJbW4jIw0b81ghFZ6fruC6FrMJyLUlWnerrM0kZX00EsKEdFYC96z3pxZ20pEBbZzMUdy4EbapcJ5rv1tm2qnF4jZDEgHKwSCYIuynCWV/G+RPPX5mVBa+6aj/pq7ZAgMBAAECgYAHr6S2XUpbe9pTGqI1VRArF2EZGZMHfiPmo/Pr6FeATEavRMQvXWXwyqQg+Desbrse4fJ0WtomVS6u4TetI/hBCadm4e39giidaQhV+D0AQ+7ffU9pudB1Hh7zyszwnk+xgYB0NDQ6JUiITM1FCmPsRH5lvg/g/P+CGxWfXnqY3QJBAJOA5YhFsVnZiYI/Ix8Xuraxihd7a6mpbpy0aJ3KcOZb26iQvZfHsG4F0lN6T2Jso119UxQ+tfzPrXopjgwSuRMCQQCKWdpWnJ4Xbc3UN1XOT9KRQwD+skMlaUGqcs36+iprvXxaFsfDijuWEfq3prdz+SQnwBovduauIC2w2XKoToHjAkBQvJzmmj8ZDxlVUXnH6xUoKsWLVOL5WuRQoe8hb02cyWrSOWeNTKAlmMonJyuMlCpXYeG3kxvJ5WLvGw/FS/pBAkBcf0ZiscNglqEOSRCtJuD5DXsUzcnmsUCd3LOqIKdL8Ru6f5B/Q2QjKVIehvAQMXniuaTIJw6DTDBAFKF7tUFRAkBTZXbPf+nKoaIDrAJuazEmi7iBtdVU8+VsSUDRzamqNFxYIBqOjnFV+EJvGFDVpOwO9VSoCqPWpf+5e0fQkn0h-----END RSA PRIVATE KEY-----
                                     // encrypt2.other_session_pubkey = null
@@ -2270,12 +2311,8 @@ angular.module('MoneyNetworkW2')
                                     // cryptMessage decrypt session information
                                     get_my_pubkey2(function (pubkey2) {
                                         encrypt1.decrypt_json(encrypted_session_info, function (session_info) {
-                                            var error, ls_updated ;
+                                            var error, ls_updated, request2, i, money_transaction ;
                                             console.log(pgm + 'session_info = ' + JSON.stringify(session_info)) ;
-
-                                            // todo: 1) do not save this session public keys in ls
-                                            // todo: 2) save other session public keys in ls after receiving pubkeys msg
-                                            //
 
                                             // session_info = {
                                             //    "money_transactionid": "hbUhFKGyyAiA8AnqVE74yUnYt9mWRdYTiZTwtFqxS54fk0JSzDJHW6e3krUK",
@@ -2339,14 +2376,94 @@ angular.module('MoneyNetworkW2')
                                             if (ls_updated) ls_save() ;
 
                                             // ready for transaction verification. both wallet sessions should have identical money transaction(s)
-                                            console.log(pgm + 'todo: pubkeys message ok. ready to crosscheck money transaction(s) with other wallet session') ;
+                                            console.log(pgm + 'todo: pubkeys message ok. ready to crosscheck money transaction(s) with other wallet session before sending money transactions to external API (btc.com)') ;
+                                            console.log(pgm + 'session_info.money_transactions = ' + JSON.stringify(session_info.money_transactions)) ;
+                                            console.log(pgm + 'identify receiver. sender is master, receiver is client. master = ' + encrypt2.master + ', client = ' + encrypt2.client) ;
+
+                                            // sender=sweden, receiver=torando
+                                            // sweden would like to send money to torando and is asking torando for approval and a bitcoin address
+                                            // torando has received money transaction, approved transaction and added a address.
+                                            // sweden has not yet received address from torando.
+                                            // otherwise the transaction is identical in sweden and torando wallets
+                                            // generic sender: only one bitcoin address. either address or return_address
+                                            // generic receiver: always two bitcoin addreses. both address and return_address.
+                                            // receiver must return bitcoin addresses to sender.
+                                            //
+                                            // sender_sweden = [{
+                                            //    "action": "Send",
+                                            //    "code": "tBTC",
+                                            //    "amount": 0.0001,
+                                            //    "json": {"return_address": "2NG8wLQf5uYiGn8RX4NYPz6HRssenNvVdSj"}
+                                            //}];
+                                            // receiver_torando = [{
+                                            //    "action": "Send",
+                                            //    "code": "tBTC",
+                                            //    "amount": 0.0001,
+                                            //    "json": {
+                                            //        "return_address": "2NG8wLQf5uYiGn8RX4NYPz6HRssenNvVdSj",
+                                            //        "address": "2MznAqaYAd4ZKXbrLcyRwfUm1HezaPBUXsU"
+                                            //    }
+                                            //}];
+
+                                            if (encrypt2.master) {
+                                                // stop. is master/sender of money transaction(s).
+                                                // wait for receiver of money transaction(s) to send addresses message
+                                                return ;
+                                            }
+
+                                            // is client/receiver. have both address and return_address for money transaction(s).
+                                            // send bitcoin address(es) added in check_mt to master/sender
+                                            request2 = {
+                                                msgtype: 'addresses',
+                                                jsons: []
+                                            } ;
+                                            for (i=0 ; i<session_info.money_transactions.length ; i++) {
+                                                money_transaction = session_info.money_transactions[i] ;
+                                                if (money_transaction.action == 'Send') {
+                                                    // receive money from other wallet
+                                                    // return_address was in received money_transaction. address was added by this client
+                                                    request2.jsons.push({address: money_transaction.json.address}) ;
+                                                }
+                                                else {
+                                                    // send money to other wallet
+                                                    // address was in reeceived money transaction. return_address was added by this client
+                                                    request2.jsons.push({return_address: money_transaction.json.return_address}) ;
+                                                }
+                                            }
+                                            console.log(pgm + 'request2 = ' + JSON.stringify(request2)) ;
+                                            //request2 = {
+                                            //    "msgtype": "addresses",
+                                            //    "jsons": [{"address": "2MwdBoKJGVto96ptKRaPbUG6hmpjwuGUCa4"}]
+                                            //};
+
+                                            // send addresses as an offline message to other wallet session
+                                            encrypt2.send_message(request2, {offline: session_info.offline}, function (response2) {
+                                                var error ;
+                                                if (!response2 || response2.error) {
+                                                    error = ['Money transaction post processing failed', 'addresses message was not send', 'error = ' + JSON.stringify(response2)] ;
+                                                    console.log(pgm + error.join('. ')) ;
+                                                    ZeroFrame.cmd('wrapperNotification', ['error', error.join('<br>')]) ;
+                                                    return ;
+                                                }
+                                                console.log(pgm + 'response2 = ' + JSON.stringify(response2));
+                                                console.log(pgm + 'offline = ' + JSON.stringify(session_info.offline));
+                                                encrypt1.encrypt_json(session_info, [2], function (encrypted_session_info) {
+                                                    var sha256;
+                                                    sha256 = CryptoJS.SHA256(session_info.money_transactionid).toString();
+                                                    ls.w_sessions[auth_address][sha256] = encrypted_session_info;
+                                                    console.log(pgm + 'session_info.money_transactionid = ' + session_info.money_transactionid + ', sha256 = ' + sha256);
+                                                    ls_save();
+                                                    z_publish(true) ;
+                                                }); // encrypt_json callback 2
+
+                                            }); // encrypt_json callback
 
                                         }); // encrypt_json callback 2
                                     }); // get_my_pubkey2 callback 1
 
                                 })() ;
                                 return ; // no response to offline pubkeys message
-
+                                // pubkeys
                             }
                             else response.error = 'Unknown msgtype ' + request.msgtype ;
                             console.log(pgm + 'response = '  + JSON.stringify(response)) ;
