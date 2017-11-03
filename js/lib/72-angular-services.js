@@ -269,35 +269,47 @@ angular.module('MoneyNetworkW2')
                 ZeroFrame.cmd("wrapperSetLocalStorage", [ls], function () {}) ;
             } // ls_save
 
-
             // setup MoneyNetworkAPI
             // MoneyNetworkAPILib.config({debug: true, ZeroFrame: ZeroFrame, optional: "^[0-9a-f]{10}.[0-9]{13}$"}) ; // global options
-            MoneyNetworkAPILib.config({debug: true, ZeroFrame: ZeroFrame, optional: "^[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]$"}) ; // global options
+            // MoneyNetworkAPILib.config({debug: true, ZeroFrame: ZeroFrame, optional: "^[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f].[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]$"}) ; // global options
+            MoneyNetworkAPILib.config({debug: true, ZeroFrame: ZeroFrame, optional: "^.*-.*$"}) ; // global options
 
             // inject extra json schemas into MoneyNetworkAPI (internal wallet to wallet communication)
             var extra_json_schemas = {
-                "addresses": {
+                "w2_check_mt": {
                     "type": 'object',
-                    "title": 'Bitcoin addresses (address or return_address) from receiver to sender',
-                    "description": 'After pubkeys handshake. sender has one bitcoin address for each money transaction. receiver have two bitcoin addresses for each money transaction. Send bitcoin addresses from receiver to sender',
+                    "title": 'Return bitcoin addresses and check money transactions',
+                    "description": 'After pubkeys handshake. Use this message to exchange addresses and crosscheck money transaction information. Identical=execute transactions. Different=abort transactions',
                     "properties": {
-                        "msgtype": { "type": 'string', "pattern": '^addresses$'},
-                        "jsons": { "type": 'array'},
-                        "items": {
-                            "type": 'object',
-                            "properties": {
-                                "address": { "type": 'string'},
-                                "return_address": { "type": 'string'}
+                        "msgtype": { "type": 'string', "pattern": '^w2_check_mt$'},
+                        "money_transactions": {
+                            "type": 'array',
+                            "items": {
+                                "type": 'object',
+                                "properties": {
+                                    "action": { "type": 'string', "pattern": '^(Send|Request)$'},
+                                    "code": {"type": 'string', "minLength": 2, "maxLength": 5},
+                                    "amount": {"type": 'number'},
+                                    "json": {
+                                        "type": 'object',
+                                        "properties": {
+                                            "address": { "type": 'string'},
+                                            "return_address": { "type": 'string'}
+                                        },
+                                        "additionalProperties": false
+                                    }
+                                },
+                                "required": ['action', 'code', 'amount', 'json'],
+                                "additionalProperties": false
                             },
-                            "additionalProperties": false
-                        },
-                        "minItems": 1
+                            "minItems": 1
+                        }
                     },
-                    "required": ['msgtype', 'jsons'],
+                    "required": ['msgtype', 'money_transactions'],
                     "additionalProperties": false
                 }
             } ;
-            MoneyNetworkAPILib.add_json_schemas(extra_json_schemas) ;
+            MoneyNetworkAPILib.add_json_schemas(extra_json_schemas, 'w2') ;
 
             var encrypt1 = new MoneyNetworkAPI({debug: 'encrypt1'}) ; // encrypt1. no sessionid. self encrypt/decrypt data in W2 localStorage ;
 
@@ -720,22 +732,22 @@ angular.module('MoneyNetworkW2')
             // demon. dbQuery. check for any json for new wallet data wallet hub before running any fileGet operations
             function monitor_first_hub_event () {
                 var pgm = service + '.monitor_first_hub_event: ' ;
-                var query, debug_seq ;
+                var w2_query_1, debug_seq ;
                 if (!Object.keys(new_wallet_hub_cbs).length) return ; // no more new wallet hubs to monitor
 
-                query =
+                w2_query_1 =
                     "select substr(directory, 1, instr(directory,'/')-1) as hub, count(*) as rows " +
                     "from json " +
                     "group by substr(directory, 1, instr(directory,'/')-1);" ;
-                debug_seq = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, 'query 1', 'dbQuery') ;
-                ZeroFrame.cmd("dbQuery", [query], function (res) {
+                debug_seq = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, 'w2 query 1', 'dbQuery') ;
+                ZeroFrame.cmd("dbQuery", [w2_query_1], function (res) {
                     var pgm = service + '.monitor_first_hub_event dbQuery callback: ';
                     var hub, i, cbs, cb;
                     // if (detected_client_log_out(pgm)) return ;
                     MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq, (!res || res.error) ? 'Failed. error = ' + JSON.stringify(res) : 'OK');
                     if (res.error) {
                         console.log(pgm + "first hub lookup failed: " + res.error);
-                        console.log(pgm + 'query = ' + query);
+                        console.log(pgm + 'query = ' + w2_query_1);
                         for (hub in new_wallet_hub_cbs) console.log(pgm + 'error: ' + new_wallet_hub_cbs[hub].length + ' callbacks are waiting forever for hub ' + hub) ;
                         return ;
                     }
@@ -761,53 +773,14 @@ angular.module('MoneyNetworkW2')
 
             } // monitor_first_hub_event
 
-            // ZeroFrame fileGet wrapper. first fileGet request must wait for mergerSiteAdd operation to finish
-            //var inner_path_re1 = /^data\/users\// ; // invalid inner_path. old before merger-site syntax
-            //var inner_path_re2 = /^merged-MoneyNetwork\/(.*?)\/data\/users\// ; // extract hub
+            // ZeroFrame wrappers.
             function z_file_get (pgm, options, cb) {
                 MoneyNetworkAPILib.z_file_get(pgm, options, cb);
-                return ;
-                //var pgm = service + '.z_file_get: ' ;
-                //var inner_path, match2, hub, debug_seq, get_optional_file_info ;
-                //inner_path = options.inner_path ;
-                //
-                //// check inner_path
-                //if (inner_path.match(inner_path_re1)) throw pgm + 'Invalid fileGet path. Not a merger-site path. inner_path = ' + inner_path ;
-                //match2 = inner_path.match(inner_path_re2) ;
-                //if (match2) {
-                //    hub = match2[1] ;
-                //    if (new_wallet_hub_cbs[hub]) {
-                //        console.log(pgm + 'new wallet hub ' + hub + '. waiting with fileGet request for ' + inner_path) ;
-                //        new_wallet_hub_cbs[hub].push(function() { z_file_get (pgm, options, cb) }) ;
-                //        return ;
-                //    }
-                //}
-                //
-                //// optional files only. get optional file before fileGet operation
-                //get_optional_file_info = function(inner_path, cb) {
-                //    var pgm = service + '.z_file_get.get_optional_file_info: ' ;
-                //    var pos, filename, optional_file ;
-                //    pos = inner_path.lastIndexOf('/') ;
-                //    filename = inner_path.substr(pos+1, inner_path.length-pos) ;
-                //    optional_file = (['content.json', 'wallet'].indexOf(filename) == -1);
-                //    console.log(pgm + 'filename = ' + JSON.stringify(filename) + ', optional_file = ' + optional_file) ;
-                //    if (!optional_file) return cb() ; // continue with fileGet
-                //    ZeroFrame.cmd("optionalFileInfo", [inner_path], function (file_info) {
-                //        console.log(pgm + 'file_info = ' + JSON.stringify(file_info));
-                //        cb() ;
-                //    }) ;
-                //}; // get_optional_file_info
-                //get_optional_file_info(inner_path, function() {
-                //    var pgm = service + '.z_file_get get_optional_file_info callback: ' ;
-                //    var debug_seq ;
-                //    debug_seq = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path, 'fileGet') ;
-                //    ZeroFrame.cmd("fileGet", options, function (data) {
-                //        MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq, data ? 'OK' : 'Not found');
-                //        cb(data) ;
-                //    }) ; // fileGet callback callback 2
-                //}) ; // get_optional_file_info callback 1
-                //
             } // z_file_get
+            function z_file_write (pgm, inner_path, content, cb) {
+                MoneyNetworkAPILib.z_file_write(pgm, inner_path, content, cb);
+            } // z_file_get
+
 
             function get_default_wallet_hub () {
                 var pgm = service + '.get_default_wallet_hub: ' ;
@@ -840,7 +813,7 @@ angular.module('MoneyNetworkW2')
                 debug_seq0 = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, null, 'mergerSiteList') ;
                 ZeroFrame.cmd("mergerSiteList", [true], function (merger_sites) {
                     var pgm = service + '.get_my_wallet_hub mergerSiteList callback 1: ' ;
-                    var wallet_data_hubs, hub, query, debug_seq1, i ;
+                    var wallet_data_hubs, hub, w2_query_2, debug_seq1, i ;
                     MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq0, merger_sites ? 'OK': 'Failed');
                     wallet_data_hubs = [] ;
                     if (!merger_sites || merger_sites.error) console.log(pgm + 'mergerSiteList failed. merger_sites = ' + JSON.stringify(merger_sites)) ;
@@ -854,7 +827,7 @@ angular.module('MoneyNetworkW2')
                     // - wallet.json file most exist
                     // - wallet.wallet_address = this site
                     // - latest updated content.json is being used
-                    query =
+                    w2_query_2 =
                         "select substr(wallet.directory, 1, instr(wallet.directory,'/')-1) as hub " +
                         "from keyvalue as wallet_address, json as wallet, json as content, keyvalue as modified " +
                         "where wallet_address.key = 'wallet_address' " +
@@ -867,9 +840,9 @@ angular.module('MoneyNetworkW2')
                         "and modified.key = 'modified' " +
                         "order by modified.value desc" ;
 
-                    console.log(pgm + 'query 17 (MS OK) = ' + query);
-                    debug_seq1 = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, 'Query 17', 'dbQuery') ;
-                    ZeroFrame.cmd("dbQuery", [query], function (res) {
+                    console.log(pgm + 'w2 query 2 = ' + w2_query_2);
+                    debug_seq1 = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, 'w2 query 2', 'dbQuery') ;
+                    ZeroFrame.cmd("dbQuery", [w2_query_2], function (res) {
                         var pgm = service + '.get_my_wallet_hub dbQuery callback 2: ' ;
                         var i, run_callbacks, wallet_hub_selected, get_and_add_default_wallet_hub ;
                         MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq1, (!res || res.error) ? 'Failed. error = ' + JSON.stringify(res) : 'OK. Returned ' + res.length + ' rows');
@@ -921,7 +894,7 @@ angular.module('MoneyNetworkW2')
 
                         if (res.error) {
                             console.log(pgm + "wallet data hub lookup failed: " + res.error);
-                            console.log(pgm + 'query = ' + query);
+                            console.log(pgm + 'query = ' + w2_query_2);
                             return get_and_add_default_wallet_hub() ;
                         }
                         if (res.length) {
@@ -977,7 +950,7 @@ angular.module('MoneyNetworkW2')
                     json = {timestamp: new Date().getTime()};
                     json_raw = unescape(encodeURIComponent(JSON.stringify(json, null, "\t")));
                     debug_seq = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path, 'fileWrite') ;
-                    ZeroFrame.cmd("fileWrite", [inner_path, btoa(json_raw)], function (res) {
+                    z_file_write(pgm, inner_path, btoa(json_raw), function (res) {
                         MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq, res == 'ok' ? 'OK' : 'Failed. error = ' + JSON.stringify(res));
                         cb() ;
                     });
@@ -1093,7 +1066,7 @@ angular.module('MoneyNetworkW2')
                     inner_path = user_path + 'content.json' ;
                     // console.log(pgm + 'calling fileWrite. path = ' + inner_path) ;
                     debug_seq = MoneyNetworkAPILib(pgm, inner_path, 'fileWrite') ;
-                    ZeroFrame.cmd("fileWrite", [inner_path, btoa(json_raw)], function (res) {
+                    z_file_write(pgm, inner_path, btoa(json_raw), function (res) {
                         var pgm = service + '.write_content_json fileWrite callback 2: ';
                         MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq, res == 'ok' ? 'OK' : 'Failed. error = ' + JSON.stringify(res));
                         console.log(pgm + 'res = ' + JSON.stringify(res)) ;
@@ -1141,7 +1114,7 @@ angular.module('MoneyNetworkW2')
                     inner_path = user_path + 'wallet.json' ;
                     // console.log(pgm + 'calling fileWrite. path = ' + inner_path) ;
                     debug_seq = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path, 'fileWrite') ;
-                    ZeroFrame.cmd("fileWrite", [inner_path, btoa(json_raw)], function (res) {
+                    z_file_write(pgm, inner_path, btoa(json_raw), function (res) {
                         var pgm = service + '.write_wallet_json fileWrite callback 2: ';
                         MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq, res == 'ok' ? 'OK' : 'Failed. error = ' + JSON.stringify(res));
                         console.log(pgm + 'res = ' + JSON.stringify(res)) ;
@@ -1158,7 +1131,7 @@ angular.module('MoneyNetworkW2')
                 get_my_wallet_hub(function (hub, random_other_hub) {
                     get_wallet_json(function (wallet) {
                         var pgm = service + '.update_wallet_json get_wallet_json callback 2: ';
-                        var old_wallet_str, old_wallet_json, error, key, wallet_sha256, query, debug_seq2 ;
+                        var old_wallet_str, old_wallet_json, error, key, wallet_sha256, w2_query_3, debug_seq2 ;
                         console.log(pgm + 'wallet = ' + JSON.stringify(wallet));
                         old_wallet_str = JSON.stringify(wallet) ;
                         old_wallet_json = JSON.parse(old_wallet_str) ;
@@ -1209,7 +1182,7 @@ angular.module('MoneyNetworkW2')
                         // count number of wallets with this wallet_sha256 signature
                         // there should always be 5 wallets with identical full wallet information (wallet_address, wallet_title, wallet_description, currencies and wallet_sha256)
                         wallet.wallet_sha256 = wallet_sha256 ;
-                        query =
+                        w2_query_3 =
                             "select count(*) as no from (" +
                             "  select keyvalue.json_id, count(*) as no " +
                             "  from keyvalue as wallet_sha256, json, keyvalue " +
@@ -1223,16 +1196,16 @@ angular.module('MoneyNetworkW2')
                             "  group by keyvalue.json_id " +
                             "  having count(*) >= 4" +
                             ")" ;
-                        console.log(pgm + 'query = ' + query) ;
-                        debug_seq2 = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, 'query ?', 'dbQuery') ;
-                        ZeroFrame.cmd("dbQuery", [query], function (res) {
+                        console.log(pgm + 'query = ' + w2_query_3) ;
+                        debug_seq2 = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, 'w2 query 3', 'dbQuery') ;
+                        ZeroFrame.cmd("dbQuery", [w2_query_3], function (res) {
                             var pgm = service + '.update_wallet_json dbQuery callback 3: ';
                             var write_full_info ;
                             MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq2, (!res || res.error) ? 'Failed. error = ' + JSON.stringify(res) : 'OK. Returned ' + res.length + ' rows');
                             // console.log(pgm + 'res = ' + JSON.stringify(res)) ;
                             if (res.error || (res.length != 1)) {
                                 console.log(pgm + 'wallet sha256 query failed. res = ' + JSON.stringify(res));
-                                console.log(pgm + 'query = ' + query);
+                                console.log(pgm + 'query = ' + w2_query_3);
                                 write_full_info = true;
                             }
                             else write_full_info = (res[0].no < 5) ;
@@ -1312,7 +1285,7 @@ angular.module('MoneyNetworkW2')
                         encrypt2.decrypt_json(encrypted_json, function (request) {
                             var pgm = service + '.process_incoming_message decrypt_json callback 2: ';
                             var response_timestamp, request_timestamp, request_timeout_at, error, response,
-                                old_wallet_status, send_response ;
+                                old_wallet_status, send_response, subsystem ;
 
                             // remove any response timestamp before validation (used in response filename)
                             response_timestamp = request.response ; delete request.response ; // request received. must use response_timestamp in response filename
@@ -1344,7 +1317,8 @@ angular.module('MoneyNetworkW2')
                             }; // send_response
 
                             // validate and process incoming json message and process
-                            error = MoneyNetworkAPILib.validate_json(pgm, request) ;
+                            if (request && (typeof request.msgtype == 'string') && (request.msgtype.substr(0,3) == 'w2_')) subsystem = 'w2' ;
+                            error = MoneyNetworkAPILib.validate_json(pgm, request, null, subsystem) ;
                             if (error) response.error = 'message is invalid. ' + error ;
                             else if (request.msgtype == 'ping') {
                                 // simple ping from MN. checking connection. return OK response
@@ -1705,7 +1679,7 @@ angular.module('MoneyNetworkW2')
                                                 pubkey2: session_info.pubkey2 // for cryptMessage
                                             };
                                             console.log(pgm + 'request2 = ' + JSON.stringify(request2));
-                                            encrypt3.send_message(request2, {encryptions: [3], offline: session_info.offline}, function (response2) {
+                                            encrypt3.send_message(request2, {encryptions: [3], offline: true}, function (response2) {
                                                 var error ;
                                                 if (!response2 || response2.error) {
                                                     error = ['Money transaction post processing failed', 'pubkeys message was not send', 'error = ' + JSON.stringify(response2)] ;
@@ -1714,7 +1688,6 @@ angular.module('MoneyNetworkW2')
                                                     return ;
                                                 }
                                                 console.log(pgm + 'response2 = ' + JSON.stringify(response2));
-                                                console.log(pgm + 'offline = ' + JSON.stringify(session_info.offline));
                                                 step_6_save_in_ls();
                                             }); // encrypt_json callback
                                         }; // step_5_save_pubkeys_msg
@@ -1726,15 +1699,13 @@ angular.module('MoneyNetworkW2')
                                             // this wallet starts the transaction and is the master in wallet to wallet communication
                                             // todo: 1) add this session keys information to encrypt3
                                             // todo: 2) encrypt3 instance should be saved in ls and should be restored after page reload (step_5_save_in_ls)
-                                            session_info.offline = [];
                                             encrypt3 = new MoneyNetworkAPI({
                                                 debug: 'encrypt3',
                                                 sessionid: session_info.money_transactionid,
                                                 master: true,
                                                 prvkey: session_info.prvkey,
                                                 userid2: session_info.userid2,
-                                                cb: process_incoming_message,
-                                                extra: {offline: session_info.offline}
+                                                cb: process_incoming_message
                                             });
                                             step_5_save_pubkeys_msg();
                                         }; // step_4_create_session
@@ -2167,7 +2138,7 @@ angular.module('MoneyNetworkW2')
                                                 pubkey2: session_info.pubkey2 // for cryptMessage
                                             };
                                             console.log(pgm + 'request2 = ' + JSON.stringify(request2));
-                                            encrypt4.send_message(request2, {encryptions: [3], offline: session_info.offline}, function (response2) {
+                                            encrypt4.send_message(request2, {encryptions: [3], offline: true}, function (response2) {
                                                 var error ;
                                                 if (!response2 || response2.error) {
                                                     error = ['Money transaction post processing failed', 'pubkeys message was not send', 'error = ' + JSON.stringify(response2)] ;
@@ -2176,7 +2147,6 @@ angular.module('MoneyNetworkW2')
                                                     return ;
                                                 }
                                                 console.log(pgm + 'response2 = ' + JSON.stringify(response2));
-                                                console.log(pgm + 'offline = ' + JSON.stringify(session_info.offline));
                                                 step_6_save_in_ls();
                                             }); // encrypt_json callback
                                         }; // step_5_save_pubkeys_msg
@@ -2186,15 +2156,13 @@ angular.module('MoneyNetworkW2')
                                             var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_4_create_session: ';
 
                                             // create new session. demon process should read offline pubkeys message from other wallet session
-                                            session_info.offline = [] ;
                                             encrypt4 = new MoneyNetworkAPI({
                                                 debug: 'encrypt4',
                                                 sessionid: session_info.money_transactionid,
                                                 master: false,
                                                 prvkey: session_info.prvkey,
                                                 userid2: session_info.userid2,
-                                                cb: process_incoming_message,
-                                                extra: {offline: session_info.offline}
+                                                cb: process_incoming_message
                                             });
                                             // MoneyNetworkAPI.js:309 MoneyNetworkAPILib.add_session: monitoring other_session_filename e1af7946c6, sessionid = 3R1R46sRFEal8zWx0wYvYyo6VDLJmpFzVNsyIOhglPV4bcUgXqUDLOWrOkZA
                                             // MoneyNetworkAPI.js:327 MoneyNetworkAPILib.add_session: other_session_filename e1af7946c6 should be processed by encrypt4
@@ -2407,28 +2375,29 @@ angular.module('MoneyNetworkW2')
 
                                             if (encrypt2.master) {
                                                 // stop. is master/sender of money transaction(s).
-                                                // wait for receiver of money transaction(s) to send addresses message
+                                                // wait for receiver of money transaction(s) to send w2_check_mt message with missing bitcoin addresses
                                                 return ;
                                             }
 
                                             // is client/receiver. have both address and return_address for money transaction(s).
                                             // send bitcoin address(es) added in check_mt to master/sender
+                                            // w2_check_mt message is being used for money transaction crosscheck
+                                            // the two wallets must agree about money transaction(s) to start
                                             request2 = {
-                                                msgtype: 'addresses',
-                                                jsons: []
+                                                msgtype: 'w2_check_mt',
+                                                money_transactions: []
                                             } ;
                                             for (i=0 ; i<session_info.money_transactions.length ; i++) {
                                                 money_transaction = session_info.money_transactions[i] ;
-                                                if (money_transaction.action == 'Send') {
-                                                    // receive money from other wallet
-                                                    // return_address was in received money_transaction. address was added by this client
-                                                    request2.jsons.push({address: money_transaction.json.address}) ;
-                                                }
-                                                else {
-                                                    // send money to other wallet
-                                                    // address was in reeceived money transaction. return_address was added by this client
-                                                    request2.jsons.push({return_address: money_transaction.json.return_address}) ;
-                                                }
+                                                request2.money_transactions.push({
+                                                    action: money_transaction.action,
+                                                    code: money_transaction.code,
+                                                    amount: money_transaction.amount,
+                                                    json: {
+                                                        address: money_transaction.json.address,
+                                                        return_address: money_transaction.json.return_address
+                                                    }
+                                                }) ;
                                             }
                                             console.log(pgm + 'request2 = ' + JSON.stringify(request2)) ;
                                             //request2 = {
@@ -2436,8 +2405,8 @@ angular.module('MoneyNetworkW2')
                                             //    "jsons": [{"address": "2MwdBoKJGVto96ptKRaPbUG6hmpjwuGUCa4"}]
                                             //};
 
-                                            // send addresses as an offline message to other wallet session
-                                            encrypt2.send_message(request2, {offline: session_info.offline}, function (response2) {
+                                            // send w2_check_mt as an offline message to other wallet session
+                                            encrypt2.send_message(request2, {offline: true, subsystem: 'w2'}, function (response2) {
                                                 var error ;
                                                 if (!response2 || response2.error) {
                                                     error = ['Money transaction post processing failed', 'addresses message was not send', 'error = ' + JSON.stringify(response2)] ;
@@ -2446,7 +2415,6 @@ angular.module('MoneyNetworkW2')
                                                     return ;
                                                 }
                                                 console.log(pgm + 'response2 = ' + JSON.stringify(response2));
-                                                console.log(pgm + 'offline = ' + JSON.stringify(session_info.offline));
                                                 encrypt1.encrypt_json(session_info, [2], function (encrypted_session_info) {
                                                     var sha256;
                                                     sha256 = CryptoJS.SHA256(session_info.money_transactionid).toString();
@@ -2464,6 +2432,76 @@ angular.module('MoneyNetworkW2')
                                 })() ;
                                 return ; // no response to offline pubkeys message
                                 // pubkeys
+                            }
+                            else if (request.msgtype == 'w2_check_mt') {
+                                // after pubkeys session handshake. Now running full encryption
+                                // money transaction receiver is returning missing bitcoin addresses (address or return_address) to money transaction sender
+                                (function() {
+                                    var pgm = service + '.process_incoming_message.' + request.msgtype + ': ';
+                                    var auth_address, sha256, encrypted_session_info ;
+
+                                    // check ls status
+                                    if (!ls.w_sessions) ls.w_sessions = {};
+                                    if (!ls.w_sessions[auth_address]) ls.w_sessions[auth_address] = {};
+                                    auth_address = ZeroFrame.site_info.auth_address;
+                                    sha256 = CryptoJS.SHA256(encrypt2.sessionid).toString();
+                                    encrypted_session_info = ls.w_sessions[auth_address][sha256] ;
+                                    if (!encrypted_session_info) {
+                                        error = ['Money transaction cannot start', 'Addresses message with unknown sessionid', encrypt2.sessionid] ;
+                                        console.log(pgm + 'error. ' + error.join('. ')) ;
+                                        console.log(pgm + 'auth_address = ' + auth_address + ', sha256 = ' + sha256) ;
+                                        ZeroFrame.cmd('wrapperNotification', ['error', error.join('<br>')]) ;
+                                        return ; // no error response. this is a offline message
+                                    }
+
+                                    // cryptMessage decrypt session information
+                                    get_my_pubkey2(function (pubkey2) {
+                                        encrypt1.decrypt_json(encrypted_session_info, function (session_info) {
+                                            var error, ls_updated, request2, i, money_transaction;
+                                            console.log(pgm + 'session_info = ' + JSON.stringify(session_info));
+
+                                            // 1) must be master/sender
+
+                                            // 2) compare jsons in incoming request with money transactions in ls
+                                            //request = {
+                                            //    "msgtype": "addresses",
+                                            //    "jsons": [{"address": "2NE3FrBQyNb1pHDXhZwQzSQJUc16FqoybkV"}]
+                                            //};
+
+                                            // session_info = {
+                                            //    "money_transactionid": "hbUhFKGyyAiA8AnqVE74yUnYt9mWRdYTiZTwtFqxS54fk0JSzDJHW6e3krUK",
+                                            //    "master": false,
+                                            //    "contact": {
+                                            //        "alias": "1CCiJ97XHgVeJ",
+                                            //        "cert_user_id": "1CCiJ97XHgVeJ@moneynetwork.bit",
+                                            //        "auth_address": "1CCiJ97XHgVeJrkbnzLgfXvYRr8QEWxnWF"
+                                            //    },
+                                            //    "money_transactions": [{
+                                            //        "action": "Send",
+                                            //        "code": "tBTC",
+                                            //        "amount": 0.0001,
+                                            //        "json": {
+                                            //            "return_address": "2N9Q14JnWbVZtjmfS8cK1F2TdeKbWisJEEQ",
+                                            //            "address": "2N3WccS3b2ZBypzkJEBTCu9PtoKMmsGSMqt"
+                                            //        }
+                                            //    }],
+                                            //    "ip_external": true,
+                                            //    "pubkey": "-----BEGIN PUBLIC KEY-----\nMIGeMA0GCSqGSIb3DQEBAQUAA4GMADCBiAKBgE+3QVjs8p8kfoUAavPGsdtwbjbM\n6y3eBpg9ruNJgbUK21FJbW4jIw0b81ghFZ6fruC6FrMJyLUlWnerrM0kZX00EsKE\ndFYC96z3pxZ20pEBbZzMUdy4EbapcJ5rv1tm2qnF4jZDEgHKwSCYIuynCWV/G+RP\nPX5mVBa+6aj/pq7ZAgMBAAE=\n-----END PUBLIC KEY-----",
+                                            //    "prvkey": "-----BEGIN RSA PRIVATE KEY-----\nMIICWgIBAAKBgE+3QVjs8p8kfoUAavPGsdtwbjbM6y3eBpg9ruNJgbUK21FJbW4j\nIw0b81ghFZ6fruC6FrMJyLUlWnerrM0kZX00EsKEdFYC96z3pxZ20pEBbZzMUdy4\nEbapcJ5rv1tm2qnF4jZDEgHKwSCYIuynCWV/G+RPPX5mVBa+6aj/pq7ZAgMBAAEC\ngYAHr6S2XUpbe9pTGqI1VRArF2EZGZMHfiPmo/Pr6FeATEavRMQvXWXwyqQg+Des\nbrse4fJ0WtomVS6u4TetI/hBCadm4e39giidaQhV+D0AQ+7ffU9pudB1Hh7zyszw\nnk+xgYB0NDQ6JUiITM1FCmPsRH5lvg/g/P+CGxWfXnqY3QJBAJOA5YhFsVnZiYI/\nIx8Xuraxihd7a6mpbpy0aJ3KcOZb26iQvZfHsG4F0lN6T2Jso119UxQ+tfzPrXop\njgwSuRMCQQCKWdpWnJ4Xbc3UN1XOT9KRQwD+skMlaUGqcs36+iprvXxaFsfDijuW\nEfq3prdz+SQnwBovduauIC2w2XKoToHjAkBQvJzmmj8ZDxlVUXnH6xUoKsWLVOL5\nWuRQoe8hb02cyWrSOWeNTKAlmMonJyuMlCpXYeG3kxvJ5WLvGw/FS/pBAkBcf0Zi\nscNglqEOSRCtJuD5DXsUzcnmsUCd3LOqIKdL8Ru6f5B/Q2QjKVIehvAQMXniuaTI\nJw6DTDBAFKF7tUFRAkBTZXbPf+nKoaIDrAJuazEmi7iBtdVU8+VsSUDRzamqNFxY\nIBqOjnFV+EJvGFDVpOwO9VSoCqPWpf+5e0fQkn0h\n-----END RSA PRIVATE KEY-----",
+                                            //    "userid2": 692,
+                                            //    "pubkey2": "A9F8fG2jmxMdbcLXc8XJqiCbYyNgoe+GNayzhXfzXOcg",
+                                            //    "offline": []
+                                            //};
+
+
+
+
+                                        });
+                                    }) ;
+
+                                })() ;
+                                return ; // no response to offline addresses message
+                                // addresses
                             }
                             else response.error = 'Unknown msgtype ' + request.msgtype ;
                             console.log(pgm + 'response = '  + JSON.stringify(response)) ;
@@ -2510,37 +2548,42 @@ angular.module('MoneyNetworkW2')
 
                 encrypt2.get_session_filenames(function (this_session_filename, other_session_filename, unlock_pwd2) {
                     var pgm = service + '.read_pubkeys get_session_filenames callback 1: ' ;
-                    var query, debug_seq ;
+                    var w2_query_4, debug_seq ;
                     console.log(pgm + 'this_session_filename = ' + this_session_filename + ', other_session_filename = ' + other_session_filename) ;
-                    query =
+                    w2_query_4 =
                         "select " +
                         "  json.directory," +
                         "  substr(json.directory, 1, instr(json.directory,'/')-1) as hub," +
                         "  substr(json.directory, instr(json.directory,'/data/users/')+12) as auth_address," +
                         "  files_optional.filename, keyvalue.value as modified " +
                         "from files_optional, json, keyvalue " +
-                        "where files_optional.filename like '" + other_session_filename + ".%' " +
+                        "where files_optional.filename like '" + other_session_filename + "%' " +
                         "and json.json_id = files_optional.json_id " +
                         "and keyvalue.json_id = json.json_id " +
                         "and keyvalue.key = 'modified' " +
                         "order by files_optional.filename desc" ;
-                    console.log(pgm + 'query = ' + query) ;
-                    debug_seq = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, 'query ?', 'dbQuery') ;
-                    ZeroFrame.cmd("dbQuery", [query], function (res) {
+                    console.log(pgm + 'query = ' + w2_query_4) ;
+                    debug_seq = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, 'w2 query 4', 'dbQuery') ;
+                    ZeroFrame.cmd("dbQuery", [w2_query_4], function (res) {
                         var pgm = service + '.read_pubkeys dbQuery callback 2: ' ;
-                        var prefix, other_user_path, inner_path ;
+                        var prefix, other_user_path, inner_path, re, i ;
                         MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq, (!res || res.error) ? 'Failed. error = ' + JSON.stringify(res) : 'OK. Returned ' + res.length + ' rows');
                         prefix = "Error. MN-W2 session handshake failed. " ;
                         // console.log(pgm + 'res = ' + JSON.stringify(res)) ;
                         if (res.error) {
                             console.log(pgm + prefix + 'cannot read pubkeys message. dbQuery failed with ' + res.error) ;
-                            console.log(pgm + 'query = ' + query) ;
+                            console.log(pgm + 'query = ' + w2_query_4) ;
                             status.sessionid = null ;
                             return cb(status.sessionid) ;
                         }
+                        // check optional filename.
+                        re = /^[0-9a-f]{10}(-i|-e|-o|-io)?\.[0-9]{13}$/ ;
+                        for (i=res.length-1 ; i >= 0 ; i--) {
+                            if (!res[i].filename.match(re)) res.splice(i,1) ;
+                        }
                         if (res.length == 0) {
                             console.log(pgm + prefix + 'pubkeys message was not found') ;
-                            console.log(pgm + 'query = ' + query) ;
+                            console.log(pgm + 'query = ' + w2_query_4) ;
                             status.sessionid = null ;
                             return cb(status.sessionid) ;
                         }
@@ -3053,7 +3096,7 @@ angular.module('MoneyNetworkW2')
                                 // load list of offline transactions from ls (loaded into status.offline array)
                                 get_offline(function(error) {
                                     var pgm = service + '.initialize get_offline callback 4: ' ;
-                                    var query1, directory, debug_seq ;
+                                    var w2_query_5, directory, debug_seq ;
                                     if (error) console.log(pgm + error) ;
                                     // find outgoing money transactions
 
@@ -3061,20 +3104,20 @@ angular.module('MoneyNetworkW2')
                                     // query 1. simple get all optional files for current user directory
                                     // todo: optional files and actual files on file system can be out of sync. Should delete files_optional + sign to be sure that optional files and file system matches
                                     directory = z_cache.my_wallet_data_hub + "/data/users/" + ZeroFrame.site_info.auth_address ;
-                                    query1 =
+                                    w2_query_5 =
                                         "select files_optional.filename from json, files_optional " +
                                         "where directory like '" + directory + "' " +
                                         "and file_name = 'content.json' " +
                                         "and files_optional.json_id = json.json_id";
-                                    console.log(pgm + 'query1 = ' + query1);
-                                    debug_seq = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, 'query1', 'dbQuery') ;
-                                    ZeroFrame.cmd("dbQuery", [query1], function (files) {
+                                    console.log(pgm + 'w2 query 5 = ' + w2_query_5);
+                                    debug_seq = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, 'w2 query 5', 'dbQuery') ;
+                                    ZeroFrame.cmd("dbQuery", [w2_query_5], function (files) {
                                         var pgm = service + '.initialize dbQuery callback 5: ' ;
                                         var files, i, re, get_file_info;
                                         MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq, (!files || files.error) ? 'Failed. error = ' + JSON.stringify(res) : 'OK. Returned ' + files.length + ' rows');
                                         if (files.error) {
                                             console.log(pgm + 'query failed. error = ' + files.error);
-                                            console.log(pgm + 'query = ' + query1);
+                                            console.log(pgm + 'query = ' + w2_query_5);
                                             return;
                                         }
                                         re = new RegExp('^[0-9a-f]{10}.[0-9]{13}$');
