@@ -982,9 +982,8 @@ angular.module('MoneyNetworkW2')
                             cmd = publish ? 'sitePublish' : 'siteSign' ;
                             if (publish) {
                                 // long running operation. using z_site_publish ensure that content is not updated while publishing
-                                MoneyNetworkAPILib.z_site_publish({inner_path: inner_path}, function (res) {
+                                MoneyNetworkAPILib.z_site_publish({inner_path: inner_path, encrypt: encrypt2}, function (res) {
                                     var pgm = service + '.z_site_publish callback 4: ';
-                                    var now, request ;
                                     console.log(pgm + 'res = ' + res) ;
                                     if (res != "ok") {
                                         ZeroFrame.cmd("wrapperNotification", ["error", "Failed to " + (publish ? "publish" : "sign") + ": " + res.error, 5000]);
@@ -1001,14 +1000,7 @@ angular.module('MoneyNetworkW2')
                                     }
                                     // sign/publish OK
                                     z_publish_interval = 0 ;
-                                    now = new Date().getTime() ;
                                     cb();
-                                    if (!status.sessionid) return ; // No MN session
-                                    // inform MN about publish. minimum 16 seconds between each publish (MN and wallet sessions)
-                                    request = { msgtype: 'published', timestamp: now} ;
-                                    encrypt2.send_message(request, {response: true}, function(response) {
-                                        console.log(pgm + 'request = ' + JSON.stringify(request) + ', response = ' + JSON.stringify(response)) ;
-                                    }) ;
                                 }) ;
                                 return ;
                             }
@@ -1253,7 +1245,8 @@ angular.module('MoneyNetworkW2')
             // - encrypt2: instance of MoneyNetworkAPI class created with new MoneyNetworkAPI request
             function process_incoming_message(inner_path, encrypt2, encrypted_json_str, request) {
                 var pgm = service + '.process_incoming_message: ';
-                var pos, other_user_path, file_timestamp, options, filename, re;
+                var pos, response_timestamp, request_timestamp, request_timeout_at, error, response, old_wallet_status,
+                    send_response, subsystem;
 
                 try {
                     if (encrypt2.destroyed) {
@@ -1268,9 +1261,6 @@ angular.module('MoneyNetworkW2')
                     file_timestamp = parseInt(inner_path.substr(pos + 1));
                     console.log(pgm + 'file_timestamp = ' + file_timestamp);
 
-                    var pgm = service + '.process_incoming_message decrypt_json callback 2: ';
-                    var response_timestamp, request_timestamp, request_timeout_at, error, response,
-                        old_wallet_status, send_response, subsystem;
 
                     // remove any response timestamp before validation (used in response filename)
                     response_timestamp = request.response;
