@@ -296,6 +296,7 @@ angular.module('MoneyNetworkW2')
                                             "address": { "type": 'string'},
                                             "return_address": { "type": 'string'}
                                         },
+                                        "required": ['address', 'return_address'],
                                         "additionalProperties": false
                                     }
                                 },
@@ -1243,10 +1244,10 @@ angular.module('MoneyNetworkW2')
             // params:
             // - inner_path: inner_path to new incoming message
             // - encrypt2: instance of MoneyNetworkAPI class created with new MoneyNetworkAPI request
-            function process_incoming_message(inner_path, encrypt2, encrypted_json_str, request) {
+            function process_incoming_message(inner_path, encrypt2, encrypted_json_str, request, extra) {
                 var pgm = service + '.process_incoming_message: ';
                 var pos, response_timestamp, request_timestamp, request_timeout_at, error, response, old_wallet_status,
-                    send_response, subsystem;
+                    send_response, subsystem, file_timestamp;
 
                 try {
                     if (encrypt2.destroyed) {
@@ -1260,6 +1261,11 @@ angular.module('MoneyNetworkW2')
                     pos = inner_path.lastIndexOf('.');
                     file_timestamp = parseInt(inner_path.substr(pos + 1));
                     console.log(pgm + 'file_timestamp = ' + file_timestamp);
+
+                    if (!request) {
+                        console.log(pgm + 'no request. fileGet or decrypt must have failed. extra = ' + JSON.stringify(extra)) ;
+                        return ;
+                    }
 
 
                     // remove any response timestamp before validation (used in response filename)
@@ -1698,8 +1704,7 @@ angular.module('MoneyNetworkW2')
                                         sessionid: session_info.money_transactionid,
                                         master: true,
                                         prvkey: session_info.prvkey,
-                                        userid2: session_info.userid2,
-                                        cb: process_incoming_message
+                                        userid2: session_info.userid2
                                     });
                                     step_5_save_pubkeys_msg();
                                 }; // step_4_create_session
@@ -2435,7 +2440,7 @@ angular.module('MoneyNetworkW2')
                     }
                     else if (request.msgtype == 'w2_check_mt') {
                         // after pubkeys session handshake. Now running full encryption
-                        // money transaction receiver is returning missing bitcoin addresses (address or return_address) to money transaction sender
+                        // money transaction receiver (client) is returning missing bitcoin addresses (address or return_address) to money transaction sender (master)
                         (function () {
                             var pgm = service + '.process_incoming_message.' + request.msgtype + ': ';
                             var auth_address, sha256, encrypted_session_info;
@@ -2447,7 +2452,7 @@ angular.module('MoneyNetworkW2')
                             sha256 = CryptoJS.SHA256(encrypt2.sessionid).toString();
                             encrypted_session_info = ls.w_sessions[auth_address][sha256];
                             if (!encrypted_session_info) {
-                                error = ['Money transaction cannot start', 'Addresses message with unknown sessionid', encrypt2.sessionid];
+                                error = ['Money transaction cannot start', 'w2_check_mt message with unknown sessionid', encrypt2.sessionid];
                                 console.log(pgm + 'error. ' + error.join('. '));
                                 console.log(pgm + 'auth_address = ' + auth_address + ', sha256 = ' + sha256);
                                 ZeroFrame.cmd('wrapperNotification', ['error', error.join('<br>')]);
@@ -2457,42 +2462,123 @@ angular.module('MoneyNetworkW2')
                             // cryptMessage decrypt session information
                             get_my_pubkey2(function (pubkey2) {
                                 encrypt1.decrypt_json(encrypted_session_info, function (session_info) {
-                                    var error, ls_updated, request2, i, money_transaction;
+                                    var error, i, my_money_transaction, contact_money_transaction, ls_updated;
                                     console.log(pgm + 'session_info = ' + JSON.stringify(session_info));
 
                                     // 1) must be master/sender
+                                    if (!session_info.master) {
+                                        console.log(pgm + 'warning. is client/receiver of money transaction. ignoring incoming w2_check_mt message. only sent from receiver of money transaction to sender of money transaction') ;
+                                        return ;
+                                    }
 
                                     // 2) compare jsons in incoming request with money transactions in ls
+                                    // should be 100% identical except added address or return address (added by money transaction receiver)
                                     //request = {
-                                    //    "msgtype": "addresses",
-                                    //    "jsons": [{"address": "2NE3FrBQyNb1pHDXhZwQzSQJUc16FqoybkV"}]
-                                    //};
-
-                                    // session_info = {
-                                    //    "money_transactionid": "hbUhFKGyyAiA8AnqVE74yUnYt9mWRdYTiZTwtFqxS54fk0JSzDJHW6e3krUK",
-                                    //    "master": false,
-                                    //    "contact": {
-                                    //        "alias": "1CCiJ97XHgVeJ",
-                                    //        "cert_user_id": "1CCiJ97XHgVeJ@moneynetwork.bit",
-                                    //        "auth_address": "1CCiJ97XHgVeJrkbnzLgfXvYRr8QEWxnWF"
-                                    //    },
+                                    //    "msgtype": "w2_check_mt",
                                     //    "money_transactions": [{
                                     //        "action": "Send",
                                     //        "code": "tBTC",
                                     //        "amount": 0.0001,
                                     //        "json": {
-                                    //            "return_address": "2N9Q14JnWbVZtjmfS8cK1F2TdeKbWisJEEQ",
-                                    //            "address": "2N3WccS3b2ZBypzkJEBTCu9PtoKMmsGSMqt"
+                                    //            "address": "2Mu4yL29dxz6FGiNgoRn7LJqTR2XxCCZGnL",
+                                    //            "return_address": "2N4KSQRe5pwbxG44ha2eydYQcwVyoApAzxM"
                                     //        }
-                                    //    }],
-                                    //    "ip_external": true,
-                                    //    "pubkey": "-----BEGIN PUBLIC KEY-----\nMIGeMA0GCSqGSIb3DQEBAQUAA4GMADCBiAKBgE+3QVjs8p8kfoUAavPGsdtwbjbM\n6y3eBpg9ruNJgbUK21FJbW4jIw0b81ghFZ6fruC6FrMJyLUlWnerrM0kZX00EsKE\ndFYC96z3pxZ20pEBbZzMUdy4EbapcJ5rv1tm2qnF4jZDEgHKwSCYIuynCWV/G+RP\nPX5mVBa+6aj/pq7ZAgMBAAE=\n-----END PUBLIC KEY-----",
-                                    //    "prvkey": "-----BEGIN RSA PRIVATE KEY-----\nMIICWgIBAAKBgE+3QVjs8p8kfoUAavPGsdtwbjbM6y3eBpg9ruNJgbUK21FJbW4j\nIw0b81ghFZ6fruC6FrMJyLUlWnerrM0kZX00EsKEdFYC96z3pxZ20pEBbZzMUdy4\nEbapcJ5rv1tm2qnF4jZDEgHKwSCYIuynCWV/G+RPPX5mVBa+6aj/pq7ZAgMBAAEC\ngYAHr6S2XUpbe9pTGqI1VRArF2EZGZMHfiPmo/Pr6FeATEavRMQvXWXwyqQg+Des\nbrse4fJ0WtomVS6u4TetI/hBCadm4e39giidaQhV+D0AQ+7ffU9pudB1Hh7zyszw\nnk+xgYB0NDQ6JUiITM1FCmPsRH5lvg/g/P+CGxWfXnqY3QJBAJOA5YhFsVnZiYI/\nIx8Xuraxihd7a6mpbpy0aJ3KcOZb26iQvZfHsG4F0lN6T2Jso119UxQ+tfzPrXop\njgwSuRMCQQCKWdpWnJ4Xbc3UN1XOT9KRQwD+skMlaUGqcs36+iprvXxaFsfDijuW\nEfq3prdz+SQnwBovduauIC2w2XKoToHjAkBQvJzmmj8ZDxlVUXnH6xUoKsWLVOL5\nWuRQoe8hb02cyWrSOWeNTKAlmMonJyuMlCpXYeG3kxvJ5WLvGw/FS/pBAkBcf0Zi\nscNglqEOSRCtJuD5DXsUzcnmsUCd3LOqIKdL8Ru6f5B/Q2QjKVIehvAQMXniuaTI\nJw6DTDBAFKF7tUFRAkBTZXbPf+nKoaIDrAJuazEmi7iBtdVU8+VsSUDRzamqNFxY\nIBqOjnFV+EJvGFDVpOwO9VSoCqPWpf+5e0fQkn0h\n-----END RSA PRIVATE KEY-----",
-                                    //    "userid2": 692,
-                                    //    "pubkey2": "A9F8fG2jmxMdbcLXc8XJqiCbYyNgoe+GNayzhXfzXOcg",
-                                    //    "offline": []
+                                    //    }]
                                     //};
 
+                                    //session_info = {
+                                    //    "money_transactionid": "ej3DqoFWtmW1m0q8tq2ZlvgfTXTPJ1Hhe9vnTF3s3577vr3G8elkzaVp5mDH",
+                                    //    "master": true,
+                                    //    "contact": {
+                                    //        "alias": "jro",
+                                    //        "cert_user_id": "jro@zeroid.bit",
+                                    //        "auth_address": "18DbeZgtVCcLghmtzvg4Uv8uRQAwR8wnDQ"
+                                    //    },
+                                    //    "money_transactions": [{
+                                    //        "action": "Send",
+                                    //        "code": "tBTC",
+                                    //        "amount": 0.0001,
+                                    //        "json": {"return_address": "2N4KSQRe5pwbxG44ha2eydYQcwVyoApAzxM"}
+                                    //    }],
+                                    //    "ip_external": false,
+                                    //    "prvkey": "-----BEGIN RSA PRIVATE KEY-----\nMIICWwIBAAKBgGHz4JLpGIh0hQYo8RNSUtxuFA7+bU0kl58DyDxot+qW5xqWbmJu\ngEQ1cFYA/CRkngbrURXPVbS4WElO9mR36P3QEC/b2BsP6N0qpzMskTLLPyYFOjBY\nRmyVaYSuCGX9xwyOxt/idR7MZOTNMNxeHKbtIV+UAr5CwwI5NhGTPfI1AgMBAAEC\ngYBSPuft8vK6gLvBNFdXleQlWfhVrqQwBe2Zgx96OaNTwmlCFdWRqJ7ipswwKpuM\nIz/dJ3DqEzEvkSnwQ/D24wgqKtXHXxt+0jIhe37CDkdJ0HHaAfWIQGWX5nwasM3j\nA2mCGpVQ3e2hzPezz/7TZGmqTUJ9OtIP6MEaXbom85uk8QJBAKwPLJw2Ey7CgqaE\nRSAEwmMOVqsDn7aeSOT7ixuEm8bJtqXUlVVa8YF8Bi1r51TEDW35o2vus2JJPcn+\nVKgtGF8CQQCRvWDdZyAQHSAKP4+8OiaksGrF8Ou/1N+UuKCn2zbm+D+UPgf9yPOA\nH6GlD4Gqgt2vGy5e5yCBdHMG25Dc/E3rAkAC3/IH3iNt6ZQTQiyBf3LcAtZR3yqg\n+34OTWGioRGVPbOOi8G+/lkAp9jWk3H3CZuL1dr0J7XZk42zvUse0DoTAkBGS708\nLbDGdPXuW4g99yKKj1mBDlr4FXqeZot/S3po39by7xS1scbZxugWEKuvjh3Vh1vP\nhNYl+wA8j42JOd1vAkEAnaNq8JfW8LVzvKhgxNaGmF7KZd1zQHwkr495RGrwtqc3\nwHpJlDOFAOOUjWgEaY+qFpGBzn1rVUb58QRG8GTdag==\n-----END RSA PRIVATE KEY-----",
+                                    //    "userid2": 546
+                                    //};
+
+                                    // check number of money transactions
+                                    if (request.money_transactions.length != session_info.money_transactions.length) {
+                                        error = [
+                                            'Money transaction cannot start',
+                                            'Different number of rows',
+                                            session_info.money_transactions.length + ' row' + (session_info.money_transactions.length > 1 ? 's' : '') + ' in your transaction',
+                                            request.money_transactions.length + ' row' + (request.money_transactions.length > 1 ? 's' : '') + ' in contact transaction'
+                                        ] ;
+                                        console.log(pgm + 'error. ' + error.join('. '));
+                                        ZeroFrame.cmd('wrapperNotification', ['error', error.join('<br>')]);
+                                        return; // no error response. this is a offline message
+                                    }
+                                    // compare money transactions one by one
+                                    ls_updated = 0 ;
+                                    for (i=0 ; i<request.money_transactions.length ; i++) {
+                                        my_money_transaction = session_info.money_transactions[i] ;
+                                        contact_money_transaction = request.money_transactions[i] ;
+                                        error = [] ;
+                                        if (my_money_transaction.action != contact_money_transaction.action) {
+                                            error.push('your action is ' + my_money_transaction.action) ;
+                                            error.push('contact action is ' + my_money_transaction.action) ;
+                                        }
+                                        if (my_money_transaction.code != contact_money_transaction.code) {
+                                            error.push('your code is ' + my_money_transaction.code) ;
+                                            error.push('contact code is ' + contact_money_transaction.code) ;
+                                        }
+                                        if (my_money_transaction.amount != contact_money_transaction.amount) {
+                                            error.push('your amount is ' + my_money_transaction.amount);
+                                            error.push('contact amount is ' + contact_money_transaction.amount);
+                                        }
+                                        if (my_money_transaction.json.address) {
+                                            if (my_money_transaction.json.address != contact_money_transaction.json.address) {
+                                                error.push('your address is ' + my_money_transaction.json.address);
+                                                error.push('contact address is ' + contact_money_transaction.json.address);
+                                            }
+                                        }
+                                        else {
+                                            my_money_transaction.json.address = contact_money_transaction.json.address ;
+                                            ls_updated++ ;
+                                        }
+                                        if (my_money_transaction.json.return_address) {
+                                            if (my_money_transaction.json.return_address != contact_money_transaction.json.return_address) {
+                                                error.push('your return_address is ' + my_money_transaction.json.return_address);
+                                                error.push('contact return_address is ' + contact_money_transaction.json.return_address);
+                                            }
+                                        }
+                                        else {
+                                            my_money_transaction.json.return_address = contact_money_transaction.json.return_address ;
+                                            ls_updated++ ;
+                                        }
+                                        if (error.length) {
+                                            error.unshift('Difference' + (error.length / 2 > 1 ? 's' : '') + ' in row ' + (i+1)) ;
+                                            error.unshift('Money transaction cannot start') ;
+                                            console.log(pgm + 'error. ' + error.join('. '));
+                                            ZeroFrame.cmd('wrapperNotification', ['error', error.join('<br>')]);
+                                            return; // no error response. this is a offline message
+                                        }
+                                    } // for i (money_transactions)
+                                    if (!ls_updated) {
+                                        console.log(pgm + 'warning. ignoring incoming w2_check_mt message. bitcoin address(es) has already been received in a previous w2_check_mt message') ;
+                                        return ;
+                                    }
+                                    if (ls_updated != request.money_transactions.length) {
+                                        error = [
+                                            'Money transaction cannot start',
+                                            'Expected ' + request.money_transactions.length + ' bitcoin address' + (request.money_transactions.length > 1 ? 'es' : ''),
+                                            'Received ' + ls_updated + ' bitcoin address' + (ls_updated > 1 ? 'es' : '')
+                                            ];
+                                        console.log(pgm + 'error. ' + error.join('. '));
+                                        ZeroFrame.cmd('wrapperNotification', ['error', error.join('<br>')]);
+                                    }
+                                    console.log(pgm + 'OK w2_check_mt message. ready to execute transaction(s)');
+                                    console.log(pgm + 'session_info = ' + JSON.stringify);
+                                    ls_save();
 
                                 });
                             });

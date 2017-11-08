@@ -29,16 +29,12 @@
    "size": 10036
   },
   "js-api/MoneyNetworkAPI.js": {
-   "sha512": "411ef9fc25ec6d7ded324c779f5764b8a1b635786f9bf70bfcbc20bea378adab",
-   "size": 160333
-  },
-  "js/all.js": {
-   "sha512": "2a9f2bbd92fa925c167c2af9f3b2e911179623887f508e8d57ac7fa69f8de8ba",
-   "size": 5028201
+   "sha512": "1b3bfadeafea5e02654603624f3c56fc9b43e487e721cca5ef13eab333deeb9e",
+   "size": 191019
   },
   "js/all.js.zip": {
-   "sha512": "f38d1ba14b0f92eb22ce0be610947487570b6ebf1449ac735ab5ac4303cd9066",
-   "size": 1094722
+   "sha512": "70074110577f4a637a314a334b0117650a7dc3d7f94469fa230920a5bb70137d",
+   "size": 1096285
   }
  },
  "ignore": "((js|css)/(?!all.(js|css))|.idea|.git|data/users/.*/.*|merged-.*)",
@@ -49,7 +45,7 @@
   }
  },
  "inner_path": "content.json",
- "modified": 1509905344,
+ "modified": 1510152971,
  "postmessage_nonce_security": true,
  "settings": {
   "default_hubs": {
@@ -61,7 +57,7 @@
  },
  "signers_sign": "G07H0Zdvu6yUtEe7wxc515d5wVoZJpezNYNiKN8T1cwlBkZTYqZRbBzltNbJkstHlOMLxVLGQP6OdGCNEMCI8zE=",
  "signs": {
-  "1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1": "HPVUn7JqzOZPBN4ee4XO96K5sVjNz+bs2zNZzhBPKSL+Q3VOfuloMNSL6rpD8sjob2GXpTk/ii2y7D4iXeoTqM4="
+  "1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1": "HMgZ7eO7MJFOSEkHEA1U6ICMOjYEoUWsA1gyVujCYjjQF02OZov/0EmcL5dSdSf5f0yaWTgF+GmT8bmsiCKcZFc="
  },
  "signs_required": 1,
  "title": "MoneyNetworkW2",
