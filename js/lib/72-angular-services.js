@@ -368,7 +368,7 @@ angular.module('MoneyNetworkW2')
                     // ZeroNet certificate present. decrypt login
                     encrypted_json = user_login_info.login ;
                     console.log(pgm + 'encrypted_json = ' + JSON.stringify(encrypted_json));
-                    encrypt1.decrypt_json(encrypted_json, function(json) {
+                    encrypt1.decrypt_json(encrypted_json, {}, function(json) {
                         var pgm = service + '.get_wallet_login decrypt_json callback: ' ;
                         console.log(pgm + 'json = ' + JSON.stringify(json)) ;
                         if (!json) cb(null, null, 'decrypt error. encrypted_json was ' + JSON.stringify(user_login_info)) ;
@@ -401,7 +401,7 @@ angular.module('MoneyNetworkW2')
                             encrypted_row = encrypted_data.shift() ;
                             console.log(pgm + 'encrypted_row = ' + JSON.stringify(encrypted_row)) ;
                             encrypted_json = JSON.parse(encrypted_row.value) ;
-                            encrypt1.decrypt_json(encrypted_json, function (decrypted_json) {
+                            encrypt1.decrypt_json(encrypted_json, {}, function (decrypted_json) {
                                 var pgm = service + '.get_wallet_login.decrypt_row decrypt_json callback: ' ;
                                 var decrypted_row ;
                                 decrypted_row = {key: encrypted_row.key, value: decrypted_json} ;
@@ -488,7 +488,7 @@ angular.module('MoneyNetworkW2')
                         // cert_user_id: encrypt login
                         unencrypted_login = {wallet_id: wallet_id, wallet_password: wallet_password};
                         console.log(pgm + 'encrypt1.other_pubkey2 = ' + encrypt1.other_session_pubkey2);
-                        encrypt1.encrypt_json(unencrypted_login, {encryptions: [2], group_debug_seq: group_debug_seq}, function (encrypted_login) {
+                        encrypt1.encrypt_json(unencrypted_login, {encryptions: [2]}, function (encrypted_login) {
                             ls.save_login[auth_address].login = encrypted_login;
                             ls_save();
                             return cb();
@@ -508,7 +508,7 @@ angular.module('MoneyNetworkW2')
                             console.log(pgm + 'data = ' + JSON.stringify(data));
                             // cryptMessage encrypt data with current ZeroId before sending data to MN.
                             // encrypt data before send save_data message
-                            encrypt1.encrypt_json(data, {encryptions: [2], group_debug_seq: group_debug_seq}, function (encrypted_data) {
+                            encrypt1.encrypt_json(data, {encryptions: [2]}, function (encrypted_data) {
                                 var pgm = service + '.save_wallet_login encrypt_json callback 3: ';
                                 var request;
                                 console.log(pgm + 'data (encrypted) = ' + JSON.stringify(encrypted_data));
@@ -598,7 +598,7 @@ angular.module('MoneyNetworkW2')
                 encrypted_json = user_info.permissions ;
                 // console.log(pgm + 'encrypted_json = ' + JSON.stringify(encrypted_json));
                 if (!encrypted_json) return cb('No encrypted permissions was found for ' + auth_address) ;
-                encrypt1.decrypt_json(encrypted_json, function(json) {
+                encrypt1.decrypt_json(encrypted_json, {}, function(json) {
                     var pgm = service + '.get_permissions decrypt_json callback: ' ;
                     var key ;
                     // console.log(pgm + 'json = ' + JSON.stringify(json)) ;
@@ -685,7 +685,7 @@ angular.module('MoneyNetworkW2')
                 encrypted_json = user_info.offline ;
                 // console.log(pgm + 'encrypted_json = ' + JSON.stringify(encrypted_json));
                 if (!encrypted_json) return cb('No encrypted offline was found for ' + auth_address) ;
-                encrypt1.decrypt_json(encrypted_json, function(json) {
+                encrypt1.decrypt_json(encrypted_json, {}, function(json) {
                     var pgm = service + '.get_offline decrypt_json callback: ' ;
                     var i ;
                     // console.log(pgm + 'json = ' + JSON.stringify(json)) ;
@@ -794,7 +794,7 @@ angular.module('MoneyNetworkW2')
                 MoneyNetworkAPILib.z_file_get(pgm, options, cb);
             } // z_file_get
             function z_file_write (pgm, inner_path, content, cb) {
-                MoneyNetworkAPILib.z_file_write(pgm, inner_path, content, cb);
+                MoneyNetworkAPILib.z_file_write(pgm, inner_path, content, {}, cb);
             } // z_file_get
 
 
@@ -1268,6 +1268,8 @@ angular.module('MoneyNetworkW2')
                     // get a group debug seq. track all connected log messages. there can be many running processes
                     group_debug_seq = MoneyNetworkAPILib.debug_get_next_seq();
                     pgm = service + '.process_incoming_message/' + group_debug_seq + ': ';
+                    console.log(pgm + 'Using group_debug_seq ' + group_debug_seq + ' for this ' + (request && request.msgtype ? 'receive ' + request.msgtype + ' message' : 'process_incoming_message') + ' operation');
+
 
                     if (encrypt2.destroyed) {
                         // MoneyNetworkAPI instance has been destroyed. Maybe deleted session?
@@ -2296,7 +2298,7 @@ angular.module('MoneyNetworkW2')
                             }
                             // cryptMessage decrypt session information
                             get_my_pubkey2(function (pubkey2) {
-                                encrypt1.decrypt_json(encrypted_session_info, function (session_info) {
+                                encrypt1.decrypt_json(encrypted_session_info, {group_debug_seq: group_debug_seq}, function (session_info) {
                                     var error, ls_updated, request2, i, money_transaction;
                                     console.log(pgm + 'session_info = ' + JSON.stringify(session_info));
 
@@ -2476,7 +2478,7 @@ angular.module('MoneyNetworkW2')
                             // cryptMessage decrypt session information
                             get_my_pubkey2(function (pubkey2) {
                                 var pgm = service + '.process_incoming_message.' + request.msgtype + ' get_my_pubkey2 callback 1/' + group_debug_seq + ': ';
-                                encrypt1.decrypt_json(encrypted_session_info, function (session_info) {
+                                encrypt1.decrypt_json(encrypted_session_info, {group_debug_seq: group_debug_seq}, function (session_info) {
                                     var pgm = service + '.process_incoming_message.' + request.msgtype + ' decrypt_json callback 2/' + group_debug_seq + ': ';
                                     var error, i, my_money_transaction, contact_money_transaction, ls_updated, send_w2_start_mt;
                                     console.log(pgm + 'session_info = ' + JSON.stringify(session_info));
@@ -3160,7 +3162,7 @@ angular.module('MoneyNetworkW2')
                     status.session_handshake = 'Checking old session' ;
                     // decrypt pwd1, this_session_filename and other_session_filename
                     console.log(pgm + 'found old session. cryptMessage decrypting "info.encrypted_info"') ;
-                    encrypt1.decrypt_2(info.encrypted_info, function(decrypted_info) {
+                    encrypt1.decrypt_2(info.encrypted_info, {}, function(decrypted_info) {
                         var pgm = service + '.is_old_session decrypt_2 callback 2: ' ;
                         var array_names, array, i, temp_pwd1, request ;
                         array_names = ['session_pwd1', 'unlock_pwd2', 'this_session_filename', 'other_session_filename'] ;
