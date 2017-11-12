@@ -1261,15 +1261,16 @@ angular.module('MoneyNetworkW2')
             // - encrypt2: instance of MoneyNetworkAPI class created with new MoneyNetworkAPI request
             function process_incoming_message(inner_path, encrypt2, encrypted_json_str, request, extra) {
                 var pos, response_timestamp, request_timestamp, request_timeout_at, error, response, old_wallet_status,
-                    send_response, subsystem, file_timestamp, group_debug_seq, pgm;
+                    send_response, subsystem, file_timestamp, group_debug_seq, pgm, mn_timeout, mn_send_overhead,
+                    w2_request_overhead, now;
                 pgm = service + '.process_incoming_message: ';
 
                 try {
                     // get a group debug seq. track all connected log messages. there can be many running processes
-                    group_debug_seq = MoneyNetworkAPILib.debug_get_next_seq();
+                    if (extra && extra.group_debug_seq) group_debug_seq = extra.group_debug_seq ;
+                    else group_debug_seq = MoneyNetworkAPILib.debug_get_next_seq();
                     pgm = service + '.process_incoming_message/' + group_debug_seq + ': ';
                     console.log(pgm + 'Using group_debug_seq ' + group_debug_seq + ' for this ' + (request && request.msgtype ? 'receive ' + request.msgtype + ' message' : 'process_incoming_message') + ' operation');
-
 
                     if (encrypt2.destroyed) {
                         // MoneyNetworkAPI instance has been destroyed. Maybe deleted session?
@@ -1289,7 +1290,6 @@ angular.module('MoneyNetworkW2')
                         return ;
                     }
 
-
                     // remove any response timestamp before validation (used in response filename)
                     response_timestamp = request.response;
                     delete request.response; // request received. must use response_timestamp in response filename
@@ -1298,14 +1298,20 @@ angular.module('MoneyNetworkW2')
                     request_timeout_at = request.timeout_at;
                     delete request.timeout_at; // request received. when does request expire. how long does other session wait for response
 
-                    // request timeout?
-                    if (request_timeout_at < (new Date().getTime())) {
-                        console.log(pgm + 'warning. request timeout. ignoring request = ' + JSON.stringify(request) + ', inner_path = ' + inner_path);
-                        // https://github.com/jaros1/Money-Network-W2/issues/23
-                        // slow running VM. request is too already before it has been signed
-                        console.log(pgm + 'file_timestamp = ' + file_timestamp + ', request_timeout_at = ' + request_timeout_at + ', now = ' + (new Date().getTime())) ;
+                    // request timeout? check with and without "total_overhead"
+                    now = new Date().getTime() ;
+                    if (request_timeout_at < now) {
+                        console.log(pgm + 'timeout. file_timestamp = ' + file_timestamp + ', request_timeout_at = ' + request_timeout_at + ', now = ' + now + ', total_overhead = ' + extra.total_overhead) ;
                         console.log(pgm + 'extra = ' + JSON.stringify(extra)) ;
-                        return;
+                        if (request_timeout_at + extra.total_overhead < now) {
+                            console.log(pgm + 'error. request timeout. ignoring request = ' + JSON.stringify(request) + ', inner_path = ' + inner_path);
+                            return;
+                        }
+                        else {
+                            console.log(pgm + 'warning. request timeout. adding total_overhead ' + extra.total_overhead + ' ms to request_timeout_at. other session may reject response after timeout');
+                            request_timeout_at = request_timeout_at + extra.total_overhead ;
+                            console.log(pgm + 'new request_timeout_at = ' + request_timeout_at) ;
+                        }
                     }
 
                     console.log(pgm + 'request = ' + JSON.stringify(request));
@@ -1315,11 +1321,9 @@ angular.module('MoneyNetworkW2')
                     send_response = function (error, cb) {
                         if (!response_timestamp) return; // no response was requested
                         if (error) response.error = error;
-                        if (!cb) cb = function () {
-                        };
-
+                        if (!cb) cb = function () {};
                         // send response to other session
-                        encrypt2.send_message(response, {timestamp: response_timestamp, msgtype: request.msgtype, request: file_timestamp, timeout_at: request_timeout_at}, function (res) {
+                        encrypt2.send_message(response, {timestamp: response_timestamp, msgtype: request.msgtype, request: file_timestamp, timeout_at: request_timeout_at, group_debug_seq: group_debug_seq}, function (res) {
                             var pgm = service + '.process_incoming_message send_message callback 3/' + group_debug_seq + ': ';
                             console.log(pgm + 'res = ' + JSON.stringify(res));
                             cb();
