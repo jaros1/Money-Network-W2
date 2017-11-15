@@ -1268,7 +1268,7 @@ angular.module('MoneyNetworkW2')
                 try {
                     // get a group debug seq. track all connected log messages. there can be many running processes
                     if (extra && extra.group_debug_seq) group_debug_seq = extra.group_debug_seq ;
-                    else group_debug_seq = MoneyNetworkAPILib.debug_group_operation_start(encrypt2);
+                    else group_debug_seq = MoneyNetworkAPILib.debug_group_operation_start();
                     pgm = service + '.process_incoming_message/' + group_debug_seq + ': ';
                     console.log(pgm + 'Using group_debug_seq ' + group_debug_seq + ' for this ' + (request && request.msgtype ? 'receive ' + request.msgtype + ' message' : 'process_incoming_message') + ' operation');
                     if (request && request.msgtype) MoneyNetworkAPILib.debug_group_operation_update(group_debug_seq, {msgtype: request.msgtype});
@@ -2769,6 +2769,11 @@ angular.module('MoneyNetworkW2')
                         // w2_start_mt
 
                     }
+                    else if (request.msgtype == 'timeout') {
+                        // timeout message from MoneyNetwork. MoneyNetwork sent response after timeout. There may be a timeout failure in W2 session
+                        // merge MN process information and wallet process information.
+                        MoneyNetworkAPILib.debug_group_operation_receive_stat(encrypt2, request.stat) ;
+                    }
                     else response.error = 'Unknown msgtype ' + request.msgtype;
                     console.log(pgm + 'response = ' + JSON.stringify(response));
 
@@ -2808,12 +2813,16 @@ angular.module('MoneyNetworkW2')
             // pubkey used by JSEncrypt (client) and pubkey2 used by cryptMessage (ZeroNet)
             function read_pubkeys (cb) {
                 var pgm = service + '.read_pubkeys: ' ;
+                var group_debug_seq ;
                 if (!cb) cb = function() {} ;
 
-                encrypt2.get_session_filenames({}, function (this_session_filename, other_session_filename, unlock_pwd2) {
+                group_debug_seq = MoneyNetworkAPILib.debug_group_operation_start() ;
+                MoneyNetworkAPILib.debug_group_operation_update({msgtype: 'pubkeys'}) ;
+                encrypt2.get_session_filenames({group_debug_seq: group_debug_seq}, function (this_session_filename, other_session_filename, unlock_pwd2) {
                     var pgm = service + '.read_pubkeys get_session_filenames callback 1: ' ;
-                    var w2_query_4, debug_seq ;
-                    console.log(pgm + 'this_session_filename = ' + this_session_filename + ', other_session_filename = ' + other_session_filename) ;
+                    var pgm2, w2_query_4, debug_seq ;
+                    pgm2 = MoneyNetworkAPILib.get_group_debug_seq_pgm(pgm, group_debug_seq) ;
+                    console.log(pgm2 + 'this_session_filename = ' + this_session_filename + ', other_session_filename = ' + other_session_filename) ;
                     w2_query_4 =
                         "select " +
                         "  json.directory," +
@@ -2826,31 +2835,34 @@ angular.module('MoneyNetworkW2')
                         "and keyvalue.json_id = json.json_id " +
                         "and keyvalue.key = 'modified' " +
                         "order by files_optional.filename desc" ;
-                    console.log(pgm + 'w2 query 4 = ' + w2_query_4) ;
-                    debug_seq = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, 'w2 query 4', 'dbQuery') ;
+                    console.log(pgm2 + 'w2 query 4 = ' + w2_query_4) ;
+                    debug_seq = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, 'w2 query 4', 'dbQuery', null, group_debug_seq) ;
                     ZeroFrame.cmd("dbQuery", [w2_query_4], function (res) {
                         var pgm = service + '.read_pubkeys dbQuery callback 2: ' ;
-                        var prefix, other_user_path, inner_path, re, i ;
+                        var pgm2, prefix, other_user_path, inner_path, re, i ;
                         MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq, (!res || res.error) ? 'Failed. error = ' + JSON.stringify(res) : 'OK. Returned ' + res.length + ' rows');
+                        pgm2 = MoneyNetworkAPILib.get_group_debug_seq_pgm(pgm, group_debug_seq) ;
                         prefix = "Error. MN-W2 session handshake failed. " ;
                         // console.log(pgm + 'res = ' + JSON.stringify(res)) ;
-                        if (res.error) {
-                            console.log(pgm + prefix + 'cannot read pubkeys message. dbQuery failed with ' + res.error) ;
-                            console.log(pgm + 'query = ' + w2_query_4) ;
+                        if (!res || res.error) {
+                            console.log(pgm2 + prefix + 'cannot read pubkeys message. dbQuery failed with ' + JSON.stringify(res)) ;
+                            console.log(pgm2 + 'query = ' + w2_query_4) ;
                             status.sessionid = null ;
+                            MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq, JSON.stringify(res)) ;
                             return cb(status.sessionid) ;
                         }
                         // check optional filename. pubkeys message from mn is an -i (internal) optional file
                         re = /^[0-9a-f]{10}-i\.[0-9]{13}$/ ;
-                        console.log(pgm + 'old res.length = ' + res.length) ;
+                        console.log(pgm2 + 'old res.length = ' + res.length) ;
                         for (i=res.length-1 ; i >= 0 ; i--) {
                             if (!res[i].filename.match(re)) res.splice(i,1) ;
                         }
-                        console.log(pgm + 'new res.length = ' + res.length) ;
+                        console.log(pgm2 + 'new res.length = ' + res.length) ;
                         if (res.length == 0) {
-                            console.log(pgm + prefix + 'pubkeys message was not found') ;
-                            console.log(pgm + 'w2 query 4 = ' + w2_query_4) ;
+                            console.log(pgm2 + prefix + 'pubkeys message was not found') ;
+                            console.log(pgm2 + 'w2 query 4 = ' + w2_query_4) ;
                             status.sessionid = null ;
+                            MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq, 'pubkeys message was not found (dbQuery)') ;
                             return cb(status.sessionid) ;
                         }
 
@@ -2864,13 +2876,14 @@ angular.module('MoneyNetworkW2')
                         // read file
                         inner_path = other_user_path + res[0].filename ;
                         // console.log(pgm +  inner_path + ' z_file_get start') ;
-                        z_file_get(pgm, {inner_path: inner_path, required: true}, function (pubkeys_str) {
+                        z_file_get(pgm, {inner_path: inner_path, required: true, group_debug_seq: group_debug_seq}, function (pubkeys_str) {
                             var pgm = service + '.read_pubkeys z_file_get callback 3: ' ;
                             var pubkeys, now, content_signed, elapsed, error ;
                             // console.log(pgm + 'pubkeys_str = ' + pubkeys_str) ;
                             if (!pubkeys_str) {
                                 console.log(pgm + prefix + 'read pubkeys failed. file + ' + inner_path + ' was not found') ;
                                 status.sessionid = null ;
+                                MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq, 'pubkeys message was not found (fileGet)') ;
                                 return cb(status.sessionid) ;
                             }
                             // check pubkeys message timestamps. must not be old or > now.
@@ -2881,10 +2894,12 @@ angular.module('MoneyNetworkW2')
                             if (elapsed < 0) {
                                 console.log(pgm + prefix + 'read pubkeys failed. file + ' + inner_path + ' signed in the future. elapsed = ' + elapsed) ;
                                 status.sessionid = null ;
+                                MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq, 'pubkeys message signed in the future') ;
                                 return cb(status.sessionid) ;
                             }
                             if (elapsed > 60) {
                                 console.log(pgm + prefix + 'read pubkeys failed. file + ' + inner_path + ' is too old. elapsed = ' + elapsed) ;
+                                MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq, 'pubkeys message is old') ;
                                 status.sessionid = null ;
                                 return cb(status.sessionid) ;
                             }
@@ -2895,17 +2910,20 @@ angular.module('MoneyNetworkW2')
                             catch (e) {
                                 console.log(pgm + prefix + 'read pubkeys failed. file + ' + inner_path + ' is invalid. pubkeys_str = ' + pubkeys_str + ', error = ' + e.message) ;
                                 status.sessionid = null ;
+                                MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq, 'pubkeys message is invalid. ' + e.message) ;
                                 return cb(status.sessionid) ;
                             }
                             error = MoneyNetworkAPILib.validate_json(pgm, pubkeys) ;
                             if (error) {
                                 console.log(pgm + prefix + 'invalid pubkeys message. error = ' + error) ;
                                 status.sessionid = null ;
+                                MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq, 'pubkeys message is invalid. ' + error) ;
                                 return cb(status.sessionid) ;
                             }
                             if (pubkeys.msgtype != 'pubkeys') {
                                 console.log(pgm + prefix + 'First message from MN was NOT a pubkeys message. message = ' + JSON.stringify(pubkeys) );
                                 status.sessionid = null ;
+                                MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq, 'not a pubkey message. msgtype = ' + JSON.stringify(pubkeys.msgtype)) ;
                                 return cb(status.sessionid);
                             }
                             console.log(pgm + 'OK. received public keys from MN') ;
@@ -2915,7 +2933,7 @@ angular.module('MoneyNetworkW2')
 
                             // return W2 public keys to MN session for full end2end encryption between the 2 sessions
                             console.log(pgm + 'Return W2 public keys to MN for full end-2-end encryption') ;
-                            write_pubkeys(cb) ;
+                            write_pubkeys(group_debug_seq, cb) ;
 
                         }) ; // z_file_get callback 3
 
@@ -2962,16 +2980,17 @@ angular.module('MoneyNetworkW2')
             } // get_my_pubkey2
 
             // pubkeys message from W2 to MN. public keys + a session password
-            function write_pubkeys(cb) {
+            function write_pubkeys(group_debug_seq, cb) {
                 var pgm = service + '.write_pubkeys: ' ;
                 if (!cb) cb = function() {} ;
                 // collect info before returning W2 public keys information to MN session
                 get_user_path(function (user_path) {
                     var my_pubkey = get_my_pubkey() ;
                     get_my_pubkey2(function (my_pubkey2) {
-                        encrypt2.add_optional_files_support({}, function() {
+                        encrypt2.add_optional_files_support({group_debug_seq: group_debug_seq}, function() {
                             var pgm = service + '.write_pubkeys get_my_pubkey2 callback 3: ' ;
-                            var request, encrypted_pwd2 ;
+                            var pgm2, request, encrypted_pwd2 ;
+                            pgm2 = MoneyNetworkAPILib.get_group_debug_seq_pgm(pgm, group_debug_seq) ;
                             // W2 password
                             // - pwd1: cryptMessage encryped and saved in W2 localStorage
                             // - pwd2: encrypted with pwd1 and saved in MN.
@@ -2986,14 +3005,20 @@ angular.module('MoneyNetworkW2')
                             } ;
                             console.log(pgm + 'request = ' + JSON.stringify(request)) ;
                             // timeout in wallet test6 is 60 seconds. expire send pubkeys message in 60 seconds
-                            encrypt2.send_message(request, {response: 60000, msgtype: 'pubkeys'}, function (response) {
+                            encrypt2.send_message(request, {response: 60000, msgtype: 'pubkeys', group_debug_seq: group_debug_seq}, function (response) {
                                 var pgm = service + '.write_pubkeys send_message callback 4: ' ;
+                                var pgm2 ;
+                                pgm2 = MoneyNetworkAPILib.get_group_debug_seq_pgm(pgm, group_debug_seq) ;
                                 console.log(pgm + 'response = ' + JSON.stringify(response)) ;
                                 if (!response.error) {
                                     // session handshake ok. save session
                                     save_mn_session(function() {cb(true) }) ;
+                                    MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq) ;
                                 }
-                                else cb(false) ;
+                                else {
+                                    MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq, 'write pubkeys failed. res = ' + JSON.stringify(response)) ;
+                                    cb(false) ;
+                                }
                             }) ; // send_message callback 4
 
                         }) ; // add_optional_files_support callback 3
@@ -3251,7 +3276,7 @@ angular.module('MoneyNetworkW2')
                             encrypt2.get_session_filenames({}, function () {
                                 var pgm = service + '.is_old_session get_session_filenames callback 4: ' ;
                                 var request, timeout_at,
-                                group_debug_seq = MoneyNetworkAPILib.debug_group_operation_start(encrypt2) ;
+                                group_debug_seq = MoneyNetworkAPILib.debug_group_operation_start() ;
 
                                 // https://github.com/jaros1/Money-Network/issues/208
                                 // todo: loaded old session from Ls. No pubkeys message to MN. Send ping to MN instead so that MN known that session is up and running
