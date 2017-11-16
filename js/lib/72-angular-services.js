@@ -977,9 +977,13 @@ angular.module('MoneyNetworkW2')
             // sign or publish
             var z_publish_interval = 0 ;
             var z_publish_pending = false ;
-            function z_publish (publish, cb) {
+            function z_publish (options, cb) {
                 var pgm = service + '.z_publish: ' ;
-                var inner_path ;
+                var pgm2, options, publish, group_debug_seq, inner_path ;
+                if (!options) options = {} ;
+                publish = options.publish ;
+                group_debug_seq = options.group_debug_seq ;
+                pgm2 = MoneyNetworkAPILib.get_group_debug_seq_pgm(pgm, group_debug_seq) ;
                 if (!cb) cb = function () {} ;
                 // get full merger site user path
                 get_user_path(function (user_path) {
@@ -987,7 +991,7 @@ angular.module('MoneyNetworkW2')
                     inner_path = user_path + 'content.json' ;
                     if (publish) console.log(pgm + 'publishing ' + inner_path) ;
                     // content.json file must have optional files support
-                    encrypt1.add_optional_files_support({}, function() {
+                    encrypt1.add_optional_files_support({group_debug_seq: group_debug_seq}, function() {
                         var debug_seq ;
 
                         // publish. update status.json file and force zeronet to distribute changed content.json
@@ -997,18 +1001,20 @@ angular.module('MoneyNetworkW2')
                             // sign or publish
                             cmd = publish ? 'sitePublish' : 'siteSign' ;
                             if (publish) {
-                                // long running operation. using z_site_publish ensure that content is not updated while publishing
+                                // use MN publish queue. max one publish once every 30 seconds
                                 MoneyNetworkAPILib.z_site_publish({inner_path: inner_path, encrypt: encrypt2}, function (res) {
                                     var pgm = service + '.z_site_publish callback 4: ';
-                                    console.log(pgm + 'res = ' + res) ;
+                                    var pgm2 ;
+                                    pgm2 = MoneyNetworkAPILib.get_group_debug_seq_pgm(pgm, group_debug_seq) ;
+                                    console.log(pgm2 + 'res = ' + res) ;
                                     if (res != "ok") {
                                         ZeroFrame.cmd("wrapperNotification", ["error", "Failed to " + (publish ? "publish" : "sign") + ": " + res.error, 5000]);
                                         // error - repeat sitePublish in 30, 60, 120, 240 etc seconds (device maybe offline or no peers)
                                         if (!z_publish_interval) z_publish_interval = 30;
                                         else z_publish_interval = z_publish_interval * 2;
-                                        console.log(pgm + 'Error. Failed to publish: ' + res.error + '. Try again in ' + z_publish_interval + ' seconds');
+                                        console.log(pgm2 + 'Error. Failed to publish: ' + res.error + '. Try again in ' + z_publish_interval + ' seconds');
                                         var retry_zeronet_site_publish = function () {
-                                            z_publish(publish, cb);
+                                            z_publish({publish: publish, group_debug_seq: group_debug_seq}, cb);
                                         };
                                         $timeout(retry_zeronet_site_publish, z_publish_interval * 1000);
                                         // continue processing while waiting for failed sitePublish to finish
@@ -1020,12 +1026,14 @@ angular.module('MoneyNetworkW2')
                                 }) ;
                                 return ;
                             }
-                            // sign only. fast operationm
-                            debug_seq = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path, cmd) ;
+                            // sign only. fast operation
+                            debug_seq = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path, cmd, null, group_debug_seq) ;
                             ZeroFrame.cmd(cmd, {inner_path: inner_path}, function (res) {
                                 var pgm = service + '.z_publish ' + cmd + ' callback 4: ';
+                                var pgm2 ;
+                                pgm2 = MoneyNetworkAPILib.get_group_debug_seq_pgm(pgm, group_debug_seq) ;
                                 MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq, res == 'ok' ? 'OK' : 'Failed. error = ' + JSON.stringify(res));
-                                console.log(pgm + 'res = ' + res) ;
+                                console.log(pgm2 + 'res = ' + res) ;
                                 if (res != "ok") {
                                     ZeroFrame.cmd("wrapperNotification", ["error", "Failed to " + (publish ? "publish" : "sign") + ": " + res.error, 5000]);
                                     return cb(res.error) ; // sign only. must be a serious error
@@ -1243,7 +1251,7 @@ angular.module('MoneyNetworkW2')
                                 console.log(pgm + 'res = ' + JSON.stringify(res));
                                 if (res == "ok") {
                                     console.log(pgm + 'sign now and publish after end of session handshake. see initialize');
-                                    z_publish(false, cb);
+                                    z_publish({publish: false}, cb);
                                 }
                                 else cb(res);
                             }); // write_wallet_json callback 4
@@ -1658,7 +1666,9 @@ angular.module('MoneyNetworkW2')
 
                                 // send_mt step 7: publish
                                 step_7_publish = function () {
-                                    z_publish(true);
+                                    var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_7_publish/' + group_debug_seq + ': ';
+                                    console.log(pgm + 'publish pubkeys message for other wallet session. publishing via MN publish queue. max one publish once every 30 seconds') ;
+                                    z_publish({publish: true});
                                 }; // step_7_publish
 
                                 // send_mt step 6: save session and money transaction(s) in ls
@@ -2094,19 +2104,19 @@ angular.module('MoneyNetworkW2')
                                 // after approve incoming money transaction(s)
                                 // post start_mt tasks:
                                 // 1: warning if ZeroNet port is closed. optional files are not distributed. maybe use small normal files as a backup?
-                                // 2: encryption layer 1. jsencrypt. generate a short jsencrypt key (1024) bits. only used for this transaction
-                                // 3: encryption layer 2. select random index for cryptmessage public key and find public cryptmessage key
-                                // 4: read offline pubkeys message from other wallet
-                                // 5: create session
-                                // 6: create a <session filename>.0000000000001 file with transaction status encrypted with money_transactionid (encryption layer 3)
-                                // 7: save transaction in ls
-                                // 8: publish so that other MN and W2 sessions can new the new optional files
+                                // 2&3: generate public/private keys to be used in wallet-wallet communication
+                                // 4: create wallet-wallet session. expects incoming pubkeys message
+                                // 5: save pubkeys message for other wallet session
+                                // 6: save transaction in ls
+                                // 7: publish so that other MN and W2 sessions can see the new optional files
 
                                 // create callback chain step 1-7
 
                                 // start_mt step 7: publish
                                 step_7_publish = function () {
-                                    z_publish(true);
+                                    var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_6_save_in_ls/' + group_debug_seq + ': ';
+                                    console.log(pgm + 'publish pubkeys message for other wallet session. publishing via MN publish queue. max one publish once every 30 seconds') ;
+                                    z_publish({publish: true, group_debug_seq: group_debug_seq});
                                 }; // step_7_publish
 
                                 // start_mt step 6. save session and money transaction(s) in ls
@@ -2450,7 +2460,7 @@ angular.module('MoneyNetworkW2')
                                                 ls.w_sessions[auth_address][sha256] = encrypted_session_info;
                                                 console.log(pgm + 'session_info.money_transactionid = ' + session_info.money_transactionid + ', sha256 = ' + sha256);
                                                 ls_save();
-                                                z_publish(true);
+                                                z_publish({publish: true});
                                             }); // encrypt_json callback 2
                                         }
 
@@ -2519,7 +2529,7 @@ angular.module('MoneyNetworkW2')
                                                 return cb(error.join('. '));
                                             }
 
-                                            z_publish(true);
+                                            z_publish({publish: true});
                                             cb(null)
                                         }) ; // send_message callback
 
@@ -3510,7 +3520,7 @@ angular.module('MoneyNetworkW2')
                                                         cb(sessionid, save_wallet_login) ;
                                                         if (z_publish_pending) {
                                                             console.log('wallet.json file was updated. publish to distribute info to other users') ;
-                                                            z_publish(true);
+                                                            z_publish({publish: true});
                                                         }
                                                         return ;
                                                     }
@@ -3525,7 +3535,7 @@ angular.module('MoneyNetworkW2')
                                                         // done with or without errors
                                                         cb(sessionid, save_wallet_login) ;
                                                         console.log('content.json file was updated (files_optional). publish to distribute info to other users') ;
-                                                        z_publish(true);
+                                                        z_publish({publish: true});
                                                     }) ;
                                                     return ;
                                                 } // done
