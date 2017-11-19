@@ -273,7 +273,8 @@ angular.module('MoneyNetworkW2')
             if (self.wallet_info.status != 'Open') return ZeroFrame.cmd("wrapperNotification", ["info", "No bitcoin wallet found", 3000]) ;
             if (!self.send_address || !self.send_amount) return ZeroFrame.cmd("wrapperNotification", ["error", "Receiver and/or amount is missing", 5000]) ;
             if (!self.send_amount.match(/^[0-9]+$/)) return ZeroFrame.cmd("wrapperNotification", ["error", "Amount must be an integer (Satoshi)", 5000]) ;
-            btcService.send_money(self.send_address, self.send_amount, function (err, result) {
+            // manuel send money action in w2. confirm = true. ask user to confirm money transaction
+            btcService.send_money(self.send_address, self.send_amount, true, function (err, result) {
                 if (err) {
                     if ((typeof err == 'object') && err.message) err = err.message ;
                     console.log(pgm + 'err = ' + JSON.stringify(err)) ;
