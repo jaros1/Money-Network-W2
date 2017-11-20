@@ -1303,7 +1303,6 @@ angular.module('MoneyNetworkW2')
                 // encrypt and save encrypted in ls
                 get_my_pubkey2(function (pubkey2) {
                     encrypt1.encrypt_json(session_info, {encryptions: [2], group_debug_seq: group_debug_seq}, function (encrypted_session_info) {
-                        var sha256;
                         ls.w_sessions[auth_address][sha256] = encrypted_session_info;
                         ls_save();
                         console.log(pgm + 'OK. Saved wallet-wallet session information in localStorage');
@@ -1734,11 +1733,10 @@ angular.module('MoneyNetworkW2')
 
                                 // start callback chain
                                 step_1_confirm();
-                                // wait for callback chain to finish
-                                return;
                             }
                             catch (e) { return send_exception(pgm, e) }
                         })() ;
+                        return;
                         // end prepare_mt_request
                     }
                     else if (request.msgtype == 'send_mt') {
@@ -2245,6 +2243,8 @@ angular.module('MoneyNetworkW2')
                                             } // for i
                                             console.log(pgm + 'jsons (with old addresses) = ' + JSON.stringify(jsons)) ;
 
+                                            // todo: skip step_3_open_wallet if all bitcoins addresses were found in old session info
+
                                             step_2_confirm();
                                         }
                                         catch (e) { return send_exception(pgm, e) }
@@ -2555,28 +2555,11 @@ angular.module('MoneyNetworkW2')
                             try {
                                 var pgm = service + '.process_incoming_message.' + request.msgtype + '/' + group_debug_seq + ': ';
                                 var auth_address, sha256, encrypted_session_info, error;
-                                // received pubkeys message from other wallet session
-                                //request = {
-                                //    "msgtype": "pubkeys",
-                                //    "pubkey": "-----BEGIN PUBLIC KEY-----\nMIGeMA0GCSqGSIb3DQEBAQUAA4GMADCBiAKBgFvJDBhvZQoyjFoxQyk8xCzNi7Or\nMOrYqxRxfhhIS7DXnBeAUqGncteiNsZPaEDnDqPvMWo4M7PMTiORjIoKXUDsRbMi\nJnUIuJjsSqC8auARpFKK8Eq5OK7hFs7htwn4g9DPO3SeTQB5dzWcZx/owiKgL5At\nPry1u0EqYJvafatNAgMBAAE=\n-----END PUBLIC KEY-----",
-                                //    "pubkey2": "AksYe8aqkadPiM5833U/QOggr7dOrq8iwUxSpSpom5Oj"
-                                //}
-                                // check encrypt2 keys
-                                //console.log(pgm + 'encrypt2.debug               = ' + encrypt2.debug) ;
-                                //console.log(pgm + 'encrypt2.this_session_prvkey = ' + encrypt2.this_session_prvkey) ;
-                                //console.log(pgm + 'encrypt2.other_session_pubkey = ' + encrypt2.other_session_pubkey) ;
-                                //console.log(pgm + 'encrypt2.this_session_userid2 = ' + encrypt2.this_session_userid2) ;
-                                //console.log(pgm + 'encrypt2.other_session_pubkey2 = ' + encrypt2.other_session_pubkey) ;
-                                // encrypt2.debug               = encrypt4
-                                // encrypt2.this_session_prvkey = -----BEGIN RSA PRIVATE KEY-----MIICWgIBAAKBgE+3QVjs8p8kfoUAavPGsdtwbjbM6y3eBpg9ruNJgbUK21FJbW4jIw0b81ghFZ6fruC6FrMJyLUlWnerrM0kZX00EsKEdFYC96z3pxZ20pEBbZzMUdy4EbapcJ5rv1tm2qnF4jZDEgHKwSCYIuynCWV/G+RPPX5mVBa+6aj/pq7ZAgMBAAECgYAHr6S2XUpbe9pTGqI1VRArF2EZGZMHfiPmo/Pr6FeATEavRMQvXWXwyqQg+Desbrse4fJ0WtomVS6u4TetI/hBCadm4e39giidaQhV+D0AQ+7ffU9pudB1Hh7zyszwnk+xgYB0NDQ6JUiITM1FCmPsRH5lvg/g/P+CGxWfXnqY3QJBAJOA5YhFsVnZiYI/Ix8Xuraxihd7a6mpbpy0aJ3KcOZb26iQvZfHsG4F0lN6T2Jso119UxQ+tfzPrXopjgwSuRMCQQCKWdpWnJ4Xbc3UN1XOT9KRQwD+skMlaUGqcs36+iprvXxaFsfDijuWEfq3prdz+SQnwBovduauIC2w2XKoToHjAkBQvJzmmj8ZDxlVUXnH6xUoKsWLVOL5WuRQoe8hb02cyWrSOWeNTKAlmMonJyuMlCpXYeG3kxvJ5WLvGw/FS/pBAkBcf0ZiscNglqEOSRCtJuD5DXsUzcnmsUCd3LOqIKdL8Ru6f5B/Q2QjKVIehvAQMXniuaTIJw6DTDBAFKF7tUFRAkBTZXbPf+nKoaIDrAJuazEmi7iBtdVU8+VsSUDRzamqNFxYIBqOjnFV+EJvGFDVpOwO9VSoCqPWpf+5e0fQkn0h-----END RSA PRIVATE KEY-----
-                                // encrypt2.other_session_pubkey = null
-                                // encrypt2.this_session_userid2 = -----BEGIN RSA PRIVATE KEY-----MIICWgIBAAKBgE+3QVjs8p8kfoUAavPGsdtwbjbM6y3eBpg9ruNJgbUK21FJbW4jIw0b81ghFZ6fruC6FrMJyLUlWnerrM0kZX00EsKEdFYC96z3pxZ20pEBbZzMUdy4EbapcJ5rv1tm2qnF4jZDEgHKwSCYIuynCWV/G+RPPX5mVBa+6aj/pq7ZAgMBAAECgYAHr6S2XUpbe9pTGqI1VRArF2EZGZMHfiPmo/Pr6FeATEavRMQvXWXwyqQg+Desbrse4fJ0WtomVS6u4TetI/hBCadm4e39giidaQhV+D0AQ+7ffU9pudB1Hh7zyszwnk+xgYB0NDQ6JUiITM1FCmPsRH5lvg/g/P+CGxWfXnqY3QJBAJOA5YhFsVnZiYI/Ix8Xuraxihd7a6mpbpy0aJ3KcOZb26iQvZfHsG4F0lN6T2Jso119UxQ+tfzPrXopjgwSuRMCQQCKWdpWnJ4Xbc3UN1XOT9KRQwD+skMlaUGqcs36+iprvXxaFsfDijuWEfq3prdz+SQnwBovduauIC2w2XKoToHjAkBQvJzmmj8ZDxlVUXnH6xUoKsWLVOL5WuRQoe8hb02cyWrSOWeNTKAlmMonJyuMlCpXYeG3kxvJ5WLvGw/FS/pBAkBcf0ZiscNglqEOSRCtJuD5DXsUzcnmsUCd3LOqIKdL8Ru6f5B/Q2QjKVIehvAQMXniuaTIJw6DTDBAFKF7tUFRAkBTZXbPf+nKoaIDrAJuazEmi7iBtdVU8+VsSUDRzamqNFxYIBqOjnFV+EJvGFDVpOwO9VSoCqPWpf+5e0fQkn0h-----END RSA PRIVATE KEY-----
-                                // encrypt2.other_session_pubkey2 = null
 
                                 // check ls status
                                 if (!ls.w_sessions) ls.w_sessions = {};
-                                if (!ls.w_sessions[auth_address]) ls.w_sessions[auth_address] = {};
                                 auth_address = ZeroFrame.site_info.auth_address;
+                                if (!ls.w_sessions[auth_address]) ls.w_sessions[auth_address] = {};
                                 sha256 = CryptoJS.SHA256(encrypt2.sessionid).toString();
                                 encrypted_session_info = ls.w_sessions[auth_address][sha256];
                                 if (!encrypted_session_info) {
