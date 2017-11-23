@@ -339,9 +339,6 @@ angular.module('MoneyNetworkW2')
 
             var encrypt1 = new MoneyNetworkAPI({debug: 'encrypt1'}) ; // encrypt1. no sessionid. self encrypt/decrypt data in W2 localStorage ;
 
-            var save_wallet_id, save_wallet_password ; // last saved wallet id and password. For get_balance request
-
-
             // save_wallet_login:
             // - '1': wallet login is saved encrypted (cryptMessage) in W2 localStorage
             // - '2' & '3': wallet login is saved encrypted (symmetric) in MN localStorage (session is required)
@@ -372,9 +369,10 @@ angular.module('MoneyNetworkW2')
                             ls_save() ;
                             return cb(null, null, error) ;
                         }
-                        save_wallet_id = login.wallet_id ;
-                        save_wallet_password = login.wallet_password ;
-                        return cb(save_wallet_id, save_wallet_password, null) ;
+                        status.save_wallet_id = login.wallet_id ;
+                        status.save_wallet_password = login.wallet_password ;
+                        return cb(status.save_wallet_id, status.save_wallet_password, null) ;
+                        setTimeout(load_w_sessions, 0) ;
                     }
                     // ZeroNet certificate present. decrypt login
                     encrypted_json = user_login_info.login ;
@@ -384,9 +382,10 @@ angular.module('MoneyNetworkW2')
                         console.log(pgm + 'json = ' + JSON.stringify(json)) ;
                         if (!json) cb(null, null, 'decrypt error. encrypted_json was ' + JSON.stringify(user_login_info)) ;
                         else {
-                            save_wallet_id = json.wallet_id ;
-                            save_wallet_password = json.wallet_password ;
-                            cb(save_wallet_id, save_wallet_password, null) ;
+                            status.save_wallet_id = json.wallet_id ;
+                            status.save_wallet_password = json.wallet_password ;
+                            cb(status.save_wallet_id, status.save_wallet_password, null) ;
+                            setTimeout(load_w_sessions, 0) ;
                         }
                     }) ; // decrypt_json callback
                 }
@@ -431,9 +430,10 @@ angular.module('MoneyNetworkW2')
                             // OK. received wallet login from MN
                             console.log(pgm + 'data[0] = ' + JSON.stringify(data[0])) ;
                             // data[0] = {"key":"login","value":{"wallet_id":"UZGToFfXOz7GKCogsOOuxJYndjcmt2","wallet_password":"bGaGK/+w(Qm4Wi}fAyz:CcgxWuen)F"}}
-                            save_wallet_id = data[0].value.wallet_id ;
-                            save_wallet_password = data[0].value.wallet_password ;
-                            cb(save_wallet_id, save_wallet_password, null);
+                            status.save_wallet_id = data[0].value.wallet_id ;
+                            status.save_wallet_password = data[0].value.wallet_password ;
+                            cb(status.save_wallet_id, status.save_wallet_password, null);
+                            setTimeout(load_w_sessions, 0) ;
                         }) ; // decrypt_row callback
 
                     }) ; // send_message callback
@@ -467,8 +467,9 @@ angular.module('MoneyNetworkW2')
                 ls_save();
 
                 // for get_balance request
-                save_wallet_id = wallet_id ;
-                save_wallet_password = wallet_password ;
+                status.save_wallet_id = wallet_id ;
+                status.save_wallet_password = wallet_password ;
+                setTimeout(load_w_sessions, 0) ;
 
                 // get and add W2 pubkey2 to encryption setup (self encrypt using ZeroNet certificate)
                 get_my_pubkey2(function (my_pubkey2) {
@@ -1620,11 +1621,11 @@ angular.module('MoneyNetworkW2')
                                     // wallet not open (not created, not logged in etc)
                                     if (!status.permissions.open_wallet) return send_response('open_wallet operation is not authorized');
                                     if (!request.open_wallet) return send_response('Wallet is not open and open_wallet was not requested');
-                                    else if (!save_wallet_id || !save_wallet_password) return send_response('Wallet is not open and no wallet login was found');
+                                    else if (!status.save_wallet_id || !status.save_wallet_password) return send_response('Wallet is not open and no wallet login was found');
                                     else if (request.close_wallet && !status.permissions.close_wallet) return send_response('close_wallet operation was requested but is not authorized');
                                     else {
                                         // open test bitcoin wallet (also get_balance request)
-                                        btcService.init_wallet(save_wallet_id, save_wallet_password, function (error) {
+                                        btcService.init_wallet(status.save_wallet_id, status.save_wallet_password, function (error) {
                                             try {
                                                 if (error) {
                                                     // open wallet or get_balance request failed
@@ -1828,7 +1829,7 @@ angular.module('MoneyNetworkW2')
                                     }
                                     else {
                                         // open test bitcoin wallet (also get_balance request)
-                                        btcService.init_wallet(save_wallet_id, save_wallet_password, function (error) {
+                                        btcService.init_wallet(status.save_wallet_id, status.save_wallet_password, function (error) {
                                             try {
                                                 if (error && (wallet_info.status != 'Open')) return send_response('Open wallet request failed with error = ' + error);
                                                 if (error && send_money) console.log(pgm + 'warning. sending money and get_balance request failed with error = ' + error);
@@ -1847,7 +1848,7 @@ angular.module('MoneyNetworkW2')
                                         // wallet not open (not created, not logged in etc)
                                         if (!status.permissions.open_wallet) return send_response('Cannot send money transaction. Open wallet operation is not authorized');
                                         if (!request.open_wallet) return send_response('Cannot send money transaction. Wallet is not open and open_wallet was not requested');
-                                        else if (!save_wallet_id || !save_wallet_password) return send_response('Cannot send money transaction. Wallet is not open and no wallet login was found');
+                                        else if (!status.save_wallet_id || !status.save_wallet_password) return send_response('Cannot send money transaction. Wallet is not open and no wallet login was found');
                                     }
                                     if (request.close_wallet && !status.permissions.close_wallet) return send_response('Cannot send money transaction. Close wallet operation was requested but is not authorized');
                                     console.log(pgm + 'todo: add transactions details in confirm dialog');
@@ -2282,7 +2283,7 @@ angular.module('MoneyNetworkW2')
                                     }
                                     else {
                                         // open test bitcoin wallet (also get_balance request)
-                                        btcService.init_wallet(save_wallet_id, save_wallet_password, function (error) {
+                                        btcService.init_wallet(status.save_wallet_id, status.save_wallet_password, function (error) {
                                             try {
                                                 if (error && (wallet_info.status != 'Open')) return send_response('Open wallet request failed with error = ' + error);
                                                 if (error && send_money) console.log(pgm + 'warning. money request and get_balance request failed with error = ' + error);
@@ -2301,7 +2302,7 @@ angular.module('MoneyNetworkW2')
                                         // wallet not open (not created, not logged in etc)
                                         if (!status.permissions.open_wallet) return send_response('Cannot receive money transaction. Open wallet operation is not authorized');
                                         if (!request.open_wallet) return send_response('Cannot receive money transaction. Wallet is not open and open_wallet was not requested');
-                                        else if (!save_wallet_id || !save_wallet_password) return send_response('Cannot receive money transaction. Wallet is not open and no wallet login was found');
+                                        else if (!status.save_wallet_id || !status.save_wallet_password) return send_response('Cannot receive money transaction. Wallet is not open and no wallet login was found');
                                     }
                                     if (request.close_wallet && !status.permissions.close_wallet) return send_response('Cannot receive money transaction. Close wallet operation was requested but is not authorized');
                                     console.log(pgm + 'todo: add transactions details in confirm dialog');
@@ -3241,14 +3242,14 @@ angular.module('MoneyNetworkW2')
                                                         }
                                                         if (!is_wallet_required) return cb() ; // nothing to send
                                                         // wallet log in is required
-                                                        if (!save_wallet_id || save_wallet_password) {
+                                                        if (!status.save_wallet_id || status.save_wallet_password) {
                                                             error = ['Money transaction failed', 'Cannot send money', 'No wallet log in was found'] ;
                                                             console.log(pgm + 'todo: mark money transaction as aborted in ls');
                                                             console.log(pgm + 'todo: update file with money transaction status');
                                                             return report_error(pgm, error, {group_debug_seq: group_debug_seq}) ;
                                                         }
                                                         // open wallet
-                                                        btcService.init_wallet(save_wallet_id, save_wallet_password, function (error) {
+                                                        btcService.init_wallet(status.save_wallet_id, status.save_wallet_password, function (error) {
                                                             try {
                                                                 if (error && (wallet_info.status != 'Open')) {
                                                                     error = ['Money transaction failed', 'Cannot send money', 'Open wallet request failed', error] ;
@@ -3417,7 +3418,7 @@ angular.module('MoneyNetworkW2')
                                         }
 
                                         if (session_info.w2_start_mt_received_at) {
-                                            // ignore. already received. must be a wallet page load. see read_w_sessions
+                                            // ignore. already received. must be a wallet page load. see load_w_sessions
                                             MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq) ;
                                             return ;
                                         }
@@ -3450,14 +3451,14 @@ angular.module('MoneyNetworkW2')
                                             }
                                             if (!is_wallet_required) return cb() ; // nothing to send
                                             // wallet log in is required
-                                            if (!save_wallet_id || save_wallet_password) {
+                                            if (!status.save_wallet_id || status.save_wallet_password) {
                                                 error = ['Money transaction failed', 'Cannot send money', 'No wallet log in was found'] ;
                                                 console.log(pgm + 'todo: mark money transaction as aborted in ls');
                                                 console.log(pgm + 'todo: update file with money transaction status');
                                                 return report_error(pgm, error, {group_debug_seq: group_debug_seq}) ;
                                             }
                                             // open wallet
-                                            btcService.init_wallet(save_wallet_id, save_wallet_password, function (error) {
+                                            btcService.init_wallet(status.save_wallet_id, status.save_wallet_password, function (error) {
                                                 try {
                                                     if (error && (wallet_info.status != 'Open')) {
                                                         error = ['Money transaction failed', 'Cannot send money', 'Open wallet request failed', error] ;
@@ -4337,7 +4338,6 @@ angular.module('MoneyNetworkW2')
                                                             console.log('wallet.json file was updated. publish to distribute info to other users') ;
                                                             z_publish({publish: true});
                                                         }
-                                                        load_w_sessions() ;
                                                         return ;
                                                     }
                                                     // sign
@@ -4352,7 +4352,6 @@ angular.module('MoneyNetworkW2')
                                                         cb(sessionid, save_wallet_login) ;
                                                         console.log('content.json file was updated (files_optional). publish to distribute info to other users') ;
                                                         z_publish({publish: true});
-                                                        load_w_sessions() ;
                                                     }) ;
                                                     return ;
                                                 } // done
