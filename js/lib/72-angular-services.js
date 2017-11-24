@@ -2379,7 +2379,11 @@ angular.module('MoneyNetworkW2')
                                             //    "userid2": 461
                                             //};
 
-                                            // todo: use old addresses from old_session_info.money_transactions.json. step_5_get_new_address must use old addresses, not request new addresses
+                                            if (old_session_info.pubkeys_sent_at) {
+                                                return send_response('Money transaction is already approved') ;
+                                            }
+
+                                            // use old addresses from old_session_info.money_transactions.json. step_5_get_new_address must use old addresses, not request new addresses
                                             console.log(pgm + 'jsons (empty jsons) = ' + JSON.stringify(jsons)) ;
                                             //jsons (empty jsons) = [{}];
 
@@ -2413,7 +2417,7 @@ angular.module('MoneyNetworkW2')
                                         catch (e) { return send_exception(pgm, e) }
                                     }); // read_w_session callback
 
-                                }; // step_0_load_session
+                                }; // step_1_load_session
 
                                 // start callback chain
                                 step_1_load_session();
@@ -2464,7 +2468,11 @@ angular.module('MoneyNetworkW2')
 
                                                 if (old_session_info) {
                                                     console.log(pgm + 'warning. found old session info in localStorage. old_session_info = ' + JSON.stringify(old_session_info)) ;
-                                                    console.log(pgm + 'continue with old session info. todo: cross check old and new session info. should be identical') ;
+                                                    if (old_session_info.pubkeys_sent_at) {
+                                                        error = ['Stopping post start_mt processing', 'pubkeys message has already been sent to other wallet'] ;
+                                                        return report_error(pgm, error, {group_debug_seq: group_debug_seq}) ;
+                                                    }
+                                                    console.log(pgm + 'continue with old session info. cross checking old and new session info. should be identical') ;
                                                 }
 
                                                 // capture details for new wallet to wallet money transaction
@@ -2611,6 +2619,8 @@ angular.module('MoneyNetworkW2')
                                                             }
                                                             console.log(pgm + 'response2 = ' + JSON.stringify(response2));
                                                             console.log(pgm + 'sent pubkeys message to other wallet session');
+                                                            // mark pubkeys message as sent. do not send two pubkeys messages to other wallet session
+                                                            session_info.pubkeys_sent_at = new Date().getTime() ;
                                                             step_6_save_in_ls();
                                                         }
                                                         catch (e) { return send_exception(pgm, e) }
@@ -2732,30 +2742,18 @@ angular.module('MoneyNetworkW2')
                                             return; // no error response. this is a offline message
                                         }
 
-                                        // session_info = {
-                                        //    "money_transactionid": "hbUhFKGyyAiA8AnqVE74yUnYt9mWRdYTiZTwtFqxS54fk0JSzDJHW6e3krUK",
-                                        //    "master": false,
-                                        //    "contact": {
-                                        //        "alias": "1CCiJ97XHgVeJ",
-                                        //        "cert_user_id": "1CCiJ97XHgVeJ@moneynetwork.bit",
-                                        //        "auth_address": "1CCiJ97XHgVeJrkbnzLgfXvYRr8QEWxnWF"
-                                        //    },
-                                        //    "money_transactions": [{
-                                        //        "action": "Send",
-                                        //        "code": "tBTC",
-                                        //        "amount": 0.0001,
-                                        //        "json": {
-                                        //            "return_address": "2N9Q14JnWbVZtjmfS8cK1F2TdeKbWisJEEQ",
-                                        //            "address": "2N3WccS3b2ZBypzkJEBTCu9PtoKMmsGSMqt"
-                                        //        }
-                                        //    }],
-                                        //    "ip_external": true,
-                                        //    "pubkey": "-----BEGIN PUBLIC KEY-----\nMIGeMA0GCSqGSIb3DQEBAQUAA4GMADCBiAKBgE+3QVjs8p8kfoUAavPGsdtwbjbM\n6y3eBpg9ruNJgbUK21FJbW4jIw0b81ghFZ6fruC6FrMJyLUlWnerrM0kZX00EsKE\ndFYC96z3pxZ20pEBbZzMUdy4EbapcJ5rv1tm2qnF4jZDEgHKwSCYIuynCWV/G+RP\nPX5mVBa+6aj/pq7ZAgMBAAE=\n-----END PUBLIC KEY-----",
-                                        //    "prvkey": "-----BEGIN RSA PRIVATE KEY-----\nMIICWgIBAAKBgE+3QVjs8p8kfoUAavPGsdtwbjbM6y3eBpg9ruNJgbUK21FJbW4j\nIw0b81ghFZ6fruC6FrMJyLUlWnerrM0kZX00EsKEdFYC96z3pxZ20pEBbZzMUdy4\nEbapcJ5rv1tm2qnF4jZDEgHKwSCYIuynCWV/G+RPPX5mVBa+6aj/pq7ZAgMBAAEC\ngYAHr6S2XUpbe9pTGqI1VRArF2EZGZMHfiPmo/Pr6FeATEavRMQvXWXwyqQg+Des\nbrse4fJ0WtomVS6u4TetI/hBCadm4e39giidaQhV+D0AQ+7ffU9pudB1Hh7zyszw\nnk+xgYB0NDQ6JUiITM1FCmPsRH5lvg/g/P+CGxWfXnqY3QJBAJOA5YhFsVnZiYI/\nIx8Xuraxihd7a6mpbpy0aJ3KcOZb26iQvZfHsG4F0lN6T2Jso119UxQ+tfzPrXop\njgwSuRMCQQCKWdpWnJ4Xbc3UN1XOT9KRQwD+skMlaUGqcs36+iprvXxaFsfDijuW\nEfq3prdz+SQnwBovduauIC2w2XKoToHjAkBQvJzmmj8ZDxlVUXnH6xUoKsWLVOL5\nWuRQoe8hb02cyWrSOWeNTKAlmMonJyuMlCpXYeG3kxvJ5WLvGw/FS/pBAkBcf0Zi\nscNglqEOSRCtJuD5DXsUzcnmsUCd3LOqIKdL8Ru6f5B/Q2QjKVIehvAQMXniuaTI\nJw6DTDBAFKF7tUFRAkBTZXbPf+nKoaIDrAJuazEmi7iBtdVU8+VsSUDRzamqNFxY\nIBqOjnFV+EJvGFDVpOwO9VSoCqPWpf+5e0fQkn0h\n-----END RSA PRIVATE KEY-----",
-                                        //    "userid2": 692,
-                                        //    "pubkey2": "A9F8fG2jmxMdbcLXc8XJqiCbYyNgoe+GNayzhXfzXOcg",
-                                        //    "offline": []
-                                        //};
+                                        if (encrypt2.master) {
+                                            // stop. is master/sender of money transaction(s).
+                                            // wait for receiver of money transaction(s) to send w2_check_mt message with missing bitcoin addresses
+                                            console.log(pgm + 'pubkeys message ok. wallet-wallet communication started. is master/sender. waiting for w2_check_mt message from other wallet to crosscheck money transaction(s) before sending money transaction(s) to external API (btc.com)');
+                                            MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq) ;
+                                            return;
+                                        }
+
+                                        if (session_info.w2_check_mt_sent_at) {
+                                            // ignore. w2_check_mt message has already been sent to other wallet session
+                                            return ;
+                                        }
 
                                         // validations:
                                         // - request.pubkey == session_info.pubkey (encryption layer 1)
@@ -2820,19 +2818,6 @@ angular.module('MoneyNetworkW2')
                                         //        "address": "2MznAqaYAd4ZKXbrLcyRwfUm1HezaPBUXsU"
                                         //    }
                                         //}];
-
-                                        if (encrypt2.master) {
-                                            // stop. is master/sender of money transaction(s).
-                                            // wait for receiver of money transaction(s) to send w2_check_mt message with missing bitcoin addresses
-                                            console.log(pgm + 'pubkeys message ok. wallet-wallet communication started. is master/sender. waiting for w2_check_mt message from other wallet to crosscheck money transaction(s) before sending money transaction(s) to external API (btc.com)');
-                                            MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq) ;
-                                            return;
-                                        }
-
-                                        if (session_info.w2_check_mt_sent_at) {
-                                            // ignore. w2_check_mt message has already been sent to other wallet session
-                                            return ;
-                                        }
 
 
                                         console.log(pgm + 'pubkeys message ok. wallet-wallet communication started. is client/receiver. sending w2_check_mt message to other wallet to crosscheck money transaction(s) before sending money transaction(s) to external API (btc.com)');
@@ -2948,17 +2933,17 @@ angular.module('MoneyNetworkW2')
                                     try {
                                         console.log(pgm + 'session_info = ' + JSON.stringify(session_info));
 
-                                        if (session_info.w2_start_mt_sent_at) {
-                                            console.log(pgm + 'stopping. w2_start_mt message has already been sent to other session. w2_start_mt_sent_at = ' + session_info.w2_start_mt_sent_at) ;
-                                            return ;
-                                        }
-
                                         // 1) must be master/sender
                                         if (!session_info.master) {
                                             console.log(pgm + 'warning. is client/receiver of money transaction. ignoring incoming w2_check_mt message. only sent from receiver of money transaction to sender of money transaction');
                                             return;
                                         }
                                         // i am sender of money transaction to contact
+
+                                        if (session_info.w2_start_mt_sent_at) {
+                                            console.log(pgm + 'stopping. w2_start_mt message has already been sent to other session. w2_start_mt_sent_at = ' + session_info.w2_start_mt_sent_at) ;
+                                            return ;
+                                        }
 
                                         // has pubkeys from other wallet been received from other wallet? cannot encrypt w2_start_mt without public keys from other wallet session
                                         if (!encrypt2.other_session_pubkey || !encrypt2.other_session_pubkey2) {
@@ -3930,6 +3915,7 @@ angular.module('MoneyNetworkW2')
                 if (!cb) cb = function () {};
                 request1 = function (cb) {
                     var pgm = service + '.check_merger_permission.request1: ';
+                    var debug_seq ;
                     ZeroFrame.cmd("wrapperPermissionAdd", "Merger:MoneyNetwork", function (res) {
                         console.log(pgm + 'res = ', JSON.stringify(res));
                         if (res == "Granted") {
