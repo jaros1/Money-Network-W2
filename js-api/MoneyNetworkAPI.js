@@ -4020,7 +4020,7 @@ MoneyNetworkAPI.prototype.redo_file = function(request_filename) {
     var self;
     self = this;
     this.check_destroyed(pgm);
-    this.encrypt.get_session_filenames({}, function(this_session_filename, other_session_filename, unlock_pwd2) {
+    this.get_session_filenames({}, function(this_session_filename, other_session_filename, unlock_pwd2) {
         var pgm = self.module + '.redo_file get_session_filenames callback: ';
         var lng ;
         lng = other_session_filename.length ;

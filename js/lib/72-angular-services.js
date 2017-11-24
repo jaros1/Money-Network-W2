@@ -2753,19 +2753,6 @@ angular.module('MoneyNetworkW2')
                                             return; // no error response. this is a offline message
                                         }
 
-                                        if (encrypt2.sender) {
-                                            // stop. is sender of money transaction(s).
-                                            // wait for receiver of money transaction(s) to send w2_check_mt message with missing bitcoin addresses
-                                            console.log(pgm + 'pubkeys message ok. wallet-wallet communication started. is sender of money transaction. waiting for w2_check_mt message from other wallet to crosscheck money transaction(s) before sending money transaction(s) to external API (btc.com)');
-                                            MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq) ;
-                                            return;
-                                        }
-
-                                        if (session_info.w2_check_mt_sent_at) {
-                                            // ignore. w2_check_mt message has already been sent to other wallet session
-                                            return ;
-                                        }
-
                                         // validations:
                                         // - request.pubkey == session_info.pubkey (encryption layer 1)
                                         // - request.pubkey2 == session_info.pubkey2 (layer 2)
@@ -2830,7 +2817,17 @@ angular.module('MoneyNetworkW2')
                                         //    }
                                         //}];
 
-
+                                        if (encrypt2.sender) {
+                                            // stop. is sender of money transaction(s).
+                                            // wait for receiver of money transaction(s) to send w2_check_mt message with missing bitcoin addresses
+                                            console.log(pgm + 'pubkeys message ok. wallet-wallet communication started. is sender of money transaction. waiting for w2_check_mt message from other wallet to crosscheck money transaction(s) before sending money transaction(s) to external API (btc.com)');
+                                            MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq) ;
+                                            return;
+                                        }
+                                        if (session_info.w2_check_mt_sent_at) {
+                                            // ignore. w2_check_mt message has already been sent to other wallet session
+                                            return ;
+                                        }
                                         console.log(pgm + 'pubkeys message ok. wallet-wallet communication started. is client/receiver. sending w2_check_mt message to other wallet to crosscheck money transaction(s) before sending money transaction(s) to external API (btc.com)');
 
                                         // is client/receiver. have both address and return_address for money transaction(s).
@@ -2990,7 +2987,7 @@ angular.module('MoneyNetworkW2')
                                                 console.log(pgm + 'res = ' + JSON.stringify(res)) ;
                                                 // check optional filename. pubkeys message from other wallet session is an -o (external) optional file
                                                 re = /^[0-9a-f]{10}-o\.[0-9]{13}$/;
-                                                console.log(pgm2 + 'old res.length = ' + res.length);
+                                                console.log(pgm + 'old res.length = ' + res.length);
                                                 for (i = res.length - 1; i >= 0; i--) {
                                                     if (!res[i].filename.match(re)) continue; // invalid filename
                                                     else if (res[i].filename == filename) continue ; // this w2_check_mt message
@@ -3022,7 +3019,7 @@ angular.module('MoneyNetworkW2')
                                                     // 3: add a counter for this fallback operation. Try 3 times
                                                     if (!session_info.lost_pubkey_message_count) session_info.lost_pubkey_message_count = 0 ;
                                                     session_info.lost_pubkey_message_count++ ;
-                                                    save_w_session(sessionid, {group_debug_seq: group_debug_seq}, function () {
+                                                    save_w_session(session_info, {group_debug_seq: group_debug_seq}, function () {
                                                         var pgm = service + '.process_incoming_message.' + request.msgtype + ' save_w_session callback 4/' + group_debug_seq + ': ';
                                                         var error ;
                                                         if (session_info.lost_pubkey_message_count > 3) {
