@@ -290,7 +290,7 @@ angular.module('MoneyNetworkW2')
                 "w2_check_mt": {
                     "type": 'object',
                     "title": 'Return bitcoin addresses and check money transactions',
-                    "description": 'After pubkeys handshake. From client/receiver to master/sender. Use this message to exchange addresses and crosscheck money transaction information. Identical=execute transactions. Different=abort transactions',
+                    "description": 'After pubkeys handshake. From receiver to sender of money transaction. Use this message to exchange addresses and crosscheck money transaction information. Identical=execute transactions. Different=abort transactions',
                     "properties": {
                         "msgtype": { "type": 'string', "pattern": '^w2_check_mt$'},
                         "money_transactions": {
@@ -324,7 +324,7 @@ angular.module('MoneyNetworkW2')
                 "w2_start_mt": {
                     "type": 'object',
                     "title": 'start or abort money transactions',
-                    "description": 'After w2_check_mt check, start or about money transacion. From sender/master to receiver/client',
+                    "description": 'After w2_check_mt check, start or about money transacion. From sender of money transaction to receiver',
                     "properties": {
                         "msgtype": { "type": 'string', "pattern": '^w2_start_mt$'},
                         "error": { "type": 'string'}
@@ -947,6 +947,10 @@ angular.module('MoneyNetworkW2')
 
             } // get_my_wallet_hub
 
+            function get_merged_type () {
+                return MoneyNetworkAPILib.get_merged_type() ;
+            }
+
             // return special merger site path
             var get_user_path_cbs = [] ;
             function get_user_path (cb) {
@@ -961,7 +965,7 @@ angular.module('MoneyNetworkW2')
                 if (z_cache.user_path) return cb(z_cache.user_path) ; // OK
                 z_cache.user_path = true ;
                 get_my_wallet_hub(function (my_hub) {
-                    z_cache.user_path = 'merged-MoneyNetwork/' + my_hub + '/data/users/' + ZeroFrame.site_info.auth_address + '/' ;
+                    z_cache.user_path = 'merged-' + get_merged_type() + '/' + my_hub + '/data/users/' + ZeroFrame.site_info.auth_address + '/' ;
                     MoneyNetworkAPILib.config({this_user_path: z_cache.user_path}) ;
                     cb(z_cache.user_path);
                     while (get_user_path_cbs.length) { cb = get_user_path_cbs.shift() ; cb(z_cache.user_path)}
@@ -1405,12 +1409,18 @@ angular.module('MoneyNetworkW2')
                                 no_not_loaded++ ;
                                 return load_session() ;
                             }
+                            // https://github.com/jaros1/Money-Network/issues/273
+                            // renamed master to sender (and client to receiver)
+                            if (session_info.hasOwnProperty('master')) {
+                                session_info.sender = session_info.master ;
+                                delete session_info.master ;
+                            }
                             z_cache.w_sessions[auth_address][sha256] = session_info;
                             // initialize MoneyNetworkAPI instance for this wallet session
                             new MoneyNetworkAPI({
-                                debug: session_info.master ? 'encrypt3' : 'encrypt4',
+                                debug: session_info.sender ? 'encrypt3' : 'encrypt4',
                                 sessionid: session_info.money_transactionid,
-                                master: session_info.master,
+                                sender: session_info.sender,
                                 prvkey: session_info.prvkey,
                                 userid2: session_info.userid2,
                                 pubkey: session_info.pubkey,
@@ -1540,7 +1550,8 @@ angular.module('MoneyNetworkW2')
                         //    "total_overhead": 34000
                         //};
                         // failed fileGet for incoming money transaction file?
-                        if (encrypt2.hasOwnProperty('master') && extra && extra.file_info && !extra.file_info.is_downloaded) {
+                        if (encrypt2.hasOwnProperty('sender') && extra && extra.file_info && !extra.file_info.is_downloaded) {
+                            // optional file download failed in wallet to wallet communication
                             error = ['Hanging money transaction', 'Timeout while waiting for ' + filename, 'Check ZeroPort/VPN status', 'Maybe restart ui-server', 'Maybe reload wallet page'] ;
                             report_error(pgm, error, {group_debug_seq: group_debug_seq, type: 'info'}) ;
                         }
@@ -1933,7 +1944,7 @@ angular.module('MoneyNetworkW2')
                                         // must be temporary saved in localStorage until money transaction is processed
                                         session_info = {
                                             money_transactionid: request.money_transactionid,
-                                            master: true,
+                                            sender: true,
                                             contact: new_money_transactions[request.money_transactionid].request.contact,
                                             money_transactions: []
                                         };
@@ -2010,13 +2021,13 @@ angular.module('MoneyNetworkW2')
                                             var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_4_create_session/' + group_debug_seq + ': ';
                                             // setup session instance.
                                             // Only using symmetric encryption in first pubkeys message to other wallet session
-                                            // this wallet starts the transaction and is the master in wallet to wallet communication
+                                            // this wallet starts the transaction and is the sender in wallet to wallet communication
                                             // todo: 1) add this session keys information to encrypt3
                                             // todo: 2) encrypt3 instance should be saved in ls and should be restored after page reload (step_5_save_in_ls)
                                             encrypt3 = new MoneyNetworkAPI({
                                                 debug: 'encrypt3',
                                                 sessionid: session_info.money_transactionid,
-                                                master: true,
+                                                sender: true,
                                                 prvkey: session_info.prvkey,
                                                 userid2: session_info.userid2
                                             });
@@ -2359,7 +2370,7 @@ angular.module('MoneyNetworkW2')
                                             console.log(pgm + 'warning. found old wallet session in ls. old_session_info = ' + JSON.stringify(old_session_info));
                                             //old_session_info = {
                                             //    "money_transactionid": "dGvvnMydn8HLhCkInrLLJU3pxMljoWlGEow2GqbZfnDf1WzFeLERtoAI3r50",
-                                            //    "master": false,
+                                            //    "sender": false,
                                             //    "contact": {
                                             //        "alias": "jro",
                                             //        "cert_user_id": "jro@zeroid.bit",
@@ -2480,7 +2491,7 @@ angular.module('MoneyNetworkW2')
                                                 // request.contact = {"alias":"1MirY1KnJK3MK","cert_user_id":"1MirY1KnJK3MK@moneynetwork.bit","auth_address":"1MirY1KnJK3MKzgZiyZZM8FkyzHRJgmMh8"}
                                                 new_session_info = {
                                                     money_transactionid: request.money_transactionid,
-                                                    master: false,
+                                                    sender: false,
                                                     contact: new_money_transactions[request.money_transactionid].request.contact,
                                                     money_transactions: []
                                                 };
@@ -2500,7 +2511,7 @@ angular.module('MoneyNetworkW2')
                                                 console.log(pgm + 'new_session_info = ' + JSON.stringify(new_session_info));
                                                 //session_info = {
                                                 //    "money_transactionid": "3R1R46sRFEal8zWx0wYvYyo6VDLJmpFzVNsyIOhglPV4bcUgXqUDLOWrOkZA",
-                                                //    "master": false,
+                                                //    "sender": false,
                                                 //    "money_transactions": [{
                                                 //        "action": "Send",
                                                 //        "code": "tBTC",
@@ -2514,7 +2525,7 @@ angular.module('MoneyNetworkW2')
 
                                                 if (old_session_info) {
                                                     if (JSON.stringify(old_session_info) != JSON.stringify(new_session_info)) {
-                                                        readonly_keys = ['money_transactionid', 'master','contact','money_transactions'] ;
+                                                        readonly_keys = ['money_transactionid', 'sender','contact','money_transactions'] ;
                                                         null_keys = ['prvkey', 'userid2'] ;
                                                         errors = [] ;
                                                         for (i=0 ; i<readonly_keys.length ; i++) {
@@ -2635,7 +2646,7 @@ angular.module('MoneyNetworkW2')
                                                     encrypt4 = new MoneyNetworkAPI({
                                                         debug: 'encrypt4',
                                                         sessionid: session_info.money_transactionid,
-                                                        master: false,
+                                                        sender: false,
                                                         prvkey: session_info.prvkey,
                                                         userid2: session_info.userid2,
                                                         cb: process_incoming_message
@@ -2742,10 +2753,10 @@ angular.module('MoneyNetworkW2')
                                             return; // no error response. this is a offline message
                                         }
 
-                                        if (encrypt2.master) {
-                                            // stop. is master/sender of money transaction(s).
+                                        if (encrypt2.sender) {
+                                            // stop. is sender of money transaction(s).
                                             // wait for receiver of money transaction(s) to send w2_check_mt message with missing bitcoin addresses
-                                            console.log(pgm + 'pubkeys message ok. wallet-wallet communication started. is master/sender. waiting for w2_check_mt message from other wallet to crosscheck money transaction(s) before sending money transaction(s) to external API (btc.com)');
+                                            console.log(pgm + 'pubkeys message ok. wallet-wallet communication started. is sender of money transaction. waiting for w2_check_mt message from other wallet to crosscheck money transaction(s) before sending money transaction(s) to external API (btc.com)');
                                             MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq) ;
                                             return;
                                         }
@@ -2792,7 +2803,7 @@ angular.module('MoneyNetworkW2')
 
                                         // ready for transaction verification. both wallet sessions should have identical money transaction(s)
                                         console.log(pgm + 'session_info.money_transactions = ' + JSON.stringify(session_info.money_transactions));
-                                        console.log(pgm + 'identify receiver. sender is master, receiver is client. master = ' + encrypt2.master + ', client = ' + encrypt2.client);
+                                        console.log(pgm + 'sender/receiver check. sender = ' + encrypt2.sender + ', receiver = ' + encrypt2.receiver);
 
                                         // sender=sweden, receiver=torando
                                         // sweden would like to send money to torando and is asking torando for approval and a bitcoin address
@@ -2823,7 +2834,7 @@ angular.module('MoneyNetworkW2')
                                         console.log(pgm + 'pubkeys message ok. wallet-wallet communication started. is client/receiver. sending w2_check_mt message to other wallet to crosscheck money transaction(s) before sending money transaction(s) to external API (btc.com)');
 
                                         // is client/receiver. have both address and return_address for money transaction(s).
-                                        // send bitcoin address(es) added in check_mt to master/sender
+                                        // send bitcoin address(es) added in check_mt to sender of money transaction
                                         // w2_check_mt message is being used for money transaction crosscheck
                                         // the two wallets must agree about money transaction(s) to start
                                         request2 = {
@@ -2908,7 +2919,7 @@ angular.module('MoneyNetworkW2')
                     }
                     else if (request.msgtype == 'w2_check_mt') {
                         // after pubkeys session handshake. Now running full encryption
-                        // receiver to sender: money transaction receiver (client) is returning missing bitcoin addresses (address or return_address) to money transaction sender (master)
+                        // receiver to sender: money transaction receiver is returning missing bitcoin addresses (address or return_address) to money transaction sender
                         (function w2_check_mt(){
                             var pgm = service + '.process_incoming_message.' + request.msgtype + '/' + group_debug_seq + ': ';
                             var auth_address, sha256, encrypted_session_info;
@@ -2933,9 +2944,9 @@ angular.module('MoneyNetworkW2')
                                     try {
                                         console.log(pgm + 'session_info = ' + JSON.stringify(session_info));
 
-                                        // 1) must be master/sender
-                                        if (!session_info.master) {
-                                            console.log(pgm + 'warning. is client/receiver of money transaction. ignoring incoming w2_check_mt message. only sent from receiver of money transaction to sender of money transaction');
+                                        // 1) must be sender
+                                        if (!session_info.sender) {
+                                            console.log(pgm + 'warning. is receiver of money transaction. ignoring incoming w2_check_mt message. w2_check_mt message is only sent from receiver of money transaction to sender of money transaction');
                                             return;
                                         }
                                         // i am sender of money transaction to contact
@@ -3102,7 +3113,7 @@ angular.module('MoneyNetworkW2')
 
                                         //session_info = {
                                         //    "money_transactionid": "ej3DqoFWtmW1m0q8tq2ZlvgfTXTPJ1Hhe9vnTF3s3577vr3G8elkzaVp5mDH",
-                                        //    "master": true,
+                                        //    "sender": true,
                                         //    "contact": {
                                         //        "alias": "jro",
                                         //        "cert_user_id": "jro@zeroid.bit",
@@ -3409,8 +3420,8 @@ angular.module('MoneyNetworkW2')
                                         }
 
                                         // 1) must be client/receiver
-                                        if (session_info.master) {
-                                            console.log(pgm + 'warning. is master/sender of money transaction. ignoring incoming w2_start_mt message. only sent from master/sender of money transaction to client/receiver of money transaction');
+                                        if (session_info.sender) {
+                                            console.log(pgm + 'warning. is sender of money transaction. ignoring incoming w2_start_mt message. only sent from sender of money transaction to client/receiver of money transaction');
                                             MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq) ;
                                             return;
                                         }
@@ -3675,7 +3686,7 @@ angular.module('MoneyNetworkW2')
                         MoneyNetworkAPILib.wait_for_file(res[0].filename) ;
 
                         // first message. remember path to other session user directory. all following messages must come from same user directory
-                        other_user_path = 'merged-MoneyNetwork/' + res[0].directory + '/' ;
+                        other_user_path = 'merged-' + get_merged_type() + '/' + res[0].directory + '/' ;
                         encrypt2.setup_encryption({other_user_path: other_user_path}) ;
 
                         // read file
@@ -4249,7 +4260,7 @@ angular.module('MoneyNetworkW2')
                                                 console.log(pgm + 'done with file info lookup. i = ' + i + ', files.length = ' + files.length + ' continue with delete files') ;
                                                 return cb() ;
                                             }
-                                            inner_path = 'merged-MoneyNetwork/' + directory + '/' + files[i].filename ;
+                                            inner_path = 'merged-' + get_merged_type() + '/' + directory + '/' + files[i].filename ;
                                             debug_seq = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path, 'optionalFileInfo') ;
                                             ZeroFrame.cmd("optionalFileInfo", [inner_path], function (file_info) {
                                                 MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq, file_info ? 'OK' : 'Not found');
@@ -4328,7 +4339,7 @@ angular.module('MoneyNetworkW2')
                                                     }
                                                     // sign
                                                     z_publish_pending = true ;
-                                                    inner_path = 'merged-MoneyNetwork/' + z_cache.my_wallet_data_hub + '/data/users/' + ZeroFrame.site_info.auth_address + '/content.json' ;
+                                                    inner_path = 'merged-' + get_merged_type() + '/' + z_cache.my_wallet_data_hub + '/data/users/' + ZeroFrame.site_info.auth_address + '/content.json' ;
                                                     debug_seq = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path, 'siteSign') ;
                                                     self.ZeroFrame.cmd("siteSign", {inner_path: inner_path}, function (res) {
                                                         var pgm = service + '.create_sessions.step_3_find_old_outgoing_files.delete_file siteSign callback: ';
@@ -4342,7 +4353,7 @@ angular.module('MoneyNetworkW2')
                                                     return ;
                                                 } // done
                                                 filename = delete_files.shift() ;
-                                                inner_path = 'merged-MoneyNetwork/' + z_cache.my_wallet_data_hub + '/data/users/' + ZeroFrame.site_info.auth_address + '/' + filename ;
+                                                inner_path = 'merged-' + get_merged_type() + '/' + z_cache.my_wallet_data_hub + '/data/users/' + ZeroFrame.site_info.auth_address + '/' + filename ;
                                                 debug_seq = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path, 'fileDelete') ;
                                                 ZeroFrame.cmd("fileDelete", inner_path, function (res) {
                                                     MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq, res == 'ok' ? 'OK' : 'Failed. error = ' + JSON.stringify(res)) ;
