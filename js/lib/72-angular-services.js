@@ -1740,6 +1740,7 @@ angular.module('MoneyNetworkW2')
                                 //    - request money: address for send money operation
 
                                 // callback chain definitions
+                                // prepare_mt_request. step 6.
                                 step_6_done_ok = function () {
                                     var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_6_done_ok/' + group_debug_seq + ': ';
                                     console.log(pgm + 'jsons = ' + JSON.stringify(jsons));
@@ -1783,7 +1784,7 @@ angular.module('MoneyNetworkW2')
                                     send_response();
                                 }; // step_6_done_ok
 
-                                // step 5: optional close wallet. only if wallet has been opened in step 2
+                                // prepare_mt_request step 5: optional close wallet. only if wallet has been opened in step 2
                                 step_5_close_wallet = function () {
                                     if (request.close_wallet) btcService.close_wallet(function (res) {
                                         step_6_done_ok()
@@ -1791,7 +1792,7 @@ angular.module('MoneyNetworkW2')
                                     else return step_6_done_ok();
                                 }; // step_5_close_wallet
 
-                                // step 4: get new bitcoin address
+                                // prepare_mt_request step 4: get new bitcoin address
                                 // - send money - get return address to be used in case of a partly failed money transaction (multiple money transactions)
                                 // - request money - address to be used in send money operation
                                 step_4_get_new_address = function (i) {
@@ -1812,7 +1813,7 @@ angular.module('MoneyNetworkW2')
                                     }); // get_new_address
                                 }; // step_4_get_new_address
 
-                                // step 3: optional check balance. Only for send money operations
+                                // prepare_mt_request step 3: optional check balance. Only for send money operations
                                 step_3_check_balance = function () {
                                     var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_3_check_balance/' + group_debug_seq + ': ';
                                     if (!send_money) return step_4_get_new_address();
@@ -1822,7 +1823,7 @@ angular.module('MoneyNetworkW2')
                                     else send_response('insufficient balance confirmed balance for send money operation(s)');
                                 }; // step_3_check_balance
 
-                                // step 2: optional open wallet. wallet must be open before get new address request
+                                // prepare_mt_request step 2: optional open wallet. wallet must be open before get new address request
                                 step_2_open_wallet = function () {
                                     if (wallet_info.status == 'Open') {
                                         // bitcoin wallet is already open. never close an already open wallet
@@ -1851,10 +1852,10 @@ angular.module('MoneyNetworkW2')
                                     }
                                 }; // step_2_open_wallet
 
-                                // step 1: optional confirm money transaction (see permissions)
+                                // prepare_mt_request step 1: optional confirm money transaction (see permissions)
                                 step_1_confirm = function () {
                                     var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_1_confirm/' + group_debug_seq + ': ';
-                                    var request2;
+                                    var message, request2, confirm_status, confirm_timeout_fnk;
                                     if (wallet_info.status != 'Open') {
                                         // wallet not open (not created, not logged in etc)
                                         if (!status.permissions.open_wallet) return send_response('Cannot send money transaction. Open wallet operation is not authorized');
@@ -1864,40 +1865,50 @@ angular.module('MoneyNetworkW2')
                                     if (request.close_wallet && !status.permissions.close_wallet) return send_response('Cannot send money transaction. Close wallet operation was requested but is not authorized');
                                     console.log(pgm + 'todo: add transactions details in confirm dialog');
                                     if (!status.permissions.confirm) return step_2_open_wallet();
-                                    // send confirm notification to MN
+
+                                    // open two confirm dialog boxes.
+                                    // one here in W2 session. The other in MN session
+                                    // timeout in prepare_mt_request request from MN is 60 seconds.
+                                    // timeout in confirm dialog box is 50 seconds
+                                    confirm_status = {done: false};
+                                    confirm_timeout_fnk = function () {
+                                        if (confirm_status.done) return; // confirm dialog done
+                                        confirm_status.done = true;
+                                        send_response('Confirm transaction timeout')
+                                    };
+                                    setTimeout(confirm_timeout_fnk, 50000);
+                                    // path 1) confirm box in w2
+                                    message = 'Send todo: more text money transaction(s) to ' + request.contact.alias + '?';
+                                    ZeroFrame.cmd("wrapperConfirm", [message, 'OK'], function (confirm) {
+                                        if (confirm_status.done) return; // confirm dialog done (OK or timeout)
+                                        confirm_status.done = true ;
+                                        if (!confirm) return send_response('money transaction(s) was/were rejected');
+                                        // Money transaction was confirmed. continue
+                                        step_2_open_wallet();
+                                    }) ;
+                                    // path 2) confirm box in MN
                                     request2 = {
-                                        msgtype: 'notification',
-                                        type: 'info',
-                                        message: 'Please confirm money transaction<br>todo: more text',
-                                        timeout: 10000
+                                        msgtype: 'confirm',
+                                        message: message,
+                                        button_caption: 'OK'
                                     };
                                     console.log(pgm + 'sending request2 = ' + JSON.stringify(request2));
-                                    encrypt2.send_message(request2, {response: false}, function (response) {
+                                    encrypt2.send_message(request2, {response: 50000, group_debug_seq: group_debug_seq}, function (response) {
                                         try {
                                             var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_1_confirm send_message callback 1/' + group_debug_seq + ': ';
-                                            var message, confirm_status, confirm_timeout_fnk;
-                                            if (response && response.error) return send_response('Confirm transaction failed. error = ' + response.error);
-                                            // open confirm dialog. handle confirm timeout. wait max 2+10 seconds for confirmation
-                                            confirm_status = {done: false};
-                                            confirm_timeout_fnk = function () {
-                                                if (confirm_status.done) return; // confirm dialog done
-                                                confirm_status.done = true;
-                                                send_response('Confirm transaction timeout')
-                                            };
-                                            setTimeout(confirm_timeout_fnk, 12000);
-                                            // todo: 1) add transaction details to confirm text
-                                            // todo: 2) add plural to message: transaction(s)
-                                            message = 'Send todo: more text money transaction(s) to ' + request.contact.alias + '?';
-                                            ZeroFrame.cmd('wrapperConfirm', [message, 'OK'], function (confirm) {
-                                                try {
-                                                    if (confirm_status.done) return; // confirm dialog timeout
-                                                    confirm_status.done = true;
-                                                    if (!confirm) return send_response('money transaction(s) was/were rejected');
-                                                    // Money transaction was confirmed. continue
-                                                    step_2_open_wallet();
-                                                }
-                                                catch (e) { return send_exception(pgm, e) }
-                                            }); // wrapperConfirm callback 2
+                                            if (confirm_status.done) return; // confirm dialog done (OK or timeout)
+                                            confirm_status.done = true ;
+                                            // response should be OK or timeot
+                                            if (response && !response.error) {
+                                                // Money transaction was confirmed. continue
+                                                return step_2_open_wallet() ;
+                                            }
+                                            if (response && response.error && response.error.match(/^Timeout /)) {
+                                                // OK. timeout after 50 seconds. No or late user feedback in MN session
+                                                return;
+                                            }
+                                            // unexpected response from confirm request
+                                            console.log(pgm + 'error: response = ' + JSON.stringify(response)) ;
                                         }
                                         catch (e) { return send_exception(pgm, e) }
                                     }); // send_message callback 1
