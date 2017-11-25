@@ -25,16 +25,68 @@
    "size": 4286
   },
   "index.html": {
-   "sha512": "b4e96f4d137b33061a2a207c0766accaba761357584bf88a7c0e604393021767",
-   "size": 10036
+   "sha512": "17075e27bd71ffe69922e853790f542adb2f67ef72fe0a36d5f40ac97f92bc0d",
+   "size": 10630
   },
   "js-api/MoneyNetworkAPI.js": {
-   "sha512": "ba97ba7eeeebdd2304e2af78976da78bbe1af3ed0741cff7e861a484ed4e2b61",
-   "size": 245860
+   "sha512": "73d1b5782d49d879eeaa18e07bd2ddebf5ad232f27e7b869e30676e3439e8cd3",
+   "size": 246500
   },
   "js/all.js.zip": {
-   "sha512": "50e82d721c2fe538ce72e68698d481f9258baba1bac15e03196310d87657c069",
-   "size": 1103121
+   "sha512": "89731b5d9188867a4da62bfc33452a6c8c1539475c602a41b191b5df48abd87f",
+   "size": 1104288
+  },
+  "screendumps/1000-w2-standalone-send-money.png": {
+   "sha512": "c64693c318640591d6051cf6c2f29695f5171e0ee673d029255891730044a822",
+   "size": 436676
+  },
+  "screendumps/1010-w2-standalone-confirm-send-money.png": {
+   "sha512": "483c9c0daba472ae718826743dd09caa5884a8da9ee9c03a93f8469f3c63eba0",
+   "size": 160083
+  },
+  "screendumps/1020-w2-standalone-money-was-sent.png": {
+   "sha512": "cf845139a32dff04a423674db5941782e74fe8a33efda7b940c8bf5ddd7b48d2",
+   "size": 153472
+  },
+  "screendumps/1030-w2-standalone-unconfirmed-balance.png": {
+   "sha512": "ed2ce45bd6473458df6a2a9c3aed903709d44d234c12f1ce4f48ba706219df2e",
+   "size": 368954
+  },
+  "screendumps/2000-w2-integrated-torando-send-money.png": {
+   "sha512": "9f55d59369e5f839e3bbe5d12b787b1d21ae19f5fcf965f1815ce50cf9935785",
+   "size": 627134
+  },
+  "screendumps/2010-w2-integrated-send-ping-to-check-if-torando-wallet-is-open.png": {
+   "sha512": "d85101a0cc9be794b764f5104c03850bf32d6fdf53a738682da543367c4e3b48",
+   "size": 150897
+  },
+  "screendumps/2020-w2-integrated-validating-transaction-in-torando-wallet-and-optional-confirm-transaction.png": {
+   "sha512": "add719d4a86a0be468a35bd08a5498d9aaf189cb3cb4567f2f319e60fdce1aa6",
+   "size": 160596
+  },
+  "screendumps/2030-w2-integrated-torando-has-sent-message-with-money-to-montreal.png": {
+   "sha512": "e96ed059c9bdd3a5d3d6dd183800c050fd50368ad4f3ebedf1e9465ac387ab3c",
+   "size": 310681
+  },
+  "screendumps/2100-w2-integrated-montreal-must-approve-incoming-money-transaction.png": {
+   "sha512": "4df282dde612856bb83901866e1e621313ed5e112d3f6b532e90fdc3a6f28ce0",
+   "size": 141509
+  },
+  "screendumps/2110-w2-integrated-send-ping-to-check-if-montreal-wallet-is-open.png": {
+   "sha512": "fc0e7ff4afe34f7390ae55640f6a34782a6b9ef28b4d3c4866fc461dff95b70c",
+   "size": 136635
+  },
+  "screendumps/2120-w2-integrated-validating-transaction-in-montreal-wallet.png": {
+   "sha512": "312010ca9d5a4527496ebfb717878bb97de91a7c87a00cc84c8d6b89bdcdbcb6",
+   "size": 133745
+  },
+  "screendumps/2130-w2-integrated-money-transaction-started.png": {
+   "sha512": "3c8e3b18ccc1cab4bd680bbe17eda5dab57c888d41cd3e7c0931648c85cd0380",
+   "size": 134482
+  },
+  "screendumps/2140-w2-integrated-money-was-sent-from-torando-to-montreal.png": {
+   "sha512": "c4512df982e9b4ba025b3b522c287e8532495871de441bd14ad009a3ae059442",
+   "size": 275366
   }
  },
  "ignore": "((js|css)/(?!all.(js|css))|.idea|.git|data/users/.*/.*|merged-.*)",
@@ -42,10 +94,14 @@
   "data/users/content.json": {
    "signers": [],
    "signers_required": 1
+  },
+  "screendumps/content.json": {
+   "signers": [],
+   "signers_required": 1
   }
  },
  "inner_path": "content.json",
- "modified": 1511598868,
+ "modified": 1511616094,
  "postmessage_nonce_security": true,
  "settings": {
   "default_hubs": {
@@ -57,7 +113,7 @@
  },
  "signers_sign": "G07H0Zdvu6yUtEe7wxc515d5wVoZJpezNYNiKN8T1cwlBkZTYqZRbBzltNbJkstHlOMLxVLGQP6OdGCNEMCI8zE=",
  "signs": {
-  "1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1": "HE5+st3Z4OvikjoHYsfpqR6vQ/TmkjWTzLJ81Qj0FDl7LvsD7TIAdkBoEY9OXfuUiS4nJ22RiUSSMI/QR78k0N8="
+  "1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1": "G3SQZRTC/j3+ommwJOqmeQcwwR/Kd3ZFxkfOECa2iHgsTrDhf0lVWX9fwMFpO/8PbJFRTLo1zjLUToWcSmEaA9Y="
  },
  "signs_required": 1,
  "title": "MoneyNetworkW2",

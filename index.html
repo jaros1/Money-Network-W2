@@ -149,8 +149,8 @@
         <p>
             Summary:
         <ul style="list-style-type:disc">
-            <li>Todo: Working on MoneyNetwork integration (test, security, API, wallet operations)</li>
-            <li>Status: Tested OK with test Bitcoins</li>
+            <li>Tested OK with test Bitcoins (see screendumps below)</li>
+            <li>Tested OK with MoneyNetwork integration (see screendumps below)</li>
             <li>Please return test Bitcoins to faucet when finish testing</li>
             <li>Please delete test wallet when finish testing</li>
             <li><a href="https://github.com/jaros1/Money-Network-W2" target="_top" rel="noopener noreferrer">GitHub</a></li>
@@ -158,7 +158,20 @@
 
         </p>
 
-        <br>
+        Click to show/hide screendumps:
+        <a href="" ng-click="w.show_hide('-w2-standalone-')">Standalone usage</a> and
+        <a href="" ng-click="w.show_hide('-w2-integrated-')">MoneyNetwork integration</a>
+        <table style="width: 100%">
+            <tbody ng-repeat="s in w.screendumps|filter:{show:true,files:true}">
+            <tr><td>&nbsp;</td></tr>
+            <tr><td ng-bind="s.text"></td></tr>
+            <tr>
+                <td>
+                    <img ng-src="{{s.src}}" style="border:1px solid black">
+                </td>
+            </tr>
+            </tbody>
+        </table>
         <br>
         <p>
             Contact info: I am not using ZeroMail.
@@ -185,9 +198,9 @@
 
 <script type="text/javascript" src="js-api/MoneyNetworkAPI.js"></script>
 
-<script type="text/javascript" src="js/all.js"></script>
+<!--script type="text/javascript" src="js/all.js"></script>
 <!-- -->
-<!--script type="text/javascript" src="js/all.js.zip/all.js"></script>
+<script type="text/javascript" src="js/all.js.zip/all.js"></script>
 <!-- -->
 
 </body>
