@@ -36,7 +36,6 @@ angular.module('MoneyNetworkW2')
                 return api_client ;
             }
 
-
             function create_new_wallet (wallet_id, wallet_password, cb) {
                 var pgm = service + '.create_new_wallet: ' ;
                 if (!wallet_id || !wallet_password) return cb('Wallet ID and/or password is missing') ;
@@ -143,6 +142,7 @@ angular.module('MoneyNetworkW2')
             function send_money (address, amount, confirm, cb) {
                 var pgm = service + '.send_money: ' ;
                 var satoshi, btc, optional_confirm_send_money ;
+                if (!bitcoin_wallet) return cb('No bitcoin wallet found') ;
                 satoshi = parseInt(amount) ;
                 btc = satoshi / 100000000 ;
 
@@ -162,6 +162,11 @@ angular.module('MoneyNetworkW2')
 
             } // send_money
 
+            function get_transaction (transactionid, cb) {
+                init_api_client() ;
+                api_client.transaction(transactionid, cb) ;
+            } // get_transaction
+
             // <== https://www.blocktrail.com/api/docs
 
             // export
@@ -173,7 +178,8 @@ angular.module('MoneyNetworkW2')
                 close_wallet: close_wallet,
                 delete_wallet: delete_wallet,
                 get_new_address: get_new_address,
-                send_money: send_money
+                send_money: send_money,
+                get_transaction: get_transaction
             };
 
             // end btcService
@@ -290,7 +296,7 @@ angular.module('MoneyNetworkW2')
                 "w2_check_mt": {
                     "type": 'object',
                     "title": 'Return bitcoin addresses and check money transactions',
-                    "description": 'After pubkeys handshake. From receiver to sender of money transaction. Use this message to exchange addresses and crosscheck money transaction information. Identical=execute transactions. Different=abort transactions',
+                    "description": 'From receiver to sender. Workflow: pubkeys => w2_check_mt. Use this message to exchange bitcoin addresses and crosscheck money transaction information. Identical=execute transactions. Different=abort transactions',
                     "properties": {
                         "msgtype": { "type": 'string', "pattern": '^w2_check_mt$'},
                         "money_transactions": {
@@ -324,15 +330,38 @@ angular.module('MoneyNetworkW2')
                 "w2_start_mt": {
                     "type": 'object',
                     "title": 'start or abort money transactions',
-                    "description": 'After w2_check_mt check, start or about money transacion. From sender of money transaction to receiver',
+                    "description": 'From sender to receiver. Workflow: w2_check_mt => w2_start_mt. Start or abort money transaction',
                     "properties": {
                         "msgtype": { "type": 'string', "pattern": '^w2_start_mt$'},
-                        "error": { "type": 'string'}
+                        "pay_results": {
+                            "type": 'array',
+                            "items": { "type": ['undefined','null','string']},
+                            "description": 'null (receiver is sending), bitcoin transactionid or an error message). One row with each row in w2_check_mt.money_transactions array',
+                            "minItems": 1
+                        },
+                        "error": { "type": 'string', "description": 'w2_check_mt errors. Inconsistency between transaction in the two wallets.'}
                     },
                     "required": ['msgtype'],
                     "additionalProperties": false
+                }, // w2_start_mt
 
-                } // w2_start_mt
+                "w2_end_mt": {
+                    "type": 'object',
+                    "title": 'end or abort money transactions',
+                    "description": 'From receiver to sender. Workflow: w2_start_mt => w2_end_mt. End or abort money transaction',
+                    "properties": {
+                        "msgtype": { "type": 'string', "pattern": '^w2_end_mt$'},
+                        "pay_results": {
+                            "type": 'array',
+                            "items": { "type": ['undefined','null','string']},
+                            "description": 'null (sender is sending) or btc.pay result (transaction id or error message). One row with each row in w2_check_mt.money_transactions array',
+                            "minItems": 1
+                        },
+                        "error": { "type": 'string', "description": 'w2_start_mt errors. Inconsistency between w2_start_mt and saved transaction info'}
+                    },
+                    "required": ['msgtype'],
+                    "additionalProperties": false
+                } // w2_end_mt
 
             } ;
             MoneyNetworkAPILib.add_json_schemas(extra_json_schemas, 'w2') ;
@@ -1446,13 +1475,14 @@ angular.module('MoneyNetworkW2')
             // - pgm: calling pgm
             // - error: string or array of strings
             // - options. object with log, w2 and mn booleans. default is true
-            function report_error (pgm, error, options) {
+            function report_error (pgm, error, options, cb) {
                 var request ;
                 // validate parameters.
                 if ((typeof pgm != 'string') ||
                     ((typeof error != 'string') && !Array.isArray(error)) ||
-                    (options && (typeof options != 'object'))) {
-                    console.log(service + '.report_error: invalid call. p1 pgm = ', pgm + ', p2 error = ', error, ', p3 options = ', options) ;
+                    (options && (typeof options != 'object')) &&
+                    (cb && typeof cb != 'function')) {
+                    console.log(service + '.report_error: invalid call. p1 pgm = ', pgm + ', p2 error = ', error, ', p3 options = ', options, ', p4 cb = ', cb) ;
                     return ;
                 }
                 if (typeof error == 'string') error = [error] ;
@@ -1472,6 +1502,7 @@ angular.module('MoneyNetworkW2')
                     if (options.end_group_operation) MoneyNetworkAPILib.debug_group_operation_end(options.group_debug_seq, pgm + error.join('. ')) ;
                     return ;
                 }
+                if (!cb) cb = function() {} ;
                 // send error notification to mn session using global encrypt2 object (mn-w2 session)
                 request = {
                     msgtype: 'notification',
@@ -1482,6 +1513,7 @@ angular.module('MoneyNetworkW2')
                 encrypt2.send_message(request, {response: false, group_debug_seq: options.group_debug_seq}, function (response) {
                     console.log(pgm + 'response = ' + JSON.stringify(response)) ;
                     if (options.end_group_operation) MoneyNetworkAPILib.debug_group_operation_end(options.group_debug_seq, pgm + error.join('. ')) ;
+                    cb() ;
                 }); // send_message callback
             } // report error
 
@@ -1579,9 +1611,7 @@ angular.module('MoneyNetworkW2')
                             return;
                         }
                         else {
-                            console.log(pgm + 'warning. request timeout. adding total_overhead ' + extra.total_overhead + ' ms to request_timeout_at. other session may reject response after timeout');
-                            request_timeout_at = request_timeout_at + extra.total_overhead ;
-                            console.log(pgm + 'new request_timeout_at = ' + request_timeout_at) ;
+                            console.log(pgm + 'warning. request timeout. other session may reject response after timeout. processing request anyway');
                         }
                     }
 
@@ -2927,7 +2957,9 @@ angular.module('MoneyNetworkW2')
                     }
                     else if (request.msgtype == 'w2_check_mt') {
                         // after pubkeys session handshake. Now running full encryption
-                        // receiver to sender: money transaction receiver is returning missing bitcoin addresses (address or return_address) to money transaction sender
+                        // receiver to sender:
+                        // - returning missing bitcoin addresses (address or return_address) to money transaction sender
+                        //
                         (function w2_check_mt(){
                             var pgm = service + '.process_incoming_message.' + request.msgtype + '/' + group_debug_seq + ': ';
                             var auth_address, sha256, encrypted_session_info;
@@ -3069,21 +3101,31 @@ angular.module('MoneyNetworkW2')
 
                                         send_w2_start_mt = function (error, cb) {
                                             var pgm = service + '.process_incoming_message.' + request.msgtype + '.send_w2_start_mt/' + group_debug_seq + ': ';
-                                            var request2;
+                                            var request2, money_transaction, is_null;
                                             if (error && (typeof error != 'string')) {
                                                 console.log(pgm + 'invalid send_w2_start_mt call. First parameter error must be null or a string') ;
                                                 throw pgm + 'invalid send_w2_start_mt call. First parameter error must be null or a string';
                                             }
-                                            if (!cb) cb = function () {
-                                            };
+                                            if (!cb) cb = function () {};
                                             if (typeof cb != 'function') {
                                                 console.log(pgm + 'invalid send_w2_start_mt call. second parameter cb must be null or a callback function') ;
                                                 throw pgm + 'invalid send_w2_start_mt call. second parameter cb must be null or a callback function';
                                             }
                                             request2 = {
-                                                msgtype: 'w2_start_mt'
+                                                msgtype: 'w2_start_mt',
+                                                pay_results: []
                                             };
+                                            for (i=0 ; i<session_info.money_transactions.length ; i++) {
+                                                money_transaction = session_info.money_transactions[i] ;
+                                                request2.pay_results.push(money_transaction.btc_send_ok || money_transaction.btc_send_error) ;
+                                                if (request2.pay_results[request2.pay_results.length-1]) is_null = false ;
+                                            } // for i
+                                            if (error && is_null) delete request2.pay_results ;
                                             if (error) request2.error = error;
+                                            //request2 = {
+                                            //    "msgtype": "w2_start_mt",
+                                            //    "pay_results": ["3b49bae7e2b69f17f35c849f7148cd5c4573dc4ec0a25c3d539eca695cee9061", null]
+                                            //};
                                             encrypt2.send_message(request2, {optional: 'o', subsystem: 'w2', group_debug_seq: group_debug_seq}, function (response2) {
                                                 var pgm = service + '.process_incoming_message.' + request.msgtype + '.send_w2_start_mt send_message callback/' + group_debug_seq + ': ';
                                                 console.log(pgm + 'response2 = ' + JSON.stringify(response2));
@@ -3098,8 +3140,6 @@ angular.module('MoneyNetworkW2')
                                                     z_publish({publish: true});
                                                     cb(null)
                                                 }) ;
-
-
                                             }); // send_message callback
 
                                         }; // send_w2_start_mt
@@ -3150,7 +3190,6 @@ angular.module('MoneyNetworkW2')
                                             return send_w2_start_mt(error.join('. '));
                                         }
                                         // compare money transactions one by one
-                                        ls_updated = 0;
                                         for (i = 0; i < request.money_transactions.length; i++) {
                                             my_money_transaction = session_info.money_transactions[i];
                                             contact_money_transaction = request.money_transactions[i];
@@ -3167,6 +3206,7 @@ angular.module('MoneyNetworkW2')
                                                 error.push('your amount is ' + my_money_transaction.amount);
                                                 error.push('contact amount is ' + contact_money_transaction.amount);
                                             }
+
                                             if (my_money_transaction.json.address) {
                                                 if (my_money_transaction.json.address != contact_money_transaction.json.address) {
                                                     error.push('your address is ' + my_money_transaction.json.address);
@@ -3174,9 +3214,10 @@ angular.module('MoneyNetworkW2')
                                                 }
                                             }
                                             else {
+                                                // add missing address from incoming w2_check_mt message
                                                 my_money_transaction.json.address = contact_money_transaction.json.address;
-                                                ls_updated++;
                                             }
+
                                             if (my_money_transaction.json.return_address) {
                                                 if (my_money_transaction.json.return_address != contact_money_transaction.json.return_address) {
                                                     error.push('your return_address is ' + my_money_transaction.json.return_address);
@@ -3184,9 +3225,10 @@ angular.module('MoneyNetworkW2')
                                                 }
                                             }
                                             else {
+                                                // add missing return_address from incoming w2_check_mt message
                                                 my_money_transaction.json.return_address = contact_money_transaction.json.return_address;
-                                                ls_updated++;
                                             }
+
                                             if (error.length) {
                                                 error.unshift('Difference' + (error.length / 2 > 1 ? 's' : '') + ' in row ' + (i + 1));
                                                 error.unshift('Money transaction cannot start');
@@ -3194,189 +3236,182 @@ angular.module('MoneyNetworkW2')
                                                 return send_w2_start_mt(error.join('. '));
                                             }
                                         } // for i (money_transactions)
-                                        if (!ls_updated) {
-                                            console.log(pgm + 'warning. ignoring incoming w2_check_mt message. bitcoin address(es) has already been received in a previous w2_check_mt message');
-                                            return send_w2_start_mt();
-                                        }
-                                        if (ls_updated != request.money_transactions.length) {
-                                            error = [
-                                                'Money transaction cannot start',
-                                                'Expected ' + request.money_transactions.length + ' bitcoin address' + (request.money_transactions.length > 1 ? 'es' : ''),
-                                                'Received ' + ls_updated + ' bitcoin address' + (ls_updated > 1 ? 'es' : '')
-                                            ];
-                                            report_error(pgm, error, {group_debug_seq: group_debug_seq, end_group_operation: false});
-                                            return send_w2_start_mt(error.join('. '));
-                                        }
+
                                         // money transaction in both wallets are 100% identical.
-                                        console.log(pgm + 'OK w2_check_mt message. ready to execute transaction(s)');
+                                        console.log(pgm + 'OK w2_check_mt message. all addresses ready. ready to execute transaction(s)');
 
                                         // encrypt and save changed session info
                                         console.log(pgm + 'session_info = ' + JSON.stringify(session_info));
                                         save_w_session(session_info, {group_debug_seq: group_debug_seq}, function () {
                                             // encrypt1.encrypt_json(session_info, {encryptions: [2], group_debug_seq: group_debug_seq}, function (encrypted_session_info) {
                                             var pgm = service + '.process_incoming_message.' + request.msgtype + ' save_w_session callback 2/' + group_debug_seq + ': ';
+                                            var send_money, ls_updated, wallet_was_open, optional_open_wallet, optional_close_wallet;
                                             try {
-                                                // 1) send w2_start_mt message
-                                                send_w2_start_mt(null, function (error) {
-                                                    var pgm = service + '.process_incoming_message.' + request.msgtype + ' start_w2_start_mt callback 3/' + group_debug_seq + ': ';
-                                                    var send_money, ls_updated, wallet_was_open, optional_open_wallet, optional_close_wallet;
-                                                    if (error) {
-                                                        // stop. error has already been handled in send_w2_start_mt
-                                                        console.log(pgm + error);
-                                                        return;
+
+                                                if (error.length) {
+                                                    // stop. error has already been handled in send_w2_start_mt
+                                                    console.log(pgm + error.join('. '));
+                                                    return;
+                                                }
+                                                // 2) call btc.com api
+                                                console.log(pgm + 'call relevant btc.com api commands (send money, get transaction)');
+                                                console.log(pgm + 'keep track of transaction status in ls');
+                                                console.log(pgm + 'todo: must update file with transaction status');
+                                                console.log(pgm + 'send w2_start_mt message to other wallet');
+
+                                                // open wallet before any send_money calls
+                                                wallet_was_open = (wallet_info.status == 'Open');
+                                                optional_open_wallet = function (cb) {
+                                                    var is_wallet_required, i, money_transaction, error;
+                                                    if (wallet_was_open) return cb();
+                                                    // is wallet required in send_money loop?
+                                                    is_wallet_required = false;
+                                                    for (i = 0; i < session_info.money_transactions.length; i++) {
+                                                        money_transaction = session_info.money_transactions[i];
+                                                        if ((money_transaction.action == 'Send') && (money_transaction.code == 'tBTC')) is_wallet_required = true;
                                                     }
-                                                    console.log(pgm + 'w2_start_mt message was been sent to other wallet');
-                                                    // 2) call btc.com api
-                                                    console.log(pgm + 'todo: call relevant btc.com api commands (send money)');
-                                                    console.log(pgm + 'todo: must keep track of transaction status in ls');
-                                                    console.log(pgm + 'todo: must update file with transaction status');
-
-                                                    console.log(pgm + 'todo: add open wallet operation before send_money and close wallet operation after send_money. see receive w2_start_mt') ;
-
-                                                    // open wallet before any send_money calls
-                                                    wallet_was_open = (wallet_info.status == 'Open') ;
-                                                    optional_open_wallet = function (cb) {
-                                                        var is_wallet_required, i, money_transaction, error ;
-                                                        if (wallet_was_open) return cb() ;
-                                                        // is wallet required in send_money loop?
-                                                        is_wallet_required = false ;
-                                                        for (i=0 ; i<session_info.money_transactions.length ; i++) {
-                                                            money_transaction = session_info.money_transactions[i];
-                                                            if ((money_transaction.action == 'Send') && (money_transaction.code == 'tBTC')) is_wallet_required = true ;
-                                                        }
-                                                        if (!is_wallet_required) return cb() ; // nothing to send
-                                                        // wallet log in is required
-                                                        if (!status.save_wallet_id || status.save_wallet_password) {
-                                                            error = ['Money transaction failed', 'Cannot send money', 'No wallet log in was found'] ;
-                                                            console.log(pgm + 'todo: mark money transaction as aborted in ls');
-                                                            console.log(pgm + 'todo: update file with money transaction status');
-                                                            return report_error(pgm, error, {group_debug_seq: group_debug_seq}) ;
-                                                        }
-                                                        // open wallet
-                                                        btcService.init_wallet(status.save_wallet_id, status.save_wallet_password, function (error) {
-                                                            try {
-                                                                if (error && (wallet_info.status != 'Open')) {
-                                                                    error = ['Money transaction failed', 'Cannot send money', 'Open wallet request failed', error] ;
-                                                                    console.log(pgm + 'todo: mark money transaction as aborted in ls');
-                                                                    console.log(pgm + 'todo: update file with money transaction status');
-                                                                    return report_error(pgm, error, {group_debug_seq: group_debug_seq}) ;
-                                                                }
-                                                                // continue with send_money operations
-                                                                cb() ;
-                                                            }
-                                                            catch (e) {
-                                                                error = ['Money transaction failed', 'Cannot send money', 'Open wallet request failed', e.message];
+                                                    if (!is_wallet_required) return cb(); // nothing to send
+                                                    // wallet log in is required
+                                                    if (!status.save_wallet_id || status.save_wallet_password) {
+                                                        error = ['Money transaction failed', 'Cannot send money', 'No wallet log in was found'];
+                                                        console.log(pgm + 'todo: mark money transaction as aborted in ls');
+                                                        console.log(pgm + 'todo: update file with money transaction status');
+                                                        return report_error(pgm, error, {group_debug_seq: group_debug_seq});
+                                                    }
+                                                    // open wallet
+                                                    btcService.init_wallet(status.save_wallet_id, status.save_wallet_password, function (error) {
+                                                        try {
+                                                            if (error && (wallet_info.status != 'Open')) {
+                                                                error = ['Money transaction failed', 'Cannot send money', 'Open wallet request failed', error];
                                                                 console.log(pgm + 'todo: mark money transaction as aborted in ls');
                                                                 console.log(pgm + 'todo: update file with money transaction status');
-                                                                return report_error(pgm, error, {group_debug_seq: group_debug_seq}) ;
+                                                                return report_error(pgm, error, {group_debug_seq: group_debug_seq});
                                                             }
-                                                        }); // init_wallet callback
+                                                            // continue with send_money operations
+                                                            cb();
+                                                        }
+                                                        catch (e) {
+                                                            error = ['Money transaction failed', 'Cannot send money', 'Open wallet request failed', e.message];
+                                                            console.log(pgm + 'todo: mark money transaction as aborted in ls');
+                                                            console.log(pgm + 'todo: update file with money transaction status');
+                                                            return report_error(pgm, error, {group_debug_seq: group_debug_seq});
+                                                        }
+                                                    }); // init_wallet callback
 
-                                                    } ; // optional_open_wallet
+                                                }; // optional_open_wallet
 
-                                                    optional_close_wallet = function (cb) {
-                                                        if (wallet_was_open) return cb() ;
-                                                        if (wallet_info.status != 'Open') return cb() ;
-                                                        // close wallet
-                                                        btcService.close_wallet(function (res) {
-                                                            console.log(pgm + 'res = ' + JSON.stringify(res)) ;
-                                                            cb() ;
-                                                        });
-                                                    } ; // optional_close_wallet
+                                                optional_close_wallet = function (cb) {
+                                                    if (wallet_was_open) return cb();
+                                                    if (wallet_info.status != 'Open') return cb();
+                                                    // close wallet
+                                                    btcService.close_wallet(function (res) {
+                                                        console.log(pgm + 'res = ' + JSON.stringify(res));
+                                                        cb();
+                                                    });
+                                                }; // optional_close_wallet
 
 
-                                                    optional_open_wallet(function () {
-                                                        var send_money ;
+                                                optional_open_wallet(function () {
+                                                    var send_money;
 
-                                                        // send money loop (if any Send money transactions in money_transactions array)
-                                                        ls_updated = false;
-                                                        send_money = function (i) {
-                                                            var pgm = service + '.process_incoming_message.' + request.msgtype + '.send_money/' + group_debug_seq + ': ';
-                                                            var money_transaction, amount_bitcoin, amount_satoshi;
-                                                            if (i >= session_info.money_transactions.length) {
-                                                                console.log(pgm + 'done sending money. ');
-                                                                console.log(pgm + 'todo: report status for send_money operations');
-                                                                console.log(pgm + 'todo: update transaction status on file system');
-                                                                save_w_session(session_info, {group_debug_seq: group_debug_seq}, function () {
-                                                                    console.log(pgm + 'saved session_info in ls') ;
-                                                                    optional_close_wallet(function() {
-                                                                        MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq) ;
-                                                                    }) ;
+                                                    // send money loop (if any Send money transactions in money_transactions array)
+                                                    ls_updated = false;
+                                                    send_money = function (i) {
+                                                        var pgm = service + '.process_incoming_message.' + request.msgtype + '.send_money/' + group_debug_seq + ': ';
+                                                        var money_transaction, amount_bitcoin, amount_satoshi;
+                                                        if (i >= session_info.money_transactions.length) {
+                                                            console.log(pgm + 'done sending money. ');
+                                                            console.log(pgm + 'todo: report status for send_money operations');
+                                                            console.log(pgm + 'todo: update transaction status on file system');
+                                                            save_w_session(session_info, {group_debug_seq: group_debug_seq}, function () {
+                                                                console.log(pgm + 'saved session_info in ls');
+                                                                optional_close_wallet(function () {
+                                                                    send_w2_start_mt(null, function () {
+                                                                        MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq);
+                                                                    });
                                                                 });
-                                                                //encrypt1.encrypt_json(session_info, {encryptions: [2], group_debug_seq: group_debug_seq}, function (encrypted_session_info) {
-                                                                //    var pgm = service + '.process_incoming_message.' + request.msgtype + ' encrypt json callback 3/' + group_debug_seq + ': ';
-                                                                //    var sha256;
-                                                                //    sha256 = CryptoJS.SHA256(session_info.money_transactionid).toString();
-                                                                //    ls.w_sessions[auth_address][sha256] = encrypted_session_info;
-                                                                //    console.log(pgm + 'session_info.money_transactionid = ' + session_info.money_transactionid + ', sha256 = ' + sha256);
-                                                                //    ls_save() ;
-                                                                //})
-                                                                return;
-                                                            }
-                                                            money_transaction = session_info.money_transactions[i];
-                                                            if (money_transaction.action != 'Send') return send_money(i + 1); // Receive money. must be started by contact wallet
-                                                            if (money_transaction.code != 'tBTC') return send_money(i + 1); // not test Bitcoins
-                                                            amount_bitcoin = money_transaction.amount;
-                                                            amount_satoshi = '' + Math.round(amount_bitcoin * 100000000);
-                                                            if (money_transaction.btc_send_at) {
-                                                                console.log(pgm + 'money transaction has already been sent to btc. money_transaction = ' + JSON.stringify(money_transaction));
-                                                                return send_money(i+1) ;
-                                                            }
-                                                            money_transaction.btc_send_at = new Date().getTime();
-                                                            // wallet to wallet communication. send money operation has already been confirmed in UI. confirm = false
-                                                            btcService.send_money(money_transaction.json.address, amount_satoshi, false, function (err, result) {
-                                                                var pgm = service + '.process_incoming_message.' + request.msgtype + '.send_money send_money callback/' + group_debug_seq + ': ';
-                                                                try {
-                                                                    if (err) {
-                                                                        if ((typeof err == 'object') && err.message) err = err.message;
-                                                                        money_transaction.btc_send_error = err;
-                                                                        report_error(pgm, ["Money was not sent", err], {group_debug_seq: group_debug_seq, end_group_operation: false});
-                                                                        console.log(pgm + 'todo: retry, abort or ?')
-                                                                    }
-                                                                    else {
-                                                                        money_transaction.btc_send_ok = result;
-                                                                        report_error(pgm, ["Money was sent", "result = " + JSON.stringify(result)], {type: 'done', group_debug_seq: group_debug_seq, end_group_operation: false});
-                                                                    }
-                                                                    console.log(pgm + 'money_transaction = ' + JSON.stringify(money_transaction));
-                                                                    //money_transaction = {
-                                                                    //    "action": "Send",
-                                                                    //    "code": "tBTC",
-                                                                    //    "amount": 0.0001,
-                                                                    //    "json": {
-                                                                    //        "return_address": "2NF2iSCvKEip3uJtQ6Sg7EjmxPHGvidJeAx",
-                                                                    //        "address": "2ND1A9k3mkAgfUqvdTddV5R8doD92578FLh"
-                                                                    //    },
-                                                                    //    "btc_send_at": 1510850263171,
-                                                                    //    "btc_send_ok": "b0d27ba12287fc9433560accf19e13aabae575d577f952fd1670ee32ab133ccc"
-                                                                    //};
-                                                                    ls_updated = true;
-                                                                    // next money transaction
-                                                                    send_money(i + 1);
-
-                                                                }
-                                                                catch (e) {
-                                                                    // receive offline message w2_check_mt failed.
-                                                                    if (!e) return ; // exception in MoneyNetworkAPI instance
-                                                                    console.log(pgm + e.message);
-                                                                    console.log(e.stack);
-                                                                    report_error(pgm, ["JS exception", e.message], {log: false}) ;
-                                                                    throw(e);
-                                                                }
-
                                                             });
-                                                        };
-                                                        send_money(0);
+                                                            //encrypt1.encrypt_json(session_info, {encryptions: [2], group_debug_seq: group_debug_seq}, function (encrypted_session_info) {
+                                                            //    var pgm = service + '.process_incoming_message.' + request.msgtype + ' encrypt json callback 3/' + group_debug_seq + ': ';
+                                                            //    var sha256;
+                                                            //    sha256 = CryptoJS.SHA256(session_info.money_transactionid).toString();
+                                                            //    ls.w_sessions[auth_address][sha256] = encrypted_session_info;
+                                                            //    console.log(pgm + 'session_info.money_transactionid = ' + session_info.money_transactionid + ', sha256 = ' + sha256);
+                                                            //    ls_save() ;
+                                                            //})
+                                                            return;
+                                                        }
+                                                        money_transaction = session_info.money_transactions[i];
+                                                        if (money_transaction.action != 'Send') return send_money(i + 1); // Receive money. must be started by contact wallet
+                                                        if (money_transaction.code != 'tBTC') return send_money(i + 1); // not test Bitcoins
+                                                        amount_bitcoin = money_transaction.amount;
+                                                        amount_satoshi = '' + Math.round(amount_bitcoin * 100000000);
+                                                        if (money_transaction.btc_send_at) {
+                                                            console.log(pgm + 'money transaction has already been sent to btc. money_transaction = ' + JSON.stringify(money_transaction));
+                                                            return send_money(i + 1);
+                                                        }
+                                                        money_transaction.btc_send_at = new Date().getTime();
+                                                        // wallet to wallet communication. send money operation has already been confirmed in UI. confirm = false
+                                                        btcService.send_money(money_transaction.json.address, amount_satoshi, false, function (err, result) {
+                                                            var pgm = service + '.process_incoming_message.' + request.msgtype + '.send_money send_money callback/' + group_debug_seq + ': ';
+                                                            try {
+                                                                if (err) {
+                                                                    if ((typeof err == 'object') && err.message) err = err.message;
+                                                                    money_transaction.btc_send_error = err;
+                                                                    report_error(pgm, ["Money was not sent", err], {
+                                                                        group_debug_seq: group_debug_seq,
+                                                                        end_group_operation: false
+                                                                    });
+                                                                    console.log(pgm + 'todo: retry, abort or ?')
+                                                                }
+                                                                else {
+                                                                    money_transaction.btc_send_ok = result;
+                                                                    report_error(pgm, ["Money was sent", "result = " + JSON.stringify(result)], {
+                                                                        type: 'done',
+                                                                        group_debug_seq: group_debug_seq,
+                                                                        end_group_operation: false
+                                                                    });
+                                                                }
+                                                                console.log(pgm + 'money_transaction = ' + JSON.stringify(money_transaction));
+                                                                //money_transaction = {
+                                                                //    "action": "Send",
+                                                                //    "code": "tBTC",
+                                                                //    "amount": 0.0001,
+                                                                //    "json": {
+                                                                //        "return_address": "2NF2iSCvKEip3uJtQ6Sg7EjmxPHGvidJeAx",
+                                                                //        "address": "2ND1A9k3mkAgfUqvdTddV5R8doD92578FLh"
+                                                                //    },
+                                                                //    "btc_send_at": 1510850263171,
+                                                                //    "btc_send_ok": "b0d27ba12287fc9433560accf19e13aabae575d577f952fd1670ee32ab133ccc"
+                                                                //};
 
-                                                    }); // optional_open_wallet callback 4
+                                                                ls_updated = true;
+                                                                // next money transaction
+                                                                send_money(i + 1);
 
-                                                }); // send_w2_start_mt callback 3
+                                                            }
+                                                            catch (e) {
+                                                                // receive offline message w2_check_mt failed.
+                                                                if (!e) return; // exception in MoneyNetworkAPI instance
+                                                                console.log(pgm + e.message);
+                                                                console.log(e.stack);
+                                                                report_error(pgm, ["JS exception", e.message], {log: false});
+                                                                throw(e);
+                                                            }
+
+                                                        });
+                                                    };
+                                                    send_money(0);
+
+                                                }); // optional_open_wallet callback 4
+
                                             }
                                             catch (e) {
                                                 // receive offline message w2_check_mt failed.
-                                                if (!e) return ; // exception in MoneyNetworkAPI instance
+                                                if (!e) return; // exception in MoneyNetworkAPI instance
                                                 console.log(pgm + e.message);
                                                 console.log(e.stack);
-                                                report_error(pgm, ["JS exception", e.message], {log: false}) ;
+                                                report_error(pgm, ["JS exception", e.message], {log: false});
                                                 throw(e);
                                             }
                                         }); // save_w_session callback 2
@@ -3413,7 +3448,8 @@ angular.module('MoneyNetworkW2')
                                 read_w_session(encrypt2.sessionid, {group_debug_seq: group_debug_seq}, function (session_info)  {
                                     var pgm = service + '.process_incoming_message.' + request.msgtype + ' read_w_session callback 1/' + group_debug_seq + ': ';
                                     try {
-                                        var wallet_was_open, optional_open_wallet, optional_close_wallet ;
+                                        var wallet_was_open, optional_open_wallet, optional_close_wallet, send_w2_end_mt,
+                                            error, i, money_transaction, no_pay_ok, no_pay_error ;
 
                                         console.log(pgm + 'session_info = ' + JSON.stringify(session_info));
                                         if (!session_info) {
@@ -3427,7 +3463,7 @@ angular.module('MoneyNetworkW2')
                                             return ;
                                         }
 
-                                        // 1) must be client/receiver
+                                        // 1) must be receiver
                                         if (session_info.sender) {
                                             console.log(pgm + 'warning. is sender of money transaction. ignoring incoming w2_start_mt message. only sent from sender of money transaction to client/receiver of money transaction');
                                             MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq) ;
@@ -3436,46 +3472,136 @@ angular.module('MoneyNetworkW2')
 
                                         if (request.error) {
                                             // w2_check_mt check failed. money transaction was aborted by sender of money transaction
-                                            // todo: santize error in notification?
                                             console.log(pgm + 'todo: mark money transaction as aborted in ls');
                                             console.log(pgm + 'todo: update file with money transaction status');
                                             return report_error(pgm, error, {group_debug_seq: group_debug_seq}) ;
                                         }
 
-                                        // open wallet before any send_money calls
+                                        // receiver to sender: send w2_end_mt to sender of money transaction. error: w2_start_mt validation error, cb: next step
+                                        send_w2_end_mt = function (error, cb) {
+                                            var request2, i, money_transaction ;
+                                            if (error && (typeof error != 'string')) {
+                                                console.log(pgm + 'invalid send_w2_end_mt call. First parameter error must be null or a string') ;
+                                                throw pgm + 'invalid send_w2_end_mt call. First parameter error must be null or a string';
+                                            }
+                                            if (!cb) cb = function () {};
+                                            if (typeof cb != 'function') {
+                                                console.log(pgm + 'invalid send_w2_end_mt call. second parameter cb must be null or a callback function') ;
+                                                throw pgm + 'invalid send_w2_end_mt call. second parameter cb must be null or a callback function';
+                                            }
+                                            request2 = {
+                                                msgtype: 'w2_end_mt',
+                                                pay_results: []
+                                            } ;
+                                            if (error) request2.error = error ;
+                                            for (i=0 ; i<session_info.money_transactions.length ; i++) {
+                                                money_transaction = session_info.money_transactions[i] ;
+                                                if (money_transaction.action == 'Request') request2.pay_results.push(null) ;
+                                                else request2.pay_results.push(money_transaction.btc_send_ok || money_transaction.btc_send_error) ;
+                                            }
+                                            encrypt2.send_message(request2, {optional: 'o', subsystem: 'w2', group_debug_seq: group_debug_seq}, function (response2) {
+                                                var pgm = service + '.process_incoming_message.' + request.msgtype + '.send_w2_end_mt send_message callback/' + group_debug_seq + ': ';
+                                                console.log(pgm + 'response2 = ' + JSON.stringify(response2));
+                                                if (!response2 || response2.error) {
+                                                    error = ['Money transaction post processing failed', 'w2_end_mt message was not send', 'error = ' + JSON.stringify(response2)];
+                                                    report_error(pgm, error, {group_debug_seq: group_debug_seq});
+                                                    return cb(error.join('. '));
+                                                }
+                                                // mark w2_end_mt message as sent. do not sent again
+                                                session_info.w2_end_mt_sent_at = new Date().getTime() ;
+                                                save_w_session(session_info, {group_debug_seq: group_debug_seq}, function() {
+                                                    z_publish({publish: true});
+                                                    cb(null)
+                                                }) ;
+                                            }); // send_message callback
+                                        } ; // send_w2_end_mt
+
+                                        // validate w2_start_mt
+                                        // - pay_results.length == money_transactions.length
+                                        // - pay_resulls row (is receiver):
+                                        //  - null if sender is requesting money,
+                                        //  - btc OK (bitcoin transactionid) or error message if receiver is sender of money transaction (request money)
+                                        if (request.pay_results.length != session_info.money_transactions.length) {
+                                            // w2_start_mt request is invalid. send w2_end_mt error message
+                                            error = 'Invalid number of pay_results rows. Expected ' + session_info.money_transactions.length + ' rows. Found ' + request.pay_results.length + ' rows' ;
+                                            report_error(pgm, error, {group_debug_seq: group_debug_seq}, function() {
+                                                send_w2_end_mt(error);
+                                            }) ;
+                                            return ;
+                                        }
+                                        no_pay_ok = 0 ;
+                                        no_pay_error = 0 ;
+                                        for (i=0 ; i<session_info.money_transactions.length ; i++) {
+                                            money_transaction = session_info.money_transactions[i] ;
+                                            if (money_transaction.action == 'Send') {
+                                                // is receiver. sender is sending money. pay_results must have btc OK or Error result
+                                                if (request.pay_results[i] == null) {
+                                                    error = 'Error. pay_results[' + i + '] is missing. Expected bitcoin transaction id or error message' ;
+                                                    report_error(pgm, error, {group_debug_seq: group_debug_seq}, function () {
+                                                        send_w2_end_mt(error);
+                                                    }) ;
+                                                    return ;
+                                                }
+                                                else if (request.pay_results[i].match(/[0-9a-f]{64}/)) {
+                                                    // could be a bitcoin transaction id but must be validated in next step
+                                                    no_pay_ok++ ;
+                                                    money_transaction.btc_receive_ok = request.pay_results[i] ;
+                                                }
+                                                else {
+                                                    // must be a error message
+                                                    no_pay_error++ ;
+                                                    money_transaction.btc_receive_error = request.pay_results[i] ;
+                                                }
+                                            }
+                                            else {
+                                                // is receiver. sender is requesting money. pay_results[i] must null
+                                                if (request.pay_results[i] != null) {
+                                                    error = 'Error. Expected pay_results[' + i + '] to be null. Found ' + request.pay_results[i] ;
+                                                    report_error(pgm, error, {group_debug_seq: group_debug_seq}, function () {
+                                                        send_w2_end_mt(error);
+                                                    }) ;
+                                                    return ;
+                                                }
+                                            }
+                                        }
+
+                                        // open wallet before any send_money or get transaction calls
                                         wallet_was_open = (wallet_info.status == 'Open') ;
                                         optional_open_wallet = function (cb) {
                                             var is_wallet_required, i, money_transaction, error ;
                                             if (wallet_was_open) return cb() ;
+                                            if (!no_pay_ok) return cb() ; //
                                             // is wallet required in send_money loop?
                                             is_wallet_required = false ;
+                                            if (no_pay_ok) is_wallet_required = true ;
                                             for (i=0 ; i<session_info.money_transactions.length ; i++) {
                                                 money_transaction = session_info.money_transactions[i];
                                                 if ((money_transaction.action == 'Request') && (money_transaction.code == 'tBTC')) is_wallet_required = true ;
                                             }
-                                            if (!is_wallet_required) return cb() ; // nothing to send
+                                            if (!is_wallet_required) return cb() ; // nothing to send and no transaction ids to validate
                                             // wallet log in is required
                                             if (!status.save_wallet_id || status.save_wallet_password) {
-                                                error = ['Money transaction failed', 'Cannot send money', 'No wallet log in was found'] ;
-                                                console.log(pgm + 'todo: mark money transaction as aborted in ls');
+                                                error = ['Money transaction failed', 'Cannot open wallet', 'No wallet log in was found'] ;
+                                                console.log(pgm + 'todo: save received transaction in ls (no_pay_ok>0 or no_pay_error>0)');
                                                 console.log(pgm + 'todo: update file with money transaction status');
+                                                // todo: send w2_end_mt (publish required) or report_error first?
                                                 return report_error(pgm, error, {group_debug_seq: group_debug_seq}) ;
                                             }
                                             // open wallet
                                             btcService.init_wallet(status.save_wallet_id, status.save_wallet_password, function (error) {
                                                 try {
                                                     if (error && (wallet_info.status != 'Open')) {
-                                                        error = ['Money transaction failed', 'Cannot send money', 'Open wallet request failed', error] ;
-                                                        console.log(pgm + 'todo: mark money transaction as aborted in ls');
+                                                        error = ['Money transaction failed', 'Open wallet request failed', error] ;
+                                                        console.log(pgm + 'todo: save updated money transaction in ls');
                                                         console.log(pgm + 'todo: update file with money transaction status');
                                                         return report_error(pgm, error, {group_debug_seq: group_debug_seq}) ;
                                                     }
-                                                    // continue with send_money operations
+                                                    // continue with send_money and check transaction operations
                                                     cb() ;
                                                 }
                                                 catch (e) {
-                                                    error = ['Money transaction failed', 'Cannot send money', 'Open wallet request failed', e.message];
-                                                    console.log(pgm + 'todo: mark money transaction as aborted in ls');
+                                                    error = ['Money transaction failed', 'Open wallet request failed', e.message];
+                                                    console.log(pgm + 'todo: save updated money transaction in ls');
                                                     console.log(pgm + 'todo: update file with money transaction status');
                                                     return report_error(pgm, error, {group_debug_seq: group_debug_seq}) ;
                                                 }
@@ -3493,31 +3619,16 @@ angular.module('MoneyNetworkW2')
                                             });
                                         } ; // optional_close_wallet
 
-                                        // start callback sequence (open wallet, send_money, close wallet)
+                                        // start callback sequence (open wallet, send_or_check_money, close wallet)
                                         optional_open_wallet(function () {
-                                            var send_money ;
+                                            var send_money, check_money, send_or_check_money ;
 
-                                            // send money loop (if any Send money transactions in money_transactions array)
                                             send_money = function (i) {
                                                 var pgm = service + '.process_incoming_message.' + request.msgtype + '.send_money/' + group_debug_seq + ': ';
-                                                var money_transaction, amount_bitcoin, amount_satoshi;
-                                                if (i >= session_info.money_transactions.length) {
-                                                    console.log(pgm + 'done sending money. ');
-                                                    console.log(pgm + 'todo: report status for send_money operations');
-                                                    console.log(pgm + 'todo: update transaction status on file system');
-                                                    // mark w2_start_mt message as received. do not process again
-                                                    session_info.w2_start_mt_received_at = new Date().getTime() ;
-                                                    save_w_session(session_info, {group_debug_seq: group_debug_seq}, function () {
-                                                        console.log(pgm + 'saved session_info in ls') ;
-                                                        optional_close_wallet(function() {
-                                                            MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq) ;
-                                                        }) ;
-                                                    }) ;
-                                                    return;
-                                                }
+                                                var money_transaction, amount_bitcoin, amount_satoshi ;
                                                 money_transaction = session_info.money_transactions[i];
-                                                if (money_transaction.action != 'Request') return send_money(i + 1); // Send money. must be started by contact wallet
-                                                if (money_transaction.code != 'tBTC') return send_money(i + 1); // not test Bitcoins
+                                                // is receiver. action must be Request
+                                                if (money_transaction.action != 'Request') throw pgm + 'invalid call. send_money. Is receiver and action is not Request' ;
                                                 amount_bitcoin = money_transaction.amount;
                                                 amount_satoshi = '' + Math.round(amount_bitcoin * 100000000);
                                                 money_transaction.btc_send_at = new Date().getTime();
@@ -3536,34 +3647,180 @@ angular.module('MoneyNetworkW2')
                                                             report_error(pgm, ["Money was sent", "result = " + JSON.stringify(result)], {group_debug_seq: group_debug_seq, end_group_operation: false, type: 'done'}) ;
                                                         }
                                                         console.log(pgm + 'money_transaction = ' + JSON.stringify(money_transaction));
-                                                        //money_transaction = {
-                                                        //    "action": "Send",
-                                                        //    "code": "tBTC",
-                                                        //    "amount": 0.0001,
-                                                        //    "json": {
-                                                        //        "return_address": "2NF2iSCvKEip3uJtQ6Sg7EjmxPHGvidJeAx",
-                                                        //        "address": "2ND1A9k3mkAgfUqvdTddV5R8doD92578FLh"
-                                                        //    },
-                                                        //    "btc_send_at": 1510850263171,
-                                                        //    "btc_send_ok": "b0d27ba12287fc9433560accf19e13aabae575d577f952fd1670ee32ab133ccc"
-                                                        //};
                                                         // next money transaction
-                                                        send_money(i + 1);
-
+                                                        send_or_check_money(i + 1);
                                                     }
                                                     catch (e) {
-                                                        // receive offline message w2_start_mt failed.
-                                                        // todo: notification in w2 and mn UI
+                                                        // receive message w2_start_mt failed.
                                                         if (!e) return ; // exception in MoneyNetworkAPI instance
                                                         console.log(pgm + e.message);
                                                         console.log(e.stack);
                                                         report_error(pgm, ["JS exception", e.message], {log: false, group_debug_seq: group_debug_seq}) ;
                                                         throw(e);
                                                     }
-                                                });
-                                            }; // send_money
-                                            // start send_money loop
-                                            send_money(0);
+                                                }); // send_money callback
+
+                                            } ; // send_money
+
+                                            check_money = function (i) {
+                                                var pgm = service + '.process_incoming_message.' + request.msgtype + '.check_money/' + group_debug_seq + ': ';
+                                                var money_transaction ;
+                                                money_transaction = session_info.money_transactions[i];
+                                                if (money_transaction.action != 'Send') throw pgm + 'invalid call. Is receiver and action is not Send' ;
+                                                if (!money_transaction.btc_receive_ok) throw pgm, + 'invalid call. No txhash received from sender' ;
+                                                btcService.get_transaction(money_transaction.btc_receive_ok, function (err, tx) {
+                                                    var expected_amount, received_amount, i, output ;
+                                                    console.log(pgm + 'err = ' + JSON.stringify(err)) ;
+                                                    console.log(pgm + 'tx = ' + JSON.stringify(tx)) ;
+
+                                                    //session_info = {
+                                                    //    "money_transactionid": "5o0AyTjxIapVXUdv9TJ8ih4OHGkVjVEzm8hGHWa8nGDgswp4G7qPCmCNbuNw",
+                                                    //    "sender": false,
+                                                    //    "contact": {
+                                                    //        "alias": "1CCiJ97XHgVeJ",
+                                                    //        "cert_user_id": "1CCiJ97XHgVeJ@moneynetwork.bit",
+                                                    //        "auth_address": "1CCiJ97XHgVeJrkbnzLgfXvYRr8QEWxnWF"
+                                                    //    },
+                                                    //    "money_transactions": [{
+                                                    //        "action": "Send",
+                                                    //        "code": "tBTC",
+                                                    //        "amount": 0.0001,
+                                                    //        "json": {
+                                                    //            "return_address": "2NFMeBDiVcXsQKbFojoUeZjZM9uC7cG2WUo",
+                                                    //            "address": "2N6Tpxf5CvR2Mw84tNBJ8cZTeAcCGLsG3eo"
+                                                    //        }
+                                                    //    }],
+                                                    //    "ip_external": true,
+                                                    //    "prvkey": "-----BEGIN RSA PRIVATE KEY-----\nMIICXAIBAAKBgQCJ2SW+7t9XmUhlF/UQeQFV7JeyUi6PkTAg0XN5Qg+DLRxb5vD2\nXayxG92vPG1ixHnkrTeaU7slFS/ruoO8OIPrlaugXC00iDifarORo+7Qy1yACpJ4\nVECN9kSe6VENGjmC8TyjTnm1C4OeS0vA8IU1J918x0Lyo2gujQtoB1YLgwIDAQAB\nAoGAaprXWRis+rbdSOlFKa8a/FNTYaGyxm629LpmfiE7k+vAIcaxFSaOlg2B3LJz\nuc1Ooy3ecWhNs7j17Wy50kc2pUgQdHDz1lB1lW7ZnH1OxkNppXqvubLmu37Qy6T4\n8fhSp0z4oRgW6ngsIrqbOvhuEyVNFUyC1mAyP2JMiHhQXnkCQQDLKDIhyeQyOZ3X\nzdkekxQFjr/eu2S+aQRTerNBnfRkYhy3yC+jVBhxpgp2xHiUVPuoJjNTg00vDQdj\nn31VcJvvAkEArbQs3bSnYNyA131gHRbS3BlrmHdK2ajasQ5uFVBA9JJb6s+lubQw\nSXC+dkMD83c39iQAbozqI0yp7KnX3t8FrQJAcSlFq26CzrsrQd7mltJEL8hQ9ecZ\n+boTb9CD8wPh8tx3tKMsbeTU7NEZOQi9RZqExyfoJReZMaEnQYXAUYw1PwJAbeLE\nW0C0fhcgPrImwmA05l4CbgJRTJ6AMm/xffQ2E0Ifec0AhxkRTvRO2NuOPU/XDBQ8\nXbMxT0FpYbkUQf6ORQJBAKEQIuMeyrOmhnX1lhWMJ7O4hMBRb/bcFhOHBTu1tM25\naq82q1L1RJ4iwpbAVeqL+9PUSbOd8ehQbLtHh3EsQV4=\n-----END RSA PRIVATE KEY-----",
+                                                    //    "userid2": 781,
+                                                    //    "pubkeys_sent_at": 1511801540032,
+                                                    //    "w2_check_mt_sent_at": 1511801558222
+                                                    //};
+
+                                                    //tx = {
+                                                    //    "raw": "0100000001588349abf17134d48afcaf9962dec190b914a4d2612081355cb617be2d828ce000000000fc00473044022047536be07a45d65f456d6dff3b8aaafc56dcd1b612001b31dada1d8b44482877022001407954013f428180a9a8a3baa22e840b89b92a8448784eebf04a47ff0bfc8c01473044022039349e9b56bf50a1b93da939218998f73403f2a3515c1f344dbb44fd621023af022032b5a4c2f7c6d6740720bce75ff5ebe8488e3b2dcdd60dcdaef22d07e576ff14014c69522102daee43f4f9aa744d1e9fd6b47c8850f336363fedab705de4cdb20a091c0ded8b2102eef9f8823d6733dc56bfc44be186d429dc0bb4ca977a3bd7b321ecb2b9140b88210348137d020bf5006522b59bbcdff46041f242b3a829648e0fb62574d14fd694a053aeffffffff02102700000000000017a91490fbd1e17dcc9be6f251484ee2feb86f8a4f47b98720ac97000000000017a91425c088a52cc4beee69c0e24e75a1e25b8e44d60c8700000000",
+                                                    //    "hash": "6305448779c703b11f3e826048782e42579008b4f433f3e328739922d9bccce2",
+                                                    //    "first_seen_at": "2017-11-27T16:53:53+0000",
+                                                    //    "last_seen_at": "2017-11-27T16:53:53+0000",
+                                                    //    "block_height": null,
+                                                    //    "block_time": null,
+                                                    //    "block_hash": null,
+                                                    //    "confirmations": 0,
+                                                    //    "is_coinbase": false,
+                                                    //    "estimated_value": 9950000,
+                                                    //    "total_input_value": 9960000,
+                                                    //    "total_output_value": 9950000,
+                                                    //    "total_fee": 10000,
+                                                    //    "estimated_change": null,
+                                                    //    "estimated_change_address": null,
+                                                    //    "high_priority": false,
+                                                    //    "enough_fee": true,
+                                                    //    "contains_dust": false,
+                                                    //    "inputs": [{
+                                                    //        "index": 0,
+                                                    //        "output_hash": "e08c822dbe17b65c35812061d2a414b990c1de6299affc8ad43471f1ab498358",
+                                                    //        "output_index": 0,
+                                                    //        "output_confirmed": false,
+                                                    //        "value": 9960000,
+                                                    //        "sequence": 4294967295,
+                                                    //        "address": "2MycwPrGnbXgMcT1deAomP1fYx6e8nieJhv",
+                                                    //        "type": "scripthash",
+                                                    //        "multisig": null,
+                                                    //        "multisig_addresses": null,
+                                                    //        "script_signature": "00473044022047536be07a45d65f456d6dff3b8aaafc56dcd1b612001b31dada1d8b44482877022001407954013f428180a9a8a3baa22e840b89b92a8448784eebf04a47ff0bfc8c01473044022039349e9b56bf50a1b93da939218998f73403f2a3515c1f344dbb44fd621023af022032b5a4c2f7c6d6740720bce75ff5ebe8488e3b2dcdd60dcdaef22d07e576ff14014c69522102daee43f4f9aa744d1e9fd6b47c8850f336363fedab705de4cdb20a091c0ded8b2102eef9f8823d6733dc56bfc44be186d429dc0bb4ca977a3bd7b321ecb2b9140b88210348137d020bf5006522b59bbcdff46041f242b3a829648e0fb62574d14fd694a053ae"
+                                                    //    }],
+                                                    //    "outputs": [{
+                                                    //        "index": 0,
+                                                    //        "value": 10000,
+                                                    //        "address": "2N6Tpxf5CvR2Mw84tNBJ8cZTeAcCGLsG3eo",
+                                                    //        "type": "scripthash",
+                                                    //        "multisig": null,
+                                                    //        "multisig_addresses": null,
+                                                    //        "script": "OP_HASH160 90fbd1e17dcc9be6f251484ee2feb86f8a4f47b9 OP_EQUAL",
+                                                    //        "script_hex": "a91490fbd1e17dcc9be6f251484ee2feb86f8a4f47b987",
+                                                    //        "spent_hash": null,
+                                                    //        "spent_index": 0
+                                                    //    }, {
+                                                    //        "index": 1,
+                                                    //        "value": 9940000,
+                                                    //        "address": "2MvgqdryveLMQ2XocdxvmB9ZWDFFq65LAty",
+                                                    //        "type": "scripthash",
+                                                    //        "multisig": null,
+                                                    //        "multisig_addresses": null,
+                                                    //        "script": "OP_HASH160 25c088a52cc4beee69c0e24e75a1e25b8e44d60c OP_EQUAL",
+                                                    //        "script_hex": "a91425c088a52cc4beee69c0e24e75a1e25b8e44d60c87",
+                                                    //        "spent_hash": null,
+                                                    //        "spent_index": 0
+                                                    //    }],
+                                                    //    "opt_in_rbf": false,
+                                                    //    "unconfirmed_inputs": true,
+                                                    //    "lock_time_timestamp": null,
+                                                    //    "lock_time_block_height": null,
+                                                    //    "size": 367,
+                                                    //    "is_double_spend": false,
+                                                    //    "double_spend_in": []
+                                                    //};
+
+                                                    if (err) {
+                                                        // get transaction failed. maybe API error. maybe invalid transactionid
+                                                        money_transaction.btc_receive_error = 'Receive money failed. Could not verify received bitcoin transaction ' + money_transaction.btc_receive_ok + '. btc error = ' + err ;
+                                                        return send_or_check_money(i + 1);
+                                                    }
+                                                    // check tx
+                                                    if (!tx) {
+                                                        money_transaction.btc_receive_error = 'Receive money failed. Could not verify received bitcoin transaction ' + money_transaction.btc_receive_ok + '. tx is null' ;
+                                                        return send_or_check_money(i + 1);
+                                                    }
+                                                    if (!tx.outputs || !tx.outputs.length) {
+                                                        money_transaction.btc_receive_error = 'Receive money failed. Could not verify received bitcoin transaction ' + money_transaction.btc_receive_ok + '. tx.outputs is empty' ;
+                                                        return send_or_check_money(i + 1);
+                                                    }
+                                                    // check amount
+                                                    expected_amount = Math.round(money_transaction.amount * 100000000) ;
+                                                    received_amount = 0 ;
+                                                    for (i=0 ; i<tx.outputs.length ; i++) {
+                                                        output = tx.outputs[i] ;
+                                                        if (output.address == money_transaction.json.address) received_amount = received_amount + output.value ;
+                                                    }
+                                                    console.log(pgm + 'expected_amount = ' + expected_amount + ', received_amount = ' + received_amount) ;
+                                                    if (Math.round(Math.abs(expected_amount - received_amount)) == 0) {
+                                                        console.log(pgm + 'Everything is fine. todo: notification in UI.') ;
+                                                        return send_or_check_money(i + 1);
+                                                    }
+                                                    console.log(pgm + 'error: expected amount <> received amount. todo: notification in UI') ;
+                                                    money_transaction.btc_receive_error = 'Expected ' + expected_amount + ' satoshi. Received ' + received_amount + ' satoshi' ;
+                                                    send_or_check_money(i + 1);
+                                                }) ;
+                                            } ; // check_money
+
+                                            // send/check money loop (if any Send or check money transactions in money_transactions array)
+                                            send_or_check_money = function (i) {
+                                                var pgm = service + '.process_incoming_message.' + request.msgtype + '.send_or_check_money/' + group_debug_seq + ': ';
+                                                var money_transaction;
+                                                if (i >= session_info.money_transactions.length) {
+                                                    console.log(pgm + 'done sending and checking money. ');
+                                                    console.log(pgm + 'todo: report status for send_money operations');
+                                                    console.log(pgm + 'todo: update transaction status on file system');
+                                                    // mark w2_start_mt message as received. do not process again
+                                                    session_info.w2_start_mt_received_at = new Date().getTime() ;
+                                                    save_w_session(session_info, {group_debug_seq: group_debug_seq}, function () {
+                                                        console.log(pgm + 'saved session_info in ls') ;
+                                                        optional_close_wallet(function() {
+                                                            MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq) ;
+                                                            send_w2_end_mt() ;
+                                                        }) ;
+                                                    }) ;
+                                                    return;
+                                                }
+                                                // is receiver
+                                                money_transaction = session_info.money_transactions[i];
+                                                if (money_transaction.code != 'tBTC') return send_or_check_money(i + 1); // not test Bitcoins
+                                                if (money_transaction.action == 'Request') return send_money(i) ;
+                                                if (money_transaction.btc_receive_ok) return check_money(i) ;
+                                                send_or_check_money(i+1) ;
+                                            }; // send_or_check_money
+                                            // start send (action=Request) or check (action=Send) money loop
+                                            send_or_check_money(0);
 
                                         }) ; // optional_open_wallet callback
 
