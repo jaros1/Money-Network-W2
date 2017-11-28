@@ -6,6 +6,7 @@
     ".+/data/users/.+/content.json": {
       "to_keyvalue": [ "modified" ],
       "to_table": [
+        { "node": "files", "table": "files", "key_col": "filename"},
         { "node": "files_optional", "table": "files_optional", "key_col": "filename"}
       ]
     },
@@ -14,6 +15,16 @@
     }
   },
   "tables": {
+    "files": {
+      "cols": [
+        ["filename", "TEXT"],
+        ["sha512", "TEXT"],
+        ["size", "INTEGER"],
+        ["json_id", "INTEGER REFERENCES json (json_id)"]
+      ],
+      "indexes": ["CREATE INDEX files_i1 ON files(json_id)"],
+      "schema_changed": 2
+    },
     "files_optional": {
       "cols": [
         ["filename", "TEXT"],
@@ -25,7 +36,7 @@
         "CREATE INDEX files_optional_i1 ON files_optional(json_id)",
         "CREATE INDEX files_optional_i2 ON files_optional(filename)"
       ],
-      "schema_changed": 1
+      "schema_changed": 2
     }
   }
 }

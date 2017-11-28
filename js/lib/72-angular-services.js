@@ -1313,6 +1313,7 @@ angular.module('MoneyNetworkW2')
                 var pgm2, group_debug_seq, auth_address, sha256 ;
                 sessionid = session_info.money_transactionid ;
                 if (!options) options = {} ;
+                if (!cb) cb = function() {} ;
                 group_debug_seq = options.group_debug_seq ;
                 pgm2 = MoneyNetworkAPILib.get_group_debug_seq_pgm(pgm, group_debug_seq) ;
                 delete session_info.pubkey;
@@ -1434,6 +1435,12 @@ angular.module('MoneyNetworkW2')
                             console.log(pgm2 + 'session_info = ' + JSON.stringify(session_info));
                             if (!session_info) {
                                 console.log(pgm2 + 'decrypt_json failed for encrypted_session_info = ' + JSON.stringify(encrypted_session_info)) ;
+                                // load next wallet session
+                                no_not_loaded++ ;
+                                return load_session() ;
+                            }
+                            if (session_info.error) {
+                                console.log(pgm2 + 'ignoring old failed wallet session. session_info = ' + JSON.stringify(session_info)) ;
                                 // load next wallet session
                                 no_not_loaded++ ;
                                 return load_session() ;
@@ -2032,7 +2039,7 @@ angular.module('MoneyNetworkW2')
                                         // send_mt step 5. send offline pubkeys message to other wallet session
                                         step_5_save_pubkeys_msg = function () {
                                             var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_5_save_pubkeys_msg/' + group_debug_seq + ': ';
-                                            var request2, error;
+                                            var request2, error, optional;
                                             request2 = {
                                                 msgtype: 'pubkeys',
                                                 pubkey: session_info.pubkey, // for JSEncrypt
@@ -2040,7 +2047,8 @@ angular.module('MoneyNetworkW2')
                                             };
                                             console.log(pgm + 'request2 = ' + JSON.stringify(request2));
                                             // send offline message. no wait for response.
-                                            encrypt3.send_message(request2, {encryptions: [3], optional: 'o', group_debug_seq: group_debug_seq}, function (response2) {
+                                            optional = session_info.ip_external ? 'o' : null ;
+                                            encrypt3.send_message(request2, {encryptions: [3], optional: optional, group_debug_seq: group_debug_seq}, function (response2) {
                                                 try {
                                                     var error;
                                                     if (!response2 || response2.error) {
@@ -2653,14 +2661,15 @@ angular.module('MoneyNetworkW2')
                                                 // start_mt step 5. pubkeys message for other wallet session
                                                 step_5_save_pubkeys_msg = function () {
                                                     var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_5_save_pubkeys_msg/' + group_debug_seq + ': ';
-                                                    var request2, error;
+                                                    var request2, error, optional;
                                                     request2 = {
                                                         msgtype: 'pubkeys',
                                                         pubkey: session_info.pubkey, // for JSEncrypt
                                                         pubkey2: session_info.pubkey2 // for cryptMessage
                                                     };
                                                     console.log(pgm + 'request2 = ' + JSON.stringify(request2));
-                                                    encrypt4.send_message(request2, {encryptions: [3], optional: 'o', group_debug_seq: group_debug_seq}, function (response2) {
+                                                    optional = session_info.ip_external ? 'o' : null ;
+                                                    encrypt4.send_message(request2, {encryptions: [3], optional: optional, group_debug_seq: group_debug_seq}, function (response2) {
                                                         try {
                                                             var error;
                                                             if (!response2 || response2.error) {
@@ -3011,7 +3020,7 @@ angular.module('MoneyNetworkW2')
 
 
                                             // 1: find filename for previous incoming file (or first) for this wallet session. should be pubkeys message
-                                            w2_query_6 = "select filename from files_optional where filename like '" + encrypt2.other_session_filename + "-%'" ;
+                                            w2_query_6 = "select filename from files_optional where filename like '" + encrypt2.other_session_filename + "%'" ;
                                             console.log(pgm + 'w2_query_6 = ' + w2_query_6) ;
                                             debug_seq1 = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, 'w2 query 6', 'dbQuery', null, group_debug_seq) ;
                                             ZeroFrame.cmd("dbQuery", [w2_query_6], function (res) {
@@ -3028,8 +3037,8 @@ angular.module('MoneyNetworkW2')
                                                     return ;
                                                 }
                                                 console.log(pgm + 'res = ' + JSON.stringify(res)) ;
-                                                // check optional filename. pubkeys message from other wallet session is an -o (external) optional file
-                                                re = /^[0-9a-f]{10}-o\.[0-9]{13}$/;
+                                                // check filename. pubkeys message from other wallet session is a normal or an -o (external) optional file
+                                                re = /^[0-9a-f]{10}(-o)?\.[0-9]{13}$/;
                                                 console.log(pgm + 'old res.length = ' + res.length);
                                                 for (i = res.length - 1; i >= 0; i--) {
                                                     if (!res[i].filename.match(re)) continue; // invalid filename
@@ -3046,7 +3055,10 @@ angular.module('MoneyNetworkW2')
                                                 if (!pubkeys_file_timestamp) {
                                                     console.log(pgm + 'could not find any pubkeys message before this w2_check_mt message') ;
                                                     error = ['Money transaction failed', 'Missing pubkeys message', 'Cannot start encrypted communication'] ;
-                                                    report_error(pgm, error, {group_debug_seq: group_debug_seq}) ;
+                                                    session_info.error = error.join('. ') ; // mark transaction as failed. do not restart transaction
+                                                    report_error(pgm, error, {group_debug_seq: group_debug_seq}, function() {
+                                                        save_w_session(session_info, {group_debug_seq: group_debug_seq}) ;
+                                                    }) ;
                                                     return ;
                                                 }
                                                 console.log(pgm + 'pubkeys_filename = ' + pubkeys_filename) ;
@@ -3077,13 +3089,15 @@ angular.module('MoneyNetworkW2')
                                                         redo_pubkeys = function () {
                                                             var pgm = service + '.process_incoming_message.' + request.msgtype + '.redo_pubkeys/' + group_debug_seq + ': ';
                                                             var error ;
+                                                            console.log(pgm + 'running redo_pubkeys for ' + pubkeys_filename) ;
                                                             error = encrypt2.redo_file(encrypt2.other_user_path + pubkeys_filename);
                                                             if (error) console.log(pgm, 'redo pubkeys message failed: error = ' + error) ;
                                                         } ;
                                                         redo_w2_check_mt = function () {
                                                             var pgm = service + '.process_incoming_message.' + request.msgtype + '.redo_w2_check_mt/' + group_debug_seq + ': ';
                                                             var error ;
-                                                            error = encrypt2.redo_file(encrypt2.other_user_path + pubkeys_filename);
+                                                            console.log(pgm + 'running redo_w2_check_mt for ' + filename) ;
+                                                            error = encrypt2.redo_file(encrypt2.other_user_path + filename);
                                                             if (error) console.log(pgm, 'redo w2_check_mt failed: error = ' + error) ;
                                                         } ;
                                                         setTimeout(redo_pubkeys, 0) ;
@@ -3669,7 +3683,7 @@ angular.module('MoneyNetworkW2')
                                                 if (money_transaction.action != 'Send') throw pgm + 'invalid call. Is receiver and action is not Send' ;
                                                 if (!money_transaction.btc_receive_ok) throw pgm, + 'invalid call. No txhash received from sender' ;
                                                 btcService.get_transaction(money_transaction.btc_receive_ok, function (err, tx) {
-                                                    var expected_amount, received_amount, i, output ;
+                                                    var expected_amount, received_amount, j, output ;
                                                     console.log(pgm + 'err = ' + JSON.stringify(err)) ;
                                                     console.log(pgm + 'tx = ' + JSON.stringify(tx)) ;
 
@@ -3778,8 +3792,8 @@ angular.module('MoneyNetworkW2')
                                                     // check amount
                                                     expected_amount = Math.round(money_transaction.amount * 100000000) ;
                                                     received_amount = 0 ;
-                                                    for (i=0 ; i<tx.outputs.length ; i++) {
-                                                        output = tx.outputs[i] ;
+                                                    for (j=0 ; j<tx.outputs.length ; j++) {
+                                                        output = tx.outputs[j] ;
                                                         if (output.address == money_transaction.json.address) received_amount = received_amount + output.value ;
                                                     }
                                                     console.log(pgm + 'expected_amount = ' + expected_amount + ', received_amount = ' + received_amount) ;
@@ -3814,6 +3828,7 @@ angular.module('MoneyNetworkW2')
                                                 }
                                                 // is receiver
                                                 money_transaction = session_info.money_transactions[i];
+                                                if (!money_transaction) console.log(pgm + 'error. session_info.money_transactions.length = ' + session_info.money_transactions.length + ', i = ' + i) ;
                                                 if (money_transaction.code != 'tBTC') return send_or_check_money(i + 1); // not test Bitcoins
                                                 if (money_transaction.action == 'Request') return send_money(i) ;
                                                 if (money_transaction.btc_receive_ok) return check_money(i) ;
