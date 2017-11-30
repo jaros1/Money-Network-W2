@@ -29,12 +29,12 @@
    "size": 10630
   },
   "js-api/MoneyNetworkAPI.js": {
-   "sha512": "2d2c18a9a4c8cfa99f592701b77523d6f296d18565831f31f6b3b503734227ee",
-   "size": 255112
+   "sha512": "4c47efe328f084dc0041400a1fc11a69e002cab546e86c628040cbb4b3fa4b1a",
+   "size": 260760
   },
   "js/all.js.zip": {
-   "sha512": "d10387f4ab9185038b061c4862248f0f5ceccbd0ca1b8745022b333677a02285",
-   "size": 1110104
+   "sha512": "46edd70e2c4d2ad0f226e727598e6c82683b9265086041279fc9473a0bc92c5b",
+   "size": 1108050
   },
   "screendumps/1000-w2-standalone-send-money.png": {
    "sha512": "c64693c318640591d6051cf6c2f29695f5171e0ee673d029255891730044a822",
@@ -101,7 +101,7 @@
   }
  },
  "inner_path": "content.json",
- "modified": 1511970955,
+ "modified": 1512063504,
  "postmessage_nonce_security": true,
  "settings": {
   "default_hubs": {
@@ -113,7 +113,7 @@
  },
  "signers_sign": "G07H0Zdvu6yUtEe7wxc515d5wVoZJpezNYNiKN8T1cwlBkZTYqZRbBzltNbJkstHlOMLxVLGQP6OdGCNEMCI8zE=",
  "signs": {
-  "1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1": "HKE6tAAHQg4UFrAXhVXv71yGJQSVbBDiaujrUtoF4FyANof/GG0ISXEW0C+Lhw2TKt95KUP2mc5XN6YuxPqcikY="
+  "1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1": "GwDbFLh+6bWQdv0tlAN+oP9tM9qL4pEGSjxwcX0J1/PnW7ySaGRMZF+Yii2TPCFF5xDET+1/lWssz+4AFF0BTfY="
  },
  "signs_required": 1,
  "title": "MoneyNetworkW2",
