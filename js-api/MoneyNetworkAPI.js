@@ -978,8 +978,7 @@ var MoneyNetworkAPILib = (function () {
                 }
                 if (decrypt) fileget = true ;
 
-                // callback chain with optional fileGet and decrypt operations
-
+                // callback chain step 1-3 with optional fileGet and decrypt operations
                 step_3_run_cb = function (extra, encrypted_json, json) {
                     var pgm = module + '.message_demon.step_3_run_cb: ';
                     pgm2 = get_group_debug_seq_pgm(pgm, group_debug_seq) ;
@@ -1010,24 +1009,24 @@ var MoneyNetworkAPILib = (function () {
                     var pgm = module + '.message_demon.step_1_fileget: ';
                     var options ;
                     if (!fileget) return step_3_run_cb({db_query_at: now}, null, null) ; // cb must fileGet and decrypt
-                    // received a request. use group_debug_seq to follow request-response cycle from start to end.
+                    // received a incoming message. use /group_debug_seq to follow request-response cycle from start to end.
                     // information used in debugging and in timeout message
                     pgm2 = get_group_debug_seq_pgm(pgm, group_debug_seq) ;
                     encrypt.get_session_filenames({}, function(this_session_filename, other_session_filename, unlock_pwd2) {
-                        var pgm = module + '.message_demon.step_1_fileget get_session_filenames callback: ';
+                        var pgm = module + '.message_demon.step_1_fileget get_session_filenames callback 1: ';
                         var pgm2, waiting_for_file ;
                         pgm2 = get_group_debug_seq_pgm(pgm, group_debug_seq) ;
                         MoneyNetworkAPILib.debug_group_operation_update(group_debug_seq, {this_session_filename: this_session_filename, direction: direction, filename: (direction == 'in' ? filename : null)}) ;
                         options = { inner_path: inner_path} ;
                         // filetypes: -i, -e, -o, -io, -p
                         if (['-e', '-o'].indexOf(optional) != -1) {
-                            // wallet to wallet communication. fileGet often fails for optional fileGet. 0 or 1 peer. wait for max 5 minutes
+                            // wallet to wallet communication. fileGet often fails for optional fileGet. 0 or 1 peer. wait for max 5 minutes (5*60 seconds)
                             options.required = true ;
                             options.timeout = 60 ;
                             options.timeout_count = 5 ;
                             if (encrypt.hasOwnProperty('sender')) {
-                                // wallet to wallet communication. workaround for failed fileGet operation (timeout). Send a waiting_for_file notification after first timeout
-                                // use normal file and do not wait for response
+                                // wallet to wallet communication. workaround for failed fileGet operation (timeout). Send a waiting_for_file notification after first timeout (after 60 seconds)
+                                // use normal file for waiting_for_file message and do not wait for response
                                 waiting_for_file = function() {
                                     var pgm = module + '.message_demon.step_1_fileget.waiting_for_file: ';
                                     var group_debug_seq, pgm2, request, encryptions ;
@@ -1069,18 +1068,19 @@ var MoneyNetworkAPILib = (function () {
                                     }) ; // send_message
                                 } ; // waiting_for_file
                                 options.waiting_for_file = waiting_for_file ;
-
-                            }
-                        }
+                            } // if
+                        } // if
                         if (debug) console.log(pgm2 + 'Using group_debug_seq ' + group_debug_seq + ' for this incoming message') ;
                         options.group_debug_seq = group_debug_seq ;
                         z_file_get(pgm, options, function (json_str, extra) {
-                            var encrypted_json ;
+                            var pgm = module + '.message_demon.step_1_fileget z_file_get callback 2: ';
+                            var pgm2, encrypted_json ;
+                            pgm2 = get_group_debug_seq_pgm(pgm, group_debug_seq) ;
                             if (!extra) extra = {} ;
                             extra.db_query_at = now ;
                             extra.group_debug_seq = group_debug_seq ;
                             if (!json_str) {
-                                // timeout / file not found
+                                // timeout or deleted file. continue anyway.
                                 console.log(pgm2 + 'timeout or file not found. extra = ' + JSON.stringify(extra)) ;
                                 return step_3_run_cb(extra, null, null) ;
                             }
@@ -1093,11 +1093,12 @@ var MoneyNetworkAPILib = (function () {
                                 return step_3_run_cb(extra, json_str, null) ;
                             }
                             step_2_decrypt(extra, encrypted_json) ;
-                        }) ;
-
-                    }) ;
-                }  ;
+                        }) ; // z_file_get callback 2
+                    }) ; // get_session_filenames callback 1
+                } ; // step_1_fileget
+                // start callback chain step 1-3
                 step_1_fileget() ;
+                // done
                 done[filename] = true;
                 // prevent mutating variables in loop. only one incoming message for each demon loop = one message every 500 ms
                 break ;
@@ -1344,7 +1345,15 @@ var MoneyNetworkAPILib = (function () {
                     },
                     "api_url": {"type": 'string'},
                     "wallet_sha256": {"type": 'string', "pattern": '^[0-9a-f]{64}$'},
-                    "hub": {"type": 'string'}
+                    "hub": {"type": 'string'},
+                    "json_schemas": {
+                        "type": 'object',
+                        "description": 'Extra json schema definitions used in wallet to wallet communication. Used in compatibility check between different wallet sites (different wallet sites supporting identical currencies)'
+                    },
+                    "message_workflow": {
+                        "type": 'object',
+                        "description": 'Json message workflow for extra schemas in wallet communication. Used in compatibility check between two different wallet sites (different wallet sites supporting identical currencies)'
+                    }
                 },
                 "required": ['msgtype', 'wallet_sha256'],
                 "additionalProperties": false
@@ -1677,7 +1686,7 @@ var MoneyNetworkAPILib = (function () {
         return 'Error in ' + json.msgtype + ' JSON. ' + JSON.stringify(json_error);
     } // validate_json
 
-    // helper. calculate wallet_sha256 from other wallet fields (minimize wallet.json disk usage)
+    // helper. calculate wallet_sha256 from other fields in wallet.json (minimize wallet.json disk usage)
     // wallet must be valid json (see validate_json). return null if doublet code or doublet units
     var pseudo_wallet_sha256 = '0000000000000000000000000000000000000000000000000000000000000000' ;
     function calc_wallet_sha256 (wallet) {
@@ -1693,14 +1702,17 @@ var MoneyNetworkAPILib = (function () {
             return null ;
         }
         if (pseudo_wallet_sha256_added) delete wallet.wallet_sha256 ;
-        if (debug) console.log(pgm + 'todo: normalize currencies list. sort and  fixed order of properties. see wallet schema definition');
+        // todo: any need for "normalize" wallet structure any longer?
+        // normalize currencies list. sort and fixed order of properties. see wallet schema definition
         new_wallet = {
             wallet_address: wallet.wallet_address,
             wallet_domain: wallet.wallet_domain,
             wallet_title: wallet.wallet_title,
             wallet_description: wallet.wallet_description,
             currencies: [],
-            api_url: wallet.api_url
+            api_url: wallet.api_url,
+            json_schemas: wallet.json_schemas, // no normalize
+            message_workflow: wallet.message_workflow // no normalize
         } ;
         codes = [] ;
         for (i=0 ; i<wallet.currencies.length ; i++) {
@@ -1896,7 +1908,6 @@ var MoneyNetworkAPILib = (function () {
         }) ; // dbQuery callback 1
 
     } // get_wallet_info
-
 
     // ZeroFrame wrappers:
     // - mergerSiteAdd
@@ -2506,6 +2517,12 @@ var MoneyNetworkAPILib = (function () {
                         if (!is_MoneyNetworkAPI(options.encrypt)) throw pgm + 'invalid call. options.encrypt must be a MoneyNetworkAPI instance' ;
                         // 1) get unique cb_id from sequence. used in messages between MN and wallet sessions
                         next_cb_id++ ;
+                        // MN-wallet session?
+                        if (!encrypt.sessionid) {
+                            console.log(pgm + 'No MN-Wallet session handshake. Continue with publish without MN publish queue. May cause problems with not distributed content.json due to ratelimit check in receiving peers') ;
+                            cb(cb_id, options.encrypt) ;
+                            return ;
+                        }
                         cb_id = next_cb_id ;
                         // 2) send "queue_publish" message to MN. Expects OK (added to queue) or timeout (MN session is not running)
                         // timeout 30 seconds. important to wait for MN publish queue response. too many publish will cause problem with not distributed content.json file
@@ -2535,7 +2552,6 @@ var MoneyNetworkAPILib = (function () {
                                     cb(null) ;
                                     return ;
                                 }
-
                                 if (response.msgtype == 'start_publish') {
                                     // start_publish response from MN. Ready for publish in wallet session
                                     publish_queue.push({
@@ -3962,12 +3978,22 @@ MoneyNetworkAPI.prototype.send_message = function (request, options, cb) {
                             var pgm = self.module + '.send_message siteSign callback 6: ';
                             var debug_seq6, sign_at, elapsed_time_ms, elapsed_time_s, elapsed_text ;
                             MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq5, res == 'ok' ? 'OK' : 'Failed. error = ' + JSON.stringify(res));
-                            self.log(pgm, 'res = ' + JSON.stringify(res), group_debug_seq);
+                            // error handling
+                            if (res && res.error && res.error.match(/too large/)) {
+                                // res = {"error":"Site sign failed: Include too large 50538B > 50000B"}
+                                MoneyNetworkAPILib.z_file_delete(pgm, inner_path4, function (res2) {
+                                    set_error('Cannot send message. siteSign failed. ' + res.error);
+                                }) ;
+                                return ;
+                            }
+                            if (!res || res.error) return set_error('Cannot send message. siteSign failed. ' + JSON.stringify(res)) ;
+
                             if (!response) {
                                 // no response requested for this outgoing message. end group debug operation after sign
+                                // rest of message processing is only cleanup operations and not important for process communication
                                 MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq, (res == 'ok' ? null : res)) ;
                             }
-                            // todo: check for failed sign
+
                             sign_at = new Date().getTime();
                             elapsed_time_ms = sign_at - request_at ;
                             elapsed_time_s = Math.round(elapsed_time_ms/1000) ;
