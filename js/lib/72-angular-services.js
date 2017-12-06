@@ -1333,9 +1333,6 @@ angular.module('MoneyNetworkW2')
                 }) ; // get_my_wallet_hub callback 1
             } // update_wallet_json
 
-            // temporary save money transactions in memory and wait for send_mt request. all validations OK and chat msg with money transactions has been sent
-            var new_money_transactions = {} ; // money_transactionid => {timestamp: new Date().getTime(), request: request, response: response}
-
             function save_w_session(session_info, options, cb) {
                 var pgm = service + '.save_w_session: ' ;
                 var pgm2, group_debug_seq, auth_address, sha256 ;
@@ -1411,6 +1408,147 @@ angular.module('MoneyNetworkW2')
 
             } // read_w_session
 
+
+            // after load old wallet sessions. cleanup offline and normal files that is not in session_info.files objects ( = ls.w_files )
+            function cleanup_offline_session_files () {
+                var pgm = service + '.cleanup_offline_session_files: ';
+                var session_files, filename, directory, w2_query_7, debug_seq, auth_address, sha256, session_info, ls_updated ;
+                if (!ls.w_files) ls.w_files = {} ;
+                // migration. any files in session_info.files that is not in w_files
+                // session_info is encrypted with user cert. ls.w_files is not encrypted and for all certs
+                if (!z_cache.w_sessions) z_cache.w_sessions = {} ;
+                auth_address = ZeroFrame.site_info.auth_address ;
+                if (!z_cache.w_sessions[auth_address]) z_cache.w_sessions[auth_address] = {} ;
+                for (sha256 in z_cache.w_sessions[auth_address]) {
+                    session_info = z_cache.w_sessions[auth_address][sha256] ;
+                    if (!session_info.files) continue ;
+                    for (filename in session_info.files) {
+                        if (!ls.w_files[filename]) {
+                            ls.w_files[filename] = true ;
+                            ls_updated = true ;
+                        }
+                    }
+                }
+                // initialize session_files
+                session_files = [] ;
+                for (filename in ls.w_files) session_files.push(filename) ;
+                console.log(pgm + 'session_files = ' + JSON.stringify(session_files)) ;
+                //session_files = [
+                //    "a932f57dcd-o.1512390150104","a932f57dcd-o.1512390209794","74aff4c388-o.1512410824922",
+                //    "e17de9be9e-o.1512464275445","572bba988f-o.1512466704466"] ;
+
+                // get all files for current user directory (optional and normal)
+                directory = z_cache.my_wallet_data_hub + "/data/users/" + ZeroFrame.site_info.auth_address ;
+                w2_query_7 =
+                    "select files_optional.filename from json, files_optional " +
+                    "where json.directory like '" + directory + "' " +
+                    "and json.file_name = 'content.json' " +
+                    "and files_optional.json_id = json.json_id " +
+                    "  union all " +
+                    "select files.filename from json, files " +
+                    "where json.directory like '" + directory + "' " +
+                    "and json.file_name = 'content.json' " +
+                    "and files.json_id = json.json_id" ;
+                console.log(pgm + 'w2_query_7 = ' + w2_query_7);
+                debug_seq = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, 'w2_query_7', 'dbQuery') ;
+                ZeroFrame.cmd("dbQuery", [w2_query_7], function (db_files) {
+                    var pgm = service + '.cleanup_offline_session_files dbQuery callback 1: ';
+                    var i, re, m, delete_files ;
+                    MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq, (!db_files || db_files.error) ? 'Failed. error = ' + JSON.stringify(res) : 'OK. Returned ' + db_files.length + ' rows');
+                    if (db_files.error) {
+                        console.log(pgm + 'query failed. error = ' + db_files.error);
+                        console.log(pgm + 'w2_query_7 = ' + w2_query_7);
+                        return;
+                    }
+                    // keeping only normal and -o offline files in cleanup loop
+                    re = new RegExp('^[0-9a-f]{10}(-o|-io)?\.[0-9]{13}$');
+                    for (i = db_files.length - 1; i >= 0; i--) {
+                        m = db_files[i].filename.match(re);
+                        if (!m) db_files.splice(i, 1);
+                        else db_files[i] = db_files[i].filename ;
+                    }
+                    console.log(pgm + 'db_files = ' + JSON.stringify(db_files));
+                    //db_files = [
+                    //    "0fdfdb7dc9-o.1512129771660", "a932f57dcd-o.1512390209794", "bc29c335da-o.1512120964012",
+                    //    "74aff4c388-o.1512410824922", "7256a67c7e-o.1512397207261", "a932f57dcd-o.1512390150104",
+                    //    "e9b88eb32a-o.1512311372878", "0fdfdb7dc9-o.1512129709677", "63378fdc70-o.1512042065577",
+                    //    "dc06aad894-o.1512049190096", "1a63dae4d6-o.1512310819048", "572bba988f-o.1512466704466",
+                    //    "a083b24cf9-o.1512310819568", "63378fdc70-o.1512048265554", "dc06aad894-o.1512048894220",
+                    //    "0ae57e1267-o.1512122082534", "0ae57e1267-o.1512122016693", "e17de9be9e-o.1512464275445",
+                    //    "3a2706c5a7.1512063912370", "605599dbef.1511945421658", "1ec27dc9f2.1512060811941",
+                    //    "04d96035b0.1512309415144", "3a2706c5a7.1512063705424", "04d96035b0.1512209753726",
+                    //    "35451b596d.1512061946831", "04d96035b0.1512375134746", "0af15b2b3e.1512060875951",
+                    //    "04d96035b0.1512205178783", "04d96035b0.1512314541358", "35451b596d.1512062262691",
+                    //    "3a2706c5a7.1512064124867", "63378fdc70.1512042491424", "3a2706c5a7.1512063862884",
+                    //    "91713d47f2.1512059448212", "dc06aad894.1512049075461", "04d96035b0.1512315867644",
+                    //    "04d96035b0.1512145711239", "b25daae436.1512042028467", "3a2706c5a7.1512063953582",
+                    //    "04d96035b0.1512311432889", "e9b88eb32a.1512058689075", "04d96035b0.1512208077481",
+                    //    "04d96035b0.1512310884311", "04d96035b0.1512208285779", "04d96035b0.1512313549886",
+                    //    "04d96035b0.1512210296651"];
+
+                    delete_files = [] ;
+                    for (i=0 ; i<db_files.length ; i++) {
+                        filename = db_files[i] ;
+                        if (session_files.indexOf(filename) == -1) delete_files.push(filename) ;
+                    }
+                    console.log(pgm + 'delete_files = ' + JSON.stringify(delete_files)) ;
+                    //delete_files = [
+                    //    "0fdfdb7dc9-o.1512129771660", "bc29c335da-o.1512120964012", "e9b88eb32a-o.1512311372878",
+                    //    "7256a67c7e-o.1512397207261", "0fdfdb7dc9-o.1512129709677", "63378fdc70-o.1512042065577",
+                    //    "dc06aad894-o.1512049190096", "1a63dae4d6-o.1512310819048", "a083b24cf9-o.1512310819568",
+                    //    "63378fdc70-o.1512048265554", "dc06aad894-o.1512048894220", "0ae57e1267-o.1512122082534",
+                    //    "0ae57e1267-o.1512122016693", "3a2706c5a7.1512063912370", "605599dbef.1511945421658",
+                    //    "1ec27dc9f2.1512060811941", "04d96035b0.1512309415144", "3a2706c5a7.1512063705424",
+                    //    "04d96035b0.1512209753726", "35451b596d.1512061946831", "04d96035b0.1512375134746",
+                    //    "0af15b2b3e.1512060875951", "04d96035b0.1512205178783", "04d96035b0.1512314541358",
+                    //    "35451b596d.1512062262691", "3a2706c5a7.1512064124867", "63378fdc70.1512042491424",
+                    //    "3a2706c5a7.1512063862884", "91713d47f2.1512059448212", "dc06aad894.1512049075461",
+                    //    "04d96035b0.1512315867644", "04d96035b0.1512145711239", "b25daae436.1512042028467",
+                    //    "3a2706c5a7.1512063953582", "04d96035b0.1512311432889", "e9b88eb32a.1512058689075",
+                    //    "04d96035b0.1512208077481", "04d96035b0.1512310884311", "04d96035b0.1512208285779",
+                    //    "04d96035b0.1512313549886", "04d96035b0.1512210296651"];
+                    if (!delete_files.length) return ;
+
+                    MoneyNetworkAPILib.start_transaction(pgm, function (transaction_timestamp) {
+                        var pgm = service + '.cleanup_offline_session_files start_transaction callback 2: ';
+                        var merged_directory, no_deleted, no_not_deleted, delete_file ;
+                        // delete delete_file callback loop
+                        merged_directory = 'merged-' + MoneyNetworkAPILib.get_merged_type() + '/' + directory + '/' ;
+                        no_deleted = 0 ;
+                        no_not_deleted = 0 ;
+                        delete_file = function() {
+                            var pgm = service + '.cleanup_offline_session_files.delete_file: ';
+                            var filename, inner_path ;
+                            filename = delete_files.shift() ;
+                            if (!filename) {
+                                MoneyNetworkAPILib.end_transaction(transaction_timestamp) ;
+                                if (no_deleted) console.log(pgm + no_deleted + ' files were deleted.') ;
+                                if (no_not_deleted) console.log(pgm + no_not_deleted + ' files were not deleted. See error message above') ;
+                                if (no_deleted) z_publish({publish: true}, function(res) {
+                                    if (ls_updated) ls_save() ;
+                                }) ;
+                                return ;
+                            }
+                            inner_path = merged_directory + filename ;
+                            MoneyNetworkAPILib.z_file_delete(pgm, inner_path, function (res) {
+                                if (res =='ok') no_deleted++ ;
+                                else {
+                                    console.log(pgm + 'error. ' + filename + ' was not deleted. res = ' + JSON.stringify(res)) ;
+                                    no_not_deleted++ ;
+                                }
+                                // delete next file
+                                delete_file() ;
+                            }) ;
+                        } ; // delete_file
+                        // start delete_file loop
+                        delete_file() ;
+                    }) ; // start_transaction callback 2
+
+                }); // dbQuery callback
+
+            } // cleanup_offline_session_files
+
+
             // start up. load wallet session from ls and initialize MoneyNetworkAPI objects. One for each wallet session
             function load_w_sessions() {
                 var pgm = service + '.load_w_sessions: ';
@@ -1449,6 +1587,7 @@ angular.module('MoneyNetworkW2')
                         if (!sha256) {
                             MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq) ;
                             console.log(pgm2 + 'done loading old wallet sessions. ' + no_loaded + ' wallet sessions were loaded. ' + no_not_loaded + ' wallet sessions were not loaded') ;
+                            cleanup_offline_session_files() ;
                             return;
                         }
                         encrypted_session_info = ls.w_sessions[auth_address][sha256];
@@ -1776,13 +1915,44 @@ angular.module('MoneyNetworkW2')
                 inner_path = encrypt.this_user_path + msg_filename ;
                 MoneyNetworkAPILib.z_file_delete(pgm, inner_path, function (res) {
                     var pgm = service + '.delete_old_msg z_file_delete callback: ';
-                    var pgm2 ;
+                    var pgm2, auth_address ;
                     pgm2 = MoneyNetworkAPILib.get_group_debug_seq_pgm(pgm, group_debug_seq) ;
                     console.log(pgm2 + 'res = ' + JSON.stringify(res)) ;
                     delete session_info.files[msg_filename] ;
+                    if (!ls.w_files) ls.w_files = {} ;
+                    delete ls.w_files[msg_filename] ;
                     cb() ;
                 }) ; // z_file_delete
             } // delete_old_msg
+
+            // end of money ttransaction processing. cleanup. delete:
+            // - public and private keys
+            // -
+            function cleanup_session_info (session_info) {
+                //session_info = {
+                //    "money_transactionid":"2tqVUMirPCP8NDZIKiciQKlch8YfUuhLRVhUnbzDH5TcUbEdyKEstZkOLoTH","sender":true,
+                //    "contact":{"alias":"1CCiJ97XHgVeJ","cert_user_id":"1CCiJ97XHgVeJ@moneynetwork.bit","auth_address":"1CCiJ97XHgVeJrkbnzLgfXvYRr8QEWxnWF"},
+                //    "money_transactions":[
+                //        {"action":"Send","code":"tBTC","amount":0.00004411,"json":{"return_address":"2Mx89sU6Lkgvn5Bx6Ro6kkxdnXmYsi5Rznu","address":"2N67YLRRskJQQAdtFkZZR5wppyKtDuD3j9C"},"btc_send_at":1512476896044,"btc_send_ok":"6892ee5f982f9128255d2bd08f18ae262869426a55fdb62aa37414509f55a316"},
+                //        {"action":"Request","code":"tBTC","amount":0.00004411,"json":{"address":"2MxDTo9dPQW6uCEZBM1eJJ2bSo3x4VXBuKL","return_address":"2Mvk6cHck84nNEx8oJL6obyxfLLKmU1Kq9b"},"btc_receive_ok":"866bf68413afdfa93786ba1662fefba6bfe0f7b887aaabce18392cebd4202229"}],
+                //    "files":{},
+                //    "ip_external":true,
+                //    "prvkey":"-----BEGIN RSA PRIVATE KEY-----\nMIICWwIBAAKBgHg8Nc30MtDKnz0XESWXxiS/A4IUtYV0oa8YG7cqfDfSfElpMknt\nc9gvNdep9G6yYuQxH+itxdyqIcqqv3hWGbkkStsErj66YTsMEjXTQLY4QKXOP6u5\nEk9BIhVhkEwrYuzkzBScYfscuYdu3csKUudxfUhTL6wnxxZRwbbkUK9DAgMBAAEC\ngYA9HdX3r5aY/TX+VphXtJN6oEHHQIGYqdV57FZCP+1ObsbQhhGS9Il7LVxAGNrv\n3etYtQPUQWifJzfwDeUv5QxDji3A9+CQ8uweA0F0OrfPLKbzX+cvN5VgIlYoWVwL\nD2j/vtysXUScLkvSw49ksdh/Zji54EOq2GdzMScP6eZi4QJBAO6TZ+gBASgG0zEB\n5OjHUm98n/r/tFwSsWAEKZCgKlE4z/kBS1NNC+e6EhA40CoqSRyrVisorXUHB/m3\nY7LKZvECQQCBBDfzUEmxwoyQBuAkTRiX/XNBmvmf1dpEkeKwwlvoEsX8OflqRarQ\nY9HtxzqKmoLoJmRnmTvSWuXdMOLf1YFzAkAvdXlNCK4fNURb0mGkAMqgTO1SM/2/\n9yP70rgmAgaJA8EzapN+baw5m6UuPu8CBElo/5hzm3Lt/ckTXuzhSywxAkAiSQS1\nXDi5TIIeJDWccACBI5FlddGwcBw47KvZXU0fNx32EVH+s9TY3C4FilQ8USNInitA\nfLAxDobXaQ5hfVORAkEAgArhzoUOwhuEaK9ZcXo79OBKZijAwXm/QnHXEhY93+Kf\nJP6j764SaZ3/J5lFPY7Ete4hd+cHhEsvDfFXxqlwPA==\n-----END RSA PRIVATE KEY-----",
+                //    "userid2":451,
+                //    "pubkey":"-----BEGIN PUBLIC KEY-----\nMIGeMA0GCSqGSIb3DQEBAQUAA4GMADCBiAKBgHsuHRTVs3A0KYqEJCnPuBSXSnbb\nr66yOF5Jm2Bxe+VLmaI5mL+mP4cjTa44k9/2vFZsi0+cjr3EP5QzXvD0Y9ZVaKBx\niB9oqU23CfOTSxcIYbOtx4lUT5n+CZjtnZV+fu0D9rHrekq91rteZVl9ht78G98Q\nt6LDYHUSM4XPegWzAgMBAAE=\n-----END PUBLIC KEY-----",
+                //    "pubkey2":"AndZ699oakkQplSFu+5zmQ2zY8I/yOS4x100IUe8rDlL",
+                //    "w2_start_mt_sent_at":1512476899253,
+                //    "w2_end_mt_received_at":1512476929931
+                //};
+                delete session_info.ip_external ;
+                delete session_info.prvkey ;
+                delete session_info.userid2 ;
+                delete session_info.pubkey ;
+                delete session_info.pubkey2 ;
+            } // cleanup_session_info
+
+            // temporary save money transactions in memory and wait for send_mt request. all validations OK and chat msg with money transactions has been sent
+            var new_money_transactions = {} ; // money_transactionid => {timestamp: new Date().getTime(), request: request, response: response}
 
             // listen for incoming messages from MN and other wallet sessions. called from MoneyNetworkAPILib.demon
             // params:
@@ -2332,6 +2502,8 @@ angular.module('MoneyNetworkW2')
                                                     console.log(pgm + 'response2        = ' + JSON.stringify(response2));
                                                     console.log(pgm + 'request_filename = ' + JSON.stringify(request_filename));
                                                     console.log(pgm + 'sent pubkeys message to other wallet session');
+                                                    if (!ls.w_files) ls.w_files = {} ;
+                                                    ls.w_files[request_filename] = true ;
                                                     step_6_save_in_ls();
                                                 }
                                                 catch (e) { return send_exception(pgm, e) }
@@ -2945,6 +3117,8 @@ angular.module('MoneyNetworkW2')
                                                             console.log(pgm + 'response2        = ' + JSON.stringify(response2));
                                                             console.log(pgm + 'request_filename = ' + JSON.stringify(request_filename));
                                                             console.log(pgm + 'sent pubkeys message to other wallet session');
+                                                            if (!ls.w_files) ls.w_files = {} ;
+                                                            ls.w_files[request_filename] = true ;
                                                             // mark pubkeys message as sent. do not send two pubkeys messages to other wallet session
                                                             session_info.pubkeys_sent_at = new Date().getTime() ;
                                                             step_6_save_in_ls();
@@ -3185,6 +3359,8 @@ angular.module('MoneyNetworkW2')
                                                 }
                                                 console.log(pgm + 'response2        = ' + JSON.stringify(response2));
                                                 console.log(pgm + 'request_filename = ' + JSON.stringify(request_filename));
+                                                if (!ls.w_files) ls.w_files = {} ;
+                                                ls.w_files[request_filename] = true ;
                                                 // mark as sent. do not sent w2_check_mt message again
                                                 session_info.w2_check_mt_sent_at = new Date().getTime() ;
                                                 save_w_session(session_info, {group_debug_seq: group_debug_seq}, function () {
@@ -3335,6 +3511,8 @@ angular.module('MoneyNetworkW2')
                                                         }
                                                         console.log(pgm + 'response2        = ' + JSON.stringify(response2));
                                                         console.log(pgm + 'request_filename = ' + JSON.stringify(request_filename));
+                                                        if (!ls.w_files) ls.w_files = {} ;
+                                                        ls.w_files[request_filename] = true ;
                                                         // mark w2_start_mt message as sent. do not sent again
                                                         session_info.w2_start_mt_sent_at = new Date().getTime() ;
                                                         save_w_session(session_info, {group_debug_seq: group_debug_seq}, function() {
@@ -3716,13 +3894,20 @@ angular.module('MoneyNetworkW2')
                                                         var pgm = service + '.process_incoming_message.' + request.msgtype + '.send_w2_end_mt send_message callback/' + group_debug_seq + ': ';
                                                         if (!response2 || response2.error) {
                                                             error = ['Money transaction stopped', 'w2_end_mt message was not send', 'error = ' + JSON.stringify(response2)];
-                                                            report_error(pgm, error, {group_debug_seq: group_debug_seq});
-                                                            return cb(error.join('. '));
+                                                            save_w_session(session_info, {group_debug_seq: group_debug_seq}, function() {
+                                                                report_error(pgm, error, {group_debug_seq: group_debug_seq}, function() {
+                                                                    cb(error.join('. '))
+                                                                });
+                                                            }) ;
+                                                            return ;
                                                         }
                                                         console.log(pgm + 'response2        = ' + JSON.stringify(response2));
                                                         console.log(pgm + 'request_filename = ' + JSON.stringify(request_filename));
+                                                        if (!ls.w_files) ls.w_files = {} ;
+                                                        ls.w_files[request_filename] = true ;
                                                         // mark w2_end_mt message as sent. do not sent again
                                                         session_info.w2_end_mt_sent_at = new Date().getTime() ;
+                                                        cleanup_session_info(session_info) ;
                                                         save_w_session(session_info, {group_debug_seq: group_debug_seq}, function() {
                                                             z_publish({publish: true});
                                                             cb(null)
@@ -4155,6 +4340,7 @@ angular.module('MoneyNetworkW2')
                                                             console.log(pgm + 'todo: update transaction status on file system');
                                                             // mark w2_end_mt message as received. do not process again
                                                             session_info.w2_end_mt_received_at = new Date().getTime() ;
+                                                            cleanup_session_info(session_info) ;
                                                             save_w_session(session_info, {group_debug_seq: group_debug_seq}, function () {
                                                                 console.log(pgm + 'saved session_info in ls') ;
                                                                 optional_close_wallet(function() {
@@ -4312,6 +4498,9 @@ angular.module('MoneyNetworkW2')
                                                         if (!session_info.files) session_info.files = {} ;
                                                         old_request = session_info.files[request.filename] ;
                                                         delete session_info.files[request.filename] ;
+                                                        if (!ls.w_files) ls.w_files = {} ;
+                                                        delete ls.w_files[request.filename] ;
+
                                                         // 4: write new file
                                                         new_filename = request.filename.substr(0,10) + '.' + request.filename.substr(-13) ;
                                                         new_inner_path = encrypt2.this_user_path + new_filename ;
@@ -4328,6 +4517,8 @@ angular.module('MoneyNetworkW2')
                                                                     return ;
                                                                 }
                                                                 if (old_request) session_info.files[new_filename] = old_request ;
+                                                                if (!ls.w_files) ls.w_files = {} ;
+                                                                ls.w_files[new_filename] = true ;
                                                                 // publish change from optional to normal file.
                                                                 // other session should be able to read normal file.
 
