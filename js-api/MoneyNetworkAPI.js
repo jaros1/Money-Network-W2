@@ -3790,10 +3790,10 @@ MoneyNetworkAPI.prototype.add_optional_files_support = function (options, cb) {
 //   - request: request timestamp. only used when sending response. Added to response json after validation. used for offline transactions
 //   - timeout_at: timestamp. only used when sending response to a previous request. other session expects response before timeout_at. cleanup response after timeout
 //   - optional: session filename extension used for optional files. default found via json.msgtype => subsystem. api: i, other: e
-//     i    - <session filename>-i.<timestamp> - internal API communication between MN and wallet. not published and no distribution help is needed
-//     e    - <session filename>-e.<timestamp> - external wallet to wallet communication. published and distribution help would be nice
+//     i    - <session filename>-i.<timestamp> - internal API communication between MN and wallet. signed only and no distribution help is needed
+//     e    - <session filename>-e.<timestamp> - external wallet to wallet communication. published. distribution help would be nice
 //     o    - <session filename>-o.<timestamp> - offline wallet to wallet communication. published. distribution help would be nice.
-//     io   - <session filename>-io.<timestamp> - internal and offline. offline messages between wallet and mn sessions. no distribution help is needed
+//     io   - <session filename>-io.<timestamp> - internal and offline. offline messages between wallet and mn sessions. signed only. no distribution help is needed
 //     p    - <session filename>-p.<timestamp> - internal API communication between MN and wallets. not published and no distribution help is needed (publishing messages)
 //     null - <session filename>.<timestamp> - normal file. distributed to all peers. used only as a fallback option when optional file distribution fails
 //   - subsystem: calling subsystem. for example api, mn or wallet. used for json schema validations
