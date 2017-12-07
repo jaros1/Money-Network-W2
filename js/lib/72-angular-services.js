@@ -4443,6 +4443,94 @@ angular.module('MoneyNetworkW2')
                         return ; // no OK response to offline w2_start_mt
                         // w2_end_mt
                     }
+                    else if (request.msgtype == 'w2_cleanup_mt') {
+                        // sender to receiver: after w2_end_mt message. cleanup files on user dictionary and session_info
+                        //request = {"msgtype":"w2_cleanup_mt"} ;
+                        (function w2_cleanup_mt(){
+                            var pgm = service + '.process_incoming_message.' + request.msgtype + '/' + group_debug_seq + ': ';
+                            try {
+                                read_w_session(encrypt2.sessionid, {group_debug_seq: group_debug_seq}, function (session_info)  {
+                                    var pgm = service + '.process_incoming_message.' + request.msgtype + ' read_w_session callback 1/' + group_debug_seq + ': ';
+                                    try {
+                                        var wallet_was_open, optional_open_wallet, optional_close_wallet, error, i,
+                                            money_transaction, no_pay_ok, no_pay_error, delete_old_w2_end_mt_msg ;
+
+                                        console.log(pgm + 'session_info = ' + JSON.stringify(session_info));
+                                        if (!session_info) {
+                                            error = ['Money transaction failed', 'w2_cleanup_mt message with unknown sessionid', encrypt2.sessionid];
+                                            return report_error(pgm, error, {group_debug_seq: group_debug_seq}) ;
+                                        }
+
+                                        if (session_info.w2_cleanup_mt_received_at) {
+                                            // ignore. already received. must be a wallet page load. see load_w_sessions
+                                            MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq) ;
+                                            return ;
+                                        }
+
+                                        // 1) must be receiver
+                                        if (session_info.sender) {
+                                            console.log(pgm + 'warning. is sender of money transaction. ignoring incoming w2_cleanup_mt message. only sent from sender of money transaction to receiver of money transaction');
+                                            MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq) ;
+                                            return;
+                                        }
+
+                                        // cleanup old outgoing files:
+                                        // - is "receiver"
+                                        // - is receiving w2_cleanup_mt message from "sender"
+                                        // - "sender" must have received "w2_end_mt" message from "receiver"
+                                        // - find and delete old w2_end_mt message from receiver to sender
+
+                                        delete_old_w2_end_mt_msg = function(cb) {
+                                            delete_old_msg({session_info: session_info, msg_name: 'w2_end_mt', encrypt: encrypt2, group_debug_seq: group_debug_seq}, cb) ;
+                                        } ;
+                                        delete_old_w2_end_mt_msg(function() {
+                                            var pgm = service + '.process_incoming_message.' + request.msgtype + ' delete_old_w2_end_mt_msg callback 2/' + group_debug_seq + ': ';
+                                            try {
+                                                if (request.error) {
+                                                    // w2_start_mt check failed. money transaction was aborted by receiver of money transaction
+                                                    console.log(pgm + 'todo: mark money transaction as aborted in ls');
+                                                    console.log(pgm + 'todo: update file with money transaction status');
+                                                    return report_error(pgm, error, {group_debug_seq: group_debug_seq}) ;
+                                                }
+                                                session_info.w2_cleanup_mt_received_at = new Date().getTime() ;
+                                                cleanup_session_info(session_info) ;
+                                                save_w_session(session_info, {group_debug_seq: group_debug_seq}) ;
+
+                                            }
+                                            catch (e) {
+                                                // receive offline message w2_cleanup_mt failed.
+                                                if (!e) return ; // exception in MoneyNetworkAPI instance
+                                                console.log(pgm + e.message);
+                                                console.log(e.stack);
+                                                report_error(pgm, ["JS exception", e.message], {log: false, group_debug_seq: group_debug_seq}) ;
+                                                throw(e);
+                                            }
+                                        }) ; // delete_old_w2_end_mt_msg callback 2
+
+                                    }
+                                    catch (e) {
+                                        // receive offline message w2_cleanup_mt failed.
+                                        if (!e) return ; // exception in MoneyNetworkAPI instance
+                                        console.log(pgm + e.message);
+                                        console.log(e.stack);
+                                        report_error(pgm, ["JS exception", e.message], {log: false, group_debug_seq: group_debug_seq}) ;
+                                        throw(e);
+                                    }
+
+                                }) ; // read_w_session callback 1
+                            }
+                            catch (e) {
+                                // receive offline message w2_cleanup_mt failed.
+                                if (!e) return ; // exception in MoneyNetworkAPI instance
+                                console.log(pgm + e.message);
+                                console.log(e.stack);
+                                report_error(pgm, ["JS exception", e.message], {log: false, group_debug_seq: group_debug_seq}) ;
+                                throw(e);
+                            }
+                        })() ;
+                        return ; // no OK response to offline w2_cleanup_mt
+                        // w2_cleanup_mt
+                    }
                     else if (request.msgtype == 'timeout') {
                         // timeout message from MoneyNetwork. MoneyNetwork sent response after timeout. There may be a timeout failure in W2 session
                         // merge MN process information and wallet process information.
