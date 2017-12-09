@@ -2135,6 +2135,7 @@ angular.module('MoneyNetworkW2')
                             }
                             catch (e) {return send_exception(pgm, e) } ;
                         })() ;
+                        return ;
                         // end get_balance
                     }
                     else if (request.msgtype == 'prepare_mt_request') {
