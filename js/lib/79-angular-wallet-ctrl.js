@@ -284,7 +284,7 @@ angular.module('MoneyNetworkW2')
             }) ;
         }; // send_money
 
-        // get list of screendumps in screendumps folder
+        // get list of screen dumps in screendumps folder
         self.screendumps = [] ;
         (function () {
             MoneyNetworkAPILib.z_file_get(controller, {inner_path: 'screendumps/content.json'}, function (content_str) {
