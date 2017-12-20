@@ -383,15 +383,15 @@ angular.module('MoneyNetworkW2')
             // message workflow between sender of money transaction(s) and receiver of money transaction(s)
             var message_workflow = {
                 sender: {
-                    start: 'pubkeys',           // send_mt             => send pubkeys
-                    w2_check_mt: 'w2_start_mt', // receive w2_check_mt => send w2_start_mt
-                    w2_end_mt: 'w2_cleanup_mt'  // receive w2_end_mt   => send w2_cleanup_mt
+                    start: 'pubkeys',           // 1: send_mt             => send pubkeys
+                    w2_check_mt: 'w2_start_mt', // 3: receive w2_check_mt => send w2_start_mt
+                    w2_end_mt: 'w2_cleanup_mt'  // 5: receive w2_end_mt   => send w2_cleanup_mt
                 },
                 receiver: {
-                    start: 'pubkeys',           // start_mt            => send pubkeys
-                    pubkeys: 'w2_check_mt',     // receive pubkeys     => send w2_check_mt
-                    w2_start_mt: 'w2_end_mt',   // receive w2_start_mt => send w2_end_mt
-                    w2_cleanup_mt: 'end'        // receive w2_cleanup_mt
+                    start: 'pubkeys',           // 1: start_mt            => send pubkeys
+                    pubkeys: 'w2_check_mt',     // 2: receive pubkeys     => send w2_check_mt
+                    w2_start_mt: 'w2_end_mt',   // 4: receive w2_start_mt => send w2_end_mt
+                    w2_cleanup_mt: 'end'        // 6: receive w2_cleanup_mt
                 }
             } ;
 
@@ -468,7 +468,14 @@ angular.module('MoneyNetworkW2')
                             if (encrypted_data.length == 0) return cb2() ;
                             encrypted_row = encrypted_data.shift() ;
                             console.log(pgm + 'encrypted_row = ' + JSON.stringify(encrypted_row)) ;
-                            encrypted_json = JSON.parse(encrypted_row.value) ;
+                            try {
+                                encrypted_json = JSON.parse(encrypted_row.value) ;
+                            }
+                            catch (e) {
+                                console.log(pgm + 'error. invalid data response. value was not a json string. value = ' + encrypted_row.value + ', error = ' + e.message);
+                                data.push({key: encrypted_row.key, value: null}) ;
+                                return decrypt_row(cb2) ;
+                            }
                             encrypt1.decrypt_json(encrypted_json, {}, function (decrypted_json) {
                                 var pgm = service + '.get_wallet_login.decrypt_row decrypt_json callback: ' ;
                                 var decrypted_row ;
@@ -1576,8 +1583,9 @@ angular.module('MoneyNetworkW2')
                                 no_not_loaded++ ;
                                 return load_session() ;
                             }
+                            if (session_info.money_transactionid == 'WEWMZyr6JaTc1JpOu5pI7A4Btjk7oXiqGlaDXtjMN2J2rDofMijpazqP2eEg') delete session_info.error ;
                             if (session_info.error) {
-                                console.log(pgm2 + 'ignoring old failed wallet session. session_info = ' + JSON.stringify(session_info)) ;
+                                console.log(pgm2 + 'ignoring old failed wallet session. error = ' + session_info.error + ', session_info = ' + JSON.stringify(session_info)) ;
                                 // load next wallet session
                                 no_not_loaded++ ;
                                 return load_session() ;
@@ -1588,6 +1596,7 @@ angular.module('MoneyNetworkW2')
                                 session_info.sender = session_info.master ;
                                 delete session_info.master ;
                             }
+                            if (typeof session_info.sender != 'boolean') console.log(pgm + 'error. sender is invalid. session_info = ' + JSON.stringify(session_info));
                             z_cache.w_sessions[auth_address][sha256] = session_info;
                             // initialize MoneyNetworkAPI instance for this wallet session
                             new MoneyNetworkAPI({
@@ -1654,6 +1663,7 @@ angular.module('MoneyNetworkW2')
                 if (!cb) cb = function() {} ;
                 if (!encrypt2.sessionid) {
                     console.log(pgm + 'No MN-W2 session. Skipping MN notification') ;
+                    if (options.end_group_operation) MoneyNetworkAPILib.debug_group_operation_end(options.group_debug_seq, pgm + error.join('. ')) ;
                     return ;
                 }
                 // send error notification to mn session using global encrypt2 object (mn-w2 session)
@@ -1664,9 +1674,9 @@ angular.module('MoneyNetworkW2')
                 };
                 if (options.timeout) request.timeout = options.timeout ;
                 console.log(pgm + 'request = ' + JSON.stringify(request));
-                encrypt2.send_message(request, {response: false, group_debug_seq: options.group_debug_seq}, function (response) {
+                encrypt2.send_message(request, {response: false, group_debug_seq: options.group_debug_seq, end_group_operation: options.end_group_operation}, function (response) {
                     console.log(pgm + 'response = ' + JSON.stringify(response)) ;
-                    if (options.end_group_operation) MoneyNetworkAPILib.debug_group_operation_end(options.group_debug_seq, pgm + error.join('. ')) ;
+                    // if (options.end_group_operation) MoneyNetworkAPILib.debug_group_operation_end(options.group_debug_seq, pgm + error.join('. ')) ;
                     cb() ;
                 }); // send_message callback
             } // report error
@@ -1691,8 +1701,9 @@ angular.module('MoneyNetworkW2')
 
             // send money error: Origin is not allowed by Access-Control-Allow-Origin
             // check money error: {"crossDomain":true}
-            // halt receive w2_start_mt processing and alert user in a confirm dialog
-            function btc_cross_domain_error (error, restart_receive_w2_start_mt, group_debug_seq) {
+            // open wallet error: Origin is not allowed by Access-Control-Allow-Origin
+            // halt message processing and alert user in a confirm dialog
+            function btc_cross_domain_error (error, restart_receive_message, group_debug_seq) {
                 save_w_session(session_info, {group_debug_seq: group_debug_seq}, function () {
                     var pgm = service + '..btc_cross_domain_error save_w_session callback 1/' + group_debug_seq + ': ';
                     var message, restart_receive_w2_start_mt, confirm_status, request2 ;
@@ -1736,7 +1747,11 @@ angular.module('MoneyNetworkW2')
                             // unexpected response from confirm request
                             console.log(pgm + 'error: response = ' + JSON.stringify(response)) ;
                         }
-                        catch (e) { return send_exception(pgm, e) }
+                        catch (e) {
+                            console.log(pgm + e.message);
+                            console.log(e.stack);
+                            report_error(pgm, ["JS exception", e.message], {log: false, group_debug_seq: group_debug_seq}) ;
+                        }
                     }); // send_message callback 2
 
                 }) ; // save_w_session callback 1
@@ -1767,7 +1782,10 @@ angular.module('MoneyNetworkW2')
                 group_debug_seq = options.group_debug_seq ;
 
                 // 1: find filename for previous incoming file (=first) for this wallet session. should be pubkeys message
-                w2_query_6 = "select filename from files_optional where filename like '" + encrypt2.other_session_filename + "%'" ;
+                w2_query_6 =
+                    "select filename from files where filename like '" + encrypt2.other_session_filename + "%'" +
+                    "  union all " +
+                    "select filename from files_optional where filename like '" + encrypt2.other_session_filename + "%'" ;
                 console.log(pgm + 'w2_query_6 = ' + w2_query_6) ;
                 debug_seq1 = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, 'w2 query 6', 'dbQuery', null, group_debug_seq) ;
                 ZeroFrame.cmd("dbQuery", [w2_query_6], function (res) {
@@ -1800,7 +1818,7 @@ angular.module('MoneyNetworkW2')
                         }
                     }
                     if (!pubkeys_file_timestamp) {
-                        console.log(pgm + 'could not find any pubkeys message before this ' + in_msg_name + 'w2_check_mt message') ;
+                        console.log(pgm + 'could not find any pubkeys message before this ' + in_msg_name + ' message') ;
                         error = ['Money transaction failed', 'Missing pubkeys message', 'Cannot start encrypted communication'] ;
                         session_info.error = error.join('. ') ; // mark transaction as failed. do not restart transaction
                         report_error(pgm, error, {group_debug_seq: group_debug_seq}, function() {
@@ -2252,7 +2270,10 @@ angular.module('MoneyNetworkW2')
                                     btcService.get_new_address(function (error, address) {
                                         try {
                                             var money_transaction;
-                                            if (error) return send_response('Could not get a new bitcoin address. error = ' + error);
+                                            if (error) {
+                                                ZeroFrame.cmd("wrapperNotification", ['error', 'Get new bitcoin address failed with<br>' + error]) ;
+                                                return send_response('Could not get a new bitcoin address. error = ' + error);
+                                            }
                                             money_transaction = request.money_transactions[i];
                                             if (money_transaction.action == 'Send') jsons[i].return_address = address;
                                             else jsons[i].address = address;
@@ -2292,7 +2313,10 @@ angular.module('MoneyNetworkW2')
                                         // open test bitcoin wallet (also get_balance request)
                                         btcService.init_wallet(status.save_wallet_id, status.save_wallet_password, function (error) {
                                             try {
-                                                if (error && (wallet_info.status != 'Open')) return send_response('Open wallet request failed with error = ' + error);
+                                                if (error && (wallet_info.status != 'Open')) {
+                                                    ZeroFrame.cmd("wrapperNotification", ['error', 'Open wallet request failed with<br>' + error]) ;
+                                                    return send_response('Open wallet request failed with error = ' + error);
+                                                }
                                                 if (error && send_money) console.log(pgm + 'warning. sending money and get_balance request failed with error = ' + error);
                                                 step_3_check_balance();
                                             }
@@ -2454,16 +2478,22 @@ angular.module('MoneyNetworkW2')
                                         // send_mt step 5. send offline pubkeys message to other wallet session
                                         step_5_save_pubkeys_msg = function () {
                                             var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_5_save_pubkeys_msg/' + group_debug_seq + ': ';
-                                            var request2, error, optional;
+                                            var request2, error, options;
                                             request2 = {
                                                 msgtype: 'pubkeys',
                                                 pubkey: session_info.pubkey, // for JSEncrypt
                                                 pubkey2: session_info.pubkey2 // for cryptMessage
                                             };
                                             console.log(pgm + 'request2 = ' + JSON.stringify(request2));
-                                            // send offline message. no wait for response.
-                                            optional = session_info.ip_external ? 'o' : null ;
-                                            encrypt3.send_message(request2, {encryptions: [3], optional: optional, files: session_info.files, group_debug_seq: group_debug_seq}, function (response2, request_filename) {
+                                            // send offline message. no wait for response. use optional offline file (-o) or normal file
+                                            options = {
+                                                encryptions: [3],
+                                                optional: session_info.ip_external ? 'o' : null,
+                                                files: session_info.files,
+                                                status: '1: pubkeys sent, waiting for w2_check_mt',
+                                                group_debug_seq: group_debug_seq
+                                            } ;
+                                            encrypt3.send_message(request2, options, function (response2, request_filename) {
                                                 try {
                                                     var error;
                                                     if (!response2 || response2.error) {
@@ -2477,6 +2507,7 @@ angular.module('MoneyNetworkW2')
                                                     console.log(pgm + 'sent pubkeys message to other wallet session');
                                                     if (!ls.w_files) ls.w_files = {} ;
                                                     ls.w_files[request_filename] = true ;
+                                                    session_info.this_status = options.status ;
                                                     step_6_save_in_ls();
                                                 }
                                                 catch (e) { return send_exception(pgm, e) }
@@ -3070,15 +3101,21 @@ angular.module('MoneyNetworkW2')
                                                 // start_mt step 5. pubkeys message for other wallet session
                                                 step_5_save_pubkeys_msg = function () {
                                                     var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_5_save_pubkeys_msg/' + group_debug_seq + ': ';
-                                                    var request2, error, optional;
+                                                    var request2, error, optional, options;
                                                     request2 = {
                                                         msgtype: 'pubkeys',
                                                         pubkey: session_info.pubkey, // for JSEncrypt
                                                         pubkey2: session_info.pubkey2 // for cryptMessage
                                                     };
                                                     console.log(pgm + 'request2 = ' + JSON.stringify(request2));
-                                                    optional = session_info.ip_external ? 'o' : null ;
-                                                    encrypt4.send_message(request2, {encryptions: [3], optional: optional, files: session_info.files, group_debug_seq: group_debug_seq}, function (response2, request_filename) {
+                                                    options = {
+                                                        encryptions: [3],
+                                                        optional: session_info.ip_external ? 'o' : null,
+                                                        files: session_info.files,
+                                                        status: '1: pubkeys sent, waiting for pubkeys',
+                                                        group_debug_seq: group_debug_seq
+                                                    } ;
+                                                    encrypt4.send_message(request2, options, function (response2, request_filename) {
                                                         try {
                                                             var error;
                                                             if (!response2 || response2.error) {
@@ -3094,6 +3131,7 @@ angular.module('MoneyNetworkW2')
                                                             ls.w_files[request_filename] = true ;
                                                             // mark pubkeys message as sent. do not send two pubkeys messages to other wallet session
                                                             session_info.pubkeys_sent_at = new Date().getTime() ;
+                                                            session_info.this_status = options.status ;
                                                             step_6_save_in_ls();
                                                         }
                                                         catch (e) { return send_exception(pgm, e) }
@@ -3192,7 +3230,7 @@ angular.module('MoneyNetworkW2')
                                 // load session from ls
                                 read_w_session(encrypt2.sessionid, {group_debug_seq: group_debug_seq, ip_external: true}, function (session_info) {
                                     var pgm = service + '.process_incoming_message.' + request.msgtype + ' read_w_session callback 1/' + group_debug_seq + ': ';
-                                    var request2, i, money_transaction, ls_updated, optional ;
+                                    var request2, i, money_transaction, ls_updated, options ;
 
                                     try {
                                         if (!session_info) {
@@ -3321,8 +3359,14 @@ angular.module('MoneyNetworkW2')
                                         //};
                                         // send w2_check_mt as an offline message to other wallet session
                                         if (!session_info.files) session_info.files = {} ;
-                                        optional = session_info.ip_external ? 'o' : null ;
-                                        encrypt2.send_message(request2, {optional: optional, subsystem: 'w2', files: session_info.files, group_debug_seq: group_debug_seq}, function (response2, request_filename) {
+                                        options = {
+                                            optional: session_info.ip_external ? 'o' : null,
+                                            subsystem: 'w2',
+                                            files: session_info.files,
+                                            status: '2: w2_check_mt sent, waiting for w2_start_mt',
+                                            group_debug_seq: group_debug_seq
+                                        } ;
+                                        encrypt2.send_message(request2, options, function (response2, request_filename) {
                                             var pgm = service + '.process_incoming_message.' + request.msgtype + ' send_message callback 2/' + group_debug_seq + ': ';
                                             var error;
                                             try {
@@ -3337,6 +3381,7 @@ angular.module('MoneyNetworkW2')
                                                 ls.w_files[request_filename] = true ;
                                                 // mark as sent. do not sent w2_check_mt message again
                                                 session_info.w2_check_mt_sent_at = new Date().getTime() ;
+                                                session_info.this_status = options.status ;
                                                 save_w_session(session_info, {group_debug_seq: group_debug_seq}, function () {
                                                     var pgm = service + '.process_incoming_message.' + request.msgtype + ' save_w_session callback 3/' + group_debug_seq + ': ';
                                                     try { z_publish({publish: true});}
@@ -3450,7 +3495,7 @@ angular.module('MoneyNetworkW2')
                                             try {
                                                 send_w2_start_mt = function (error, cb) {
                                                     var pgm = service + '.process_incoming_message.' + request.msgtype + '.send_w2_start_mt/' + group_debug_seq + ': ';
-                                                    var request2, money_transaction, is_null, optional;
+                                                    var request2, money_transaction, is_null, options;
                                                     if (error && (typeof error != 'string')) {
                                                         console.log(pgm + 'invalid send_w2_start_mt call. First parameter error must be null or a string') ;
                                                         throw pgm + 'invalid send_w2_start_mt call. First parameter error must be null or a string';
@@ -3476,8 +3521,14 @@ angular.module('MoneyNetworkW2')
                                                     //    "pay_results": ["3b49bae7e2b69f17f35c849f7148cd5c4573dc4ec0a25c3d539eca695cee9061", null]
                                                     //};
                                                     if (!session_info.files) session_info.files = {} ;
-                                                    optional = session_info.ip_external ? 'o' : null ;
-                                                    encrypt2.send_message(request2, {optional: optional, subsystem: 'w2', files: session_info.files, group_debug_seq: group_debug_seq}, function (response2, request_filename) {
+                                                    options = {
+                                                        optional: session_info.ip_external ? 'o' : null, // use offline optional file (-o) or normal file
+                                                        subsystem: 'w2',
+                                                        files: session_info.files,
+                                                        status: '3: w2_start_mt sent, waiting for w2_end_mt',
+                                                        group_debug_seq: group_debug_seq
+                                                    } ;
+                                                    encrypt2.send_message(request2, options, function (response2, request_filename) {
                                                         var pgm = service + '.process_incoming_message.' + request.msgtype + '.send_w2_start_mt send_message callback/' + group_debug_seq + ': ';
                                                         if (!response2 || response2.error) {
                                                             error = ['Money transaction post processing failed', 'w2_start_mt message was not send', 'error = ' + JSON.stringify(response2)];
@@ -3490,6 +3541,7 @@ angular.module('MoneyNetworkW2')
                                                         ls.w_files[request_filename] = true ;
                                                         // mark w2_start_mt message as sent. do not sent again
                                                         session_info.w2_start_mt_sent_at = new Date().getTime() ;
+                                                        session_info.this_status = options.status ;
                                                         save_w_session(session_info, {group_debug_seq: group_debug_seq}, function() {
                                                             z_publish({publish: true});
                                                             cb(null)
@@ -3604,6 +3656,7 @@ angular.module('MoneyNetworkW2')
                                                             btcService.init_wallet(status.save_wallet_id, status.save_wallet_password, function (error) {
                                                                 try {
                                                                     if (error && (wallet_info.status != 'Open')) {
+                                                                        if (error.match(/Access-Control-Allow-Origin/)) return btc_cross_domain_error('Cannot open wallet', restart_receive_message, group_debug_seq) ; // halt processing
                                                                         error = ['Money transaction failed', 'Cannot send money', 'Open wallet request failed', error];
                                                                         console.log(pgm + 'todo: mark money transaction as aborted in ls');
                                                                         console.log(pgm + 'todo: update file with money transaction status');
@@ -3690,8 +3743,8 @@ angular.module('MoneyNetworkW2')
                                                                         }
                                                                         else {
                                                                             money_transaction.btc_send_ok = result;
-                                                                            amount_btc = money_transaction.amount ;
-                                                                            amount_satoshi = amount_btc * 100000000 ;
+                                                                            amount_btc = money_transaction.amount.toFixed(8) ;
+                                                                            amount_satoshi = Math.round(money_transaction.amount * 100000000) ;
                                                                             report_error(pgm, [amount_btc + ' tBTC / ' + amount_satoshi + ' test satoshi', 'was sent to ' + session_info.contact.alias], {group_debug_seq: group_debug_seq, end_group_operation: false, type: 'done'}) ;
                                                                         }
                                                                         console.log(pgm + 'money_transaction = ' + JSON.stringify(money_transaction));
@@ -3845,7 +3898,7 @@ angular.module('MoneyNetworkW2')
                                             try {
                                                 // receiver to sender: send w2_end_mt to sender of money transaction. error: w2_start_mt validation error, cb: next step
                                                 send_w2_end_mt = function (error, cb) {
-                                                    var request2, i, money_transaction, optional ;
+                                                    var request2, i, money_transaction, optional, options ;
                                                     if (error && (typeof error != 'string')) {
                                                         error = 'invalid send_w2_end_mt call. First parameter error must be null or a string' ;
                                                         console.log(pgm + error) ;
@@ -3867,8 +3920,14 @@ angular.module('MoneyNetworkW2')
                                                         request2.pay_results.push(money_transaction.btc_send_ok || money_transaction.btc_send_error) ;
                                                     }
                                                     if (!session_info.files) session_info.files = {} ;
-                                                    optional = session_info.ip_external ? 'o' : null ;
-                                                    encrypt2.send_message(request2, {optional: optional, subsystem: 'w2', files: session_info.files, group_debug_seq: group_debug_seq}, function (response2, request_filename) {
+                                                    options = {
+                                                        optional: session_info.ip_external ? 'o' : null, // use offline optional file (-o) or normal file
+                                                        subsystem: 'w2',
+                                                        files: session_info.files,
+                                                        status: '4: w2_end_mt sent, waiting for w2_cleanup_mt',
+                                                        group_debug_seq: group_debug_seq
+                                                    } ;
+                                                    encrypt2.send_message(request2, options, function (response2, request_filename) {
                                                         var pgm = service + '.process_incoming_message.' + request.msgtype + '.send_w2_end_mt send_message callback/' + group_debug_seq + ': ';
                                                         if (!response2 || response2.error) {
                                                             error = ['Money transaction stopped', 'w2_end_mt message was not send', 'error = ' + JSON.stringify(response2)];
@@ -3885,6 +3944,7 @@ angular.module('MoneyNetworkW2')
                                                         ls.w_files[request_filename] = true ;
                                                         // mark w2_end_mt message as sent. do not sent again
                                                         session_info.w2_end_mt_sent_at = new Date().getTime() ;
+                                                        session_info.this_status = options.status ;
                                                         cleanup_session_info(session_info) ;
                                                         save_w_session(session_info, {group_debug_seq: group_debug_seq}, function() {
                                                             z_publish({publish: true});
@@ -3969,6 +4029,7 @@ angular.module('MoneyNetworkW2')
                                                     btcService.init_wallet(status.save_wallet_id, status.save_wallet_password, function (error) {
                                                         try {
                                                             if (error && (wallet_info.status != 'Open')) {
+                                                                if (error.match(/Access-Control-Allow-Origin/)) return btc_cross_domain_error('Cannot open wallet', restart_receive_message, group_debug_seq) ; // halt processing
                                                                 error = ['Money transaction failed', 'Open wallet request failed', error] ;
                                                                 console.log(pgm + 'todo: save updated money transaction in ls');
                                                                 console.log(pgm + 'todo: update file with money transaction status');
@@ -4026,7 +4087,7 @@ angular.module('MoneyNetworkW2')
                                                                 }
                                                                 else {
                                                                     money_transaction.btc_send_ok = result;
-                                                                    amount_btc = money_transaction.amount ;
+                                                                    amount_btc = money_transaction.amount.toFixed(8) ;
                                                                     amount_satoshi = Math.round(amount_btc * 100000000) ;
                                                                     report_error(pgm, [amount_btc + ' tBTC / ' + amount_satoshi + ' test satoshi', 'was sent to ' + session_info.contact.alias], {group_debug_seq: group_debug_seq, end_group_operation: false, type: 'done'}) ;
                                                                 }
@@ -4094,7 +4155,7 @@ angular.module('MoneyNetworkW2')
                                                             console.log(pgm + 'expected_amount = ' + expected_amount + ', received_amount = ' + received_amount) ;
                                                             if (Math.round(Math.abs(expected_amount - received_amount)) == 0) {
                                                                 console.log(pgm + 'Everything is fine. todo: notification in UI.') ;
-                                                                amount_btc = money_transaction.amount ;
+                                                                amount_btc = money_transaction.amount.toFixed(8) ;
                                                                 amount_satoshi = expected_amount ;
                                                                 report_error(pgm, [amount_btc + ' tBTC / ' + amount_satoshi + ' test satoshi', 'was received from ' + session_info.contact.alias], {group_debug_seq: group_debug_seq, end_group_operation: false, type: 'done'}) ;
                                                                 return send_or_check_money(i + 1);
@@ -4110,7 +4171,7 @@ angular.module('MoneyNetworkW2')
                                                         var pgm = service + '.process_incoming_message.' + request.msgtype + '.send_or_check_money/' + group_debug_seq + ': ';
                                                         var money_transaction;
                                                         if (i >= session_info.money_transactions.length) {
-                                                            console.log(pgm + 'done sending and checking money. ');
+                                                            console.log(pgm + 'done sending and checking money');
                                                             console.log(pgm + 'todo: report status for send_money operations');
                                                             console.log(pgm + 'todo: update transaction status on file system');
                                                             // mark w2_start_mt message as received. do not process again
@@ -4234,7 +4295,7 @@ angular.module('MoneyNetworkW2')
 
                                                 // sender to receiver: send w2_cleanup_mt to sender of money transaction. error: w2_end_mt validation error, cb: next step
                                                 send_w2_cleanup_mt = function (error, cb) {
-                                                    var request2, optional ;
+                                                    var request2, options ;
                                                     if (error && (typeof error != 'string')) {
                                                         error = 'invalid send_w2_cleanup_mt call. First parameter error must be null or a string' ;
                                                         console.log(pgm + error) ;
@@ -4251,11 +4312,15 @@ angular.module('MoneyNetworkW2')
                                                     } ;
                                                     if (error) request2.error = error ;
 
-                                                    // message is sent as a -o offline file (ZeroNet port open) or a normale file (ZeroNet port is closed)
                                                     // message is NOT added to list of files in session_info.files / ls.w_files
-                                                    // = cleanup in next wallet page reload
-                                                    optional = session_info.ip_external ? 'o' : null ;
-                                                    encrypt2.send_message(request2, {optional: optional, subsystem: 'w2', group_debug_seq: group_debug_seq}, function (response2, request_filename) {
+                                                    // == cleanup in next wallet page reload
+                                                    options = {
+                                                        optional: session_info.ip_external ? 'o' : null, // use offline optional file (-o) or normal file
+                                                        subsystem: 'w2',
+                                                        status: '5: w2_cleanup_mt sent, done',
+                                                        group_debug_seq: group_debug_seq
+                                                    } ;
+                                                    encrypt2.send_message(request2, options, function (response2, request_filename) {
                                                         var pgm = service + '.process_incoming_message.' + request.msgtype + '.send_w2_end_mt send_message callback/' + group_debug_seq + ': ';
                                                         if (!response2 || response2.error) {
                                                             error = ['Money transaction stopped', 'w2_end_mt message was not send', 'error = ' + JSON.stringify(response2)];
@@ -4270,6 +4335,7 @@ angular.module('MoneyNetworkW2')
                                                         console.log(pgm + 'request_filename = ' + JSON.stringify(request_filename));
                                                         // mark w2_cleanup_mt message as sent. do not sent again
                                                         session_info.w2_cleanup_mt_sent_at = new Date().getTime() ;
+                                                        session_info.this_status = options.status ;
                                                         cleanup_session_info(session_info) ;
                                                         save_w_session(session_info, {group_debug_seq: group_debug_seq}, function() {
                                                             z_publish({publish: true});
@@ -4346,6 +4412,7 @@ angular.module('MoneyNetworkW2')
                                                     btcService.init_wallet(status.save_wallet_id, status.save_wallet_password, function (error) {
                                                         try {
                                                             if (error && (wallet_info.status != 'Open')) {
+                                                                if (error.match(/Access-Control-Allow-Origin/)) return btc_cross_domain_error('Cannot open wallet', restart_receive_message, group_debug_seq) ; // halt processing
                                                                 error = ['Money transaction failed', 'Open wallet request failed', error] ;
                                                                 console.log(pgm + 'todo: save updated money transaction in ls');
                                                                 console.log(pgm + 'todo: update file with money transaction status');
@@ -4390,9 +4457,7 @@ angular.module('MoneyNetworkW2')
                                                             // mark w2_end_mt message as received. do not process again
                                                             session_info.w2_end_mt_received_at = new Date().getTime() ;
                                                             optional_close_wallet(function() {
-                                                                send_w2_cleanup_mt(null, function() {
-                                                                    MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq) ;
-                                                                })
+                                                                send_w2_cleanup_mt() ;
                                                             }) ;
                                                             return;
                                                         }
@@ -4446,7 +4511,7 @@ angular.module('MoneyNetworkW2')
                                                             }
                                                             console.log(pgm + 'expected_amount = ' + expected_amount + ', received_amount = ' + received_amount) ;
                                                             if (Math.round(Math.abs(expected_amount - received_amount)) == 0) {
-                                                                amount_btc = money_transaction.amount ;
+                                                                amount_btc = money_transaction.amount.toFixed(8) ;
                                                                 amount_satoshi = expected_amount ;
                                                                 report_error(pgm, [amount_btc + ' tBTC / ' + amount_satoshi + ' test satoshi', 'was received from ' + session_info.contact.alias], {group_debug_seq: group_debug_seq, end_group_operation: false, type: 'done'}) ;
                                                                 return check_money(i + 1);
@@ -4509,8 +4574,7 @@ angular.module('MoneyNetworkW2')
                                 read_w_session(encrypt2.sessionid, {group_debug_seq: group_debug_seq}, function (session_info)  {
                                     var pgm = service + '.process_incoming_message.' + request.msgtype + ' read_w_session callback 1/' + group_debug_seq + ': ';
                                     try {
-                                        var wallet_was_open, optional_open_wallet, optional_close_wallet, error, i,
-                                            money_transaction, no_pay_ok, no_pay_error, delete_old_w2_end_mt_msg ;
+                                        var delete_old_w2_end_mt_msg ;
 
                                         console.log(pgm + 'session_info = ' + JSON.stringify(session_info));
                                         if (!session_info) {
@@ -4537,21 +4601,39 @@ angular.module('MoneyNetworkW2')
                                         // - "sender" must have received "w2_end_mt" message from "receiver"
                                         // - find and delete old w2_end_mt message from receiver to sender
 
+                                        console.log(pgm + 'todo: received w2_cleanup_mt. Not sending any msg to other wallet. update transaction status in file system to 6: received w2_cleanup_mt, done');
+
                                         delete_old_w2_end_mt_msg = function(cb) {
                                             delete_old_msg({session_info: session_info, msg_name: 'w2_end_mt', encrypt: encrypt2, group_debug_seq: group_debug_seq}, cb) ;
                                         } ;
                                         delete_old_w2_end_mt_msg(function() {
                                             var pgm = service + '.process_incoming_message.' + request.msgtype + ' delete_old_w2_end_mt_msg callback 2/' + group_debug_seq + ': ';
+                                            var status, options ;
                                             try {
                                                 if (request.error) {
-                                                    // w2_start_mt check failed. money transaction was aborted by receiver of money transaction
+                                                    // w2_end_mt check failed. money transaction was aborted by sender of money transaction
                                                     console.log(pgm + 'todo: mark money transaction as aborted in ls');
                                                     console.log(pgm + 'todo: update file with money transaction status');
                                                     return report_error(pgm, error, {group_debug_seq: group_debug_seq}) ;
                                                 }
-                                                session_info.w2_cleanup_mt_received_at = new Date().getTime() ;
-                                                cleanup_session_info(session_info) ;
-                                                save_w_session(session_info, {group_debug_seq: group_debug_seq}) ;
+                                                // update money transaction status
+                                                status = '6: receive w2_cleanup_mt, done' ;
+                                                options = {
+                                                    optional: session_info.ip_external ? '-o' : '',
+                                                    group_debug_seq: group_debug_seq
+                                                } ;
+                                                encrypt2.update_wallet_status(status, options, function (res) {
+                                                    var pgm = service + '.process_incoming_message.' + request.msgtype + ' update_wallet_status callback 3/' + group_debug_seq + ': ';
+                                                    console.log(pgm + 'res = ' + JSON.stringify(res)) ;
+                                                    // cleanup
+                                                    session_info.w2_cleanup_mt_received_at = new Date().getTime() ;
+                                                    session_info.this_status = status ;
+                                                    cleanup_session_info(session_info) ;
+                                                    save_w_session(session_info, {group_debug_seq: group_debug_seq}, function() {
+                                                        MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq) ;
+                                                        z_publish({publish: true});
+                                                    }) ;
+                                                }) ;
 
                                             }
                                             catch (e) {
@@ -4588,6 +4670,40 @@ angular.module('MoneyNetworkW2')
                         return ; // no OK response to offline w2_cleanup_mt
                         // w2_cleanup_mt
                     }
+                    else if (request.msgtype == 'status_mt') {
+                        // received money transaction status from other wallet. short text.
+                        (function status_mt() {
+                            var pgm = service + '.process_incoming_message.' + request.msgtype + '/' + group_debug_seq + ': ';
+                            var inner_path ;
+                            try {
+                                // 1: load session_info
+                                read_w_session(encrypt2.sessionid, {group_debug_seq: group_debug_seq}, function (session_info)  {
+                                    var pgm = service + '.process_incoming_message.' + request.msgtype + ' read_w_session callback 1/' + group_debug_seq + ': ';
+                                    var error ;
+                                    if (!session_info) {
+                                        error = 'error. could not find session_info for wallet session with sessionid ' + encrypt2.sessionid ;
+                                        console.log(pgm + error) ;
+                                        MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq, error) ;
+                                        return ;
+                                    }
+                                    session_info.other_status = request.status ;
+                                    save_w_session(session_info, {group_debug_seq: group_debug_seq}, function() {
+                                        MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq) ;
+                                    }) ;
+                                }) ; // read_w_session callback 1
+                            }
+                            catch (e) {
+                                // receive message status_mt failed.
+                                if (!e) return ; // exception in MoneyNetworkAPI instance
+                                console.log(pgm + e.message);
+                                console.log(e.stack);
+                                report_error(pgm, ["JS exception", e.message], {log: false, group_debug_seq: group_debug_seq}) ;
+                                throw(e);
+                            }
+                        })() ;
+                        return ;
+                        // status_mt
+                    }
                     else if (request.msgtype == 'timeout') {
                         // timeout message from MoneyNetwork. MoneyNetwork sent response after timeout. There may be a timeout failure in W2 session
                         // merge MN process information and wallet process information.
@@ -4611,6 +4727,12 @@ angular.module('MoneyNetworkW2')
                                         console.log(pgm + error) ;
                                         MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq, error) ;
                                         return ;
+                                    }
+                                    // check files
+                                    if (!session_info.files) session_info.files = {} ;
+                                    if (!session_info.files[request.filename]) {
+                                        console.log(pgm + 'todo: abort processing? ' + request.filename + ' is not in files') ;
+                                        console.log(pgm + 'files = ' + JSON.stringify(session_info.files)) ;
                                     }
                                     try {
                                         // 2: read old file
@@ -4674,7 +4796,7 @@ angular.module('MoneyNetworkW2')
                                                                 // 5: save session info
                                                                 MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq) ;
                                                                 if (old_request) {
-                                                                    save_w_session(session_info, {}, function() {
+                                                                    save_w_session(session_info, {group_debug_seq: group_debug_seq}, function() { // xxx
                                                                         z_publish({publish: true}) ;
                                                                     })
                                                                 }
@@ -5162,7 +5284,21 @@ angular.module('MoneyNetworkW2')
                         var pgm = service + '.is_old_session decrypt_2 callback 2: ' ;
                         var array_names, array, i, temp_pwd1, request ;
                         array_names = ['session_pwd1', 'unlock_pwd2', 'this_session_filename', 'other_session_filename'] ;
-                        array = JSON.parse(decrypted_info) ; // [ session_pwd1, unlock_pwd2, this_session_filename, other_session_filename]
+                        try {
+                            array = JSON.parse(decrypted_info) ; // [ session_pwd1, unlock_pwd2, this_session_filename, other_session_filename]
+                        }
+                        catch (e) {
+                            console.log(pgm + 'error in saved session for ' + auth_address + '. Expected json string. decrypted_info = ' + decrypted_info + '. error = ' + e.message) ;
+                            delete ls.mn_sessions[auth_address] ;
+                            ls_save() ;
+                            return cb() ;
+                        }
+                        if (!Array.isArray(array)) {
+                            console.log(pgm + 'error in saved session for ' + auth_address + '. Expected array. found ' + (typeof array) + '. decrypted_info = ' + decrypted_info) ;
+                            delete ls.mn_sessions[auth_address] ;
+                            ls_save() ;
+                            return cb() ;
+                        }
                         if (array.length != array_names.length) {
                             console.log(pgm + 'error in saved session for ' + auth_address + '. Expected encrypted_info array.length = ' + array_names.length + '. Found length = ' + array.length) ;
                             delete ls.mn_sessions[auth_address] ;
