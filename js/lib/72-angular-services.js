@@ -1703,10 +1703,10 @@ angular.module('MoneyNetworkW2')
             // check money error: {"crossDomain":true}
             // open wallet error: Origin is not allowed by Access-Control-Allow-Origin
             // halt message processing and alert user in a confirm dialog
-            function btc_cross_domain_error (error, restart_receive_message, group_debug_seq) {
+            function btc_cross_domain_error (error, restart_receive_message, session_info, group_debug_seq) {
                 save_w_session(session_info, {group_debug_seq: group_debug_seq}, function () {
-                    var pgm = service + '..btc_cross_domain_error save_w_session callback 1/' + group_debug_seq + ': ';
-                    var message, restart_receive_w2_start_mt, confirm_status, request2 ;
+                    var pgm = service + '.btc_cross_domain_error save_w_session callback 1/' + group_debug_seq + ': ';
+                    var message, confirm_status, request2 ;
                     console.log(pgm + 'saved session_info in ls');
                     message = ['Communication with btc.com failed', error, 'Origin is not allowed by Access-Control-Allow-Origin', 'Please disable VPN and press OK'] ;
 
@@ -1720,7 +1720,7 @@ angular.module('MoneyNetworkW2')
                         confirm_status.done = true ;
                         if (!confirm) return ; // do nothing.
                         // confirmed. restart processing
-                        restart_receive_w2_start_mt();
+                        restart_receive_message();
                     }) ;
                     // path 2) confirm box in MN
                     request2 = {
@@ -1732,13 +1732,13 @@ angular.module('MoneyNetworkW2')
                     // timeout 600 seconds = 10 minutes
                     encrypt2.send_message(request2, {response: 600000, group_debug_seq: group_debug_seq}, function (response) {
                         try {
-                            var pgm = service + '..btc_cross_domain_error send_message callback 2/' + group_debug_seq + ': ';
+                            var pgm = service + '.btc_cross_domain_error send_message callback 2/' + group_debug_seq + ': ';
                             if (confirm_status.done) return; // confirm dialog done (OK or timeout)
                             confirm_status.done = true ;
                             // response should be OK or timeout
                             if (response && !response.error) {
                                 // confirmed. continue
-                                return restart_receive_w2_start_mt() ;
+                                return restart_receive_message() ;
                             }
                             if (response && response.error && response.error.match(/^Timeout /)) {
                                 // OK. timeout after 600 seconds. No or late user feedback in MN session
@@ -3656,7 +3656,7 @@ angular.module('MoneyNetworkW2')
                                                             btcService.init_wallet(status.save_wallet_id, status.save_wallet_password, function (error) {
                                                                 try {
                                                                     if (error && (wallet_info.status != 'Open')) {
-                                                                        if (error.match(/Access-Control-Allow-Origin/)) return btc_cross_domain_error('Cannot open wallet', restart_receive_message, group_debug_seq) ; // halt processing
+                                                                        if (error.match(/Access-Control-Allow-Origin/)) return btc_cross_domain_error('Cannot open wallet', restart_receive_message, session_info, group_debug_seq) ; // halt processing
                                                                         error = ['Money transaction failed', 'Cannot send money', 'Open wallet request failed', error];
                                                                         console.log(pgm + 'todo: mark money transaction as aborted in ls');
                                                                         console.log(pgm + 'todo: update file with money transaction status');
@@ -3734,7 +3734,7 @@ angular.module('MoneyNetworkW2')
                                                                         if (err) {
                                                                             if ((typeof err == 'object') && err.message) err = err.message;
                                                                             money_transaction.btc_send_error = err;
-                                                                            if (err.match(/Access-Control-Allow-Origin/)) return btc_cross_domain_error('Cannot send money', restart_receive_message, group_debug_seq) ; // halt processing
+                                                                            if (err.match(/Access-Control-Allow-Origin/)) return btc_cross_domain_error('Cannot send money', restart_receive_message, session_info, group_debug_seq) ; // halt processing
                                                                             report_error(pgm, ["Money was not sent", err], {
                                                                                 group_debug_seq: group_debug_seq,
                                                                                 end_group_operation: false
@@ -4029,7 +4029,7 @@ angular.module('MoneyNetworkW2')
                                                     btcService.init_wallet(status.save_wallet_id, status.save_wallet_password, function (error) {
                                                         try {
                                                             if (error && (wallet_info.status != 'Open')) {
-                                                                if (error.match(/Access-Control-Allow-Origin/)) return btc_cross_domain_error('Cannot open wallet', restart_receive_message, group_debug_seq) ; // halt processing
+                                                                if (error.match(/Access-Control-Allow-Origin/)) return btc_cross_domain_error('Cannot open wallet', restart_receive_message, session_info, group_debug_seq) ; // halt processing
                                                                 error = ['Money transaction failed', 'Open wallet request failed', error] ;
                                                                 console.log(pgm + 'todo: save updated money transaction in ls');
                                                                 console.log(pgm + 'todo: update file with money transaction status');
@@ -4081,7 +4081,7 @@ angular.module('MoneyNetworkW2')
                                                                 if (err) {
                                                                     if ((typeof err == 'object') && err.message) err = err.message;
                                                                     money_transaction.btc_send_error = err;
-                                                                    if (err.match(/Access-Control-Allow-Origin/)) return btc_cross_domain_error('Cannot send money', restart_receive_message, group_debug_seq) ; // halt processing
+                                                                    if (err.match(/Access-Control-Allow-Origin/)) return btc_cross_domain_error('Cannot send money', restart_receive_message, session_info, group_debug_seq) ; // halt processing
                                                                     report_error(pgm, err,  {group_debug_seq: group_debug_seq, end_group_operation: false}) ;
                                                                     console.log(pgm + 'todo: retry, abort or ?')
                                                                 }
@@ -4117,7 +4117,7 @@ angular.module('MoneyNetworkW2')
                                                             var expected_amount, received_amount, j, output, amount_btc, amount_satoshi ;
                                                             console.log(pgm + 'err = ' + JSON.stringify(err)) ;
                                                             console.log(pgm + 'tx = ' + JSON.stringify(tx)) ;
-                                                            if (err && err.crossDomain) return btc_cross_domain_error('Cannot verify bitcoin transactionid', restart_receive_message, group_debug_seq) ; // halt processing
+                                                            if (err && err.crossDomain) return btc_cross_domain_error('Cannot verify bitcoin transactionid', restart_receive_message, session_info, group_debug_seq) ; // halt processing
                                                             if (err && err.code == 404) {
                                                                 //err = {"code":404}
                                                                 //tx = {"code":404,"msg":"Transaction not found"}
@@ -4412,7 +4412,7 @@ angular.module('MoneyNetworkW2')
                                                     btcService.init_wallet(status.save_wallet_id, status.save_wallet_password, function (error) {
                                                         try {
                                                             if (error && (wallet_info.status != 'Open')) {
-                                                                if (error.match(/Access-Control-Allow-Origin/)) return btc_cross_domain_error('Cannot open wallet', restart_receive_message, group_debug_seq) ; // halt processing
+                                                                if (error.match(/Access-Control-Allow-Origin/)) return btc_cross_domain_error('Cannot open wallet', restart_receive_message, session_info, group_debug_seq) ; // halt processing
                                                                 error = ['Money transaction failed', 'Open wallet request failed', error] ;
                                                                 console.log(pgm + 'todo: save updated money transaction in ls');
                                                                 console.log(pgm + 'todo: update file with money transaction status');
@@ -4473,7 +4473,7 @@ angular.module('MoneyNetworkW2')
                                                             var expected_amount, received_amount, j, output, amount_btc, amount_satoshi ;
                                                             console.log(pgm + 'err = ' + JSON.stringify(err)) ;
                                                             console.log(pgm + 'tx = ' + JSON.stringify(tx)) ;
-                                                            if (err && err.crossDomain) return btc_cross_domain_error('Cannot verify bitcoin transactionid', restart_receive_message, group_debug_seq) ; // halt processing
+                                                            if (err && err.crossDomain) return btc_cross_domain_error('Cannot verify bitcoin transactionid', restart_receive_message, session_info, group_debug_seq) ; // halt processing
                                                             if (err && err.code == 404) {
                                                                 //err = {"code":404}
                                                                 //tx = {"code":404,"msg":"Transaction not found"}
