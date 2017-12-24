@@ -1389,6 +1389,7 @@ angular.module('MoneyNetworkW2')
 
 
             // after load old wallet sessions. cleanup offline and normal files that is not in session_info.files objects ( = ls.w_files )
+            // for example waiting_for_file requests and status_mt messages
             function cleanup_offline_session_files () {
                 var pgm = service + '.cleanup_offline_session_files: ';
                 var session_files, filename, directory, w2_query_7, debug_seq, auth_address, sha256, session_info, ls_updated ;
@@ -1447,23 +1448,6 @@ angular.module('MoneyNetworkW2')
                         else db_files[i] = db_files[i].filename ;
                     }
                     console.log(pgm + 'db_files = ' + JSON.stringify(db_files));
-                    //db_files = [
-                    //    "0fdfdb7dc9-o.1512129771660", "a932f57dcd-o.1512390209794", "bc29c335da-o.1512120964012",
-                    //    "74aff4c388-o.1512410824922", "7256a67c7e-o.1512397207261", "a932f57dcd-o.1512390150104",
-                    //    "e9b88eb32a-o.1512311372878", "0fdfdb7dc9-o.1512129709677", "63378fdc70-o.1512042065577",
-                    //    "dc06aad894-o.1512049190096", "1a63dae4d6-o.1512310819048", "572bba988f-o.1512466704466",
-                    //    "a083b24cf9-o.1512310819568", "63378fdc70-o.1512048265554", "dc06aad894-o.1512048894220",
-                    //    "0ae57e1267-o.1512122082534", "0ae57e1267-o.1512122016693", "e17de9be9e-o.1512464275445",
-                    //    "3a2706c5a7.1512063912370", "605599dbef.1511945421658", "1ec27dc9f2.1512060811941",
-                    //    "04d96035b0.1512309415144", "3a2706c5a7.1512063705424", "04d96035b0.1512209753726",
-                    //    "35451b596d.1512061946831", "04d96035b0.1512375134746", "0af15b2b3e.1512060875951",
-                    //    "04d96035b0.1512205178783", "04d96035b0.1512314541358", "35451b596d.1512062262691",
-                    //    "3a2706c5a7.1512064124867", "63378fdc70.1512042491424", "3a2706c5a7.1512063862884",
-                    //    "91713d47f2.1512059448212", "dc06aad894.1512049075461", "04d96035b0.1512315867644",
-                    //    "04d96035b0.1512145711239", "b25daae436.1512042028467", "3a2706c5a7.1512063953582",
-                    //    "04d96035b0.1512311432889", "e9b88eb32a.1512058689075", "04d96035b0.1512208077481",
-                    //    "04d96035b0.1512310884311", "04d96035b0.1512208285779", "04d96035b0.1512313549886",
-                    //    "04d96035b0.1512210296651"];
 
                     delete_files = [] ;
                     for (i=0 ; i<db_files.length ; i++) {
@@ -1471,21 +1455,6 @@ angular.module('MoneyNetworkW2')
                         if (session_files.indexOf(filename) == -1) delete_files.push(filename) ;
                     }
                     console.log(pgm + 'delete_files = ' + JSON.stringify(delete_files)) ;
-                    //delete_files = [
-                    //    "0fdfdb7dc9-o.1512129771660", "bc29c335da-o.1512120964012", "e9b88eb32a-o.1512311372878",
-                    //    "7256a67c7e-o.1512397207261", "0fdfdb7dc9-o.1512129709677", "63378fdc70-o.1512042065577",
-                    //    "dc06aad894-o.1512049190096", "1a63dae4d6-o.1512310819048", "a083b24cf9-o.1512310819568",
-                    //    "63378fdc70-o.1512048265554", "dc06aad894-o.1512048894220", "0ae57e1267-o.1512122082534",
-                    //    "0ae57e1267-o.1512122016693", "3a2706c5a7.1512063912370", "605599dbef.1511945421658",
-                    //    "1ec27dc9f2.1512060811941", "04d96035b0.1512309415144", "3a2706c5a7.1512063705424",
-                    //    "04d96035b0.1512209753726", "35451b596d.1512061946831", "04d96035b0.1512375134746",
-                    //    "0af15b2b3e.1512060875951", "04d96035b0.1512205178783", "04d96035b0.1512314541358",
-                    //    "35451b596d.1512062262691", "3a2706c5a7.1512064124867", "63378fdc70.1512042491424",
-                    //    "3a2706c5a7.1512063862884", "91713d47f2.1512059448212", "dc06aad894.1512049075461",
-                    //    "04d96035b0.1512315867644", "04d96035b0.1512145711239", "b25daae436.1512042028467",
-                    //    "3a2706c5a7.1512063953582", "04d96035b0.1512311432889", "e9b88eb32a.1512058689075",
-                    //    "04d96035b0.1512208077481", "04d96035b0.1512310884311", "04d96035b0.1512208285779",
-                    //    "04d96035b0.1512313549886", "04d96035b0.1512210296651"];
                     if (!delete_files.length) return ;
 
                     MoneyNetworkAPILib.start_transaction(pgm, function (transaction_timestamp) {
@@ -4742,7 +4711,8 @@ angular.module('MoneyNetworkW2')
                                             var error, json, re ;
                                             try {
                                                 if (!json_str) {
-                                                    error = 'error. could not find ' + inner_path ;
+                                                    // OK. file deleted by W2 cleanup utility after page reload.
+                                                    error = 'ignoring waiting_for_file message. could not find ' + inner_path ;
                                                     console.log(pgm + error) ;
                                                     MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq, error) ;
                                                     return ;
