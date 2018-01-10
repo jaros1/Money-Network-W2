@@ -138,13 +138,15 @@ angular.module('MoneyNetworkW2')
                     });
             } // get_new_address
 
+            var one_hundred_millions = 100000000 ; // convert between bitcoins and satoshi
+
             // confirm: true from w2 UI. false in wallet-wallet communication.
             function send_money (address, amount, confirm, cb) {
                 var pgm = service + '.send_money: ' ;
                 var satoshi, btc, optional_confirm_send_money ;
                 if (!bitcoin_wallet) return cb('No bitcoin wallet found') ;
                 satoshi = parseInt(amount) ;
-                btc = satoshi / 100000000 ;
+                btc = satoshi / one_hundred_millions ;
 
                 optional_confirm_send_money = function (cb) {
                     if (!confirm) return cb() ;
@@ -179,7 +181,8 @@ angular.module('MoneyNetworkW2')
                 delete_wallet: delete_wallet,
                 get_new_address: get_new_address,
                 send_money: send_money,
-                get_transaction: get_transaction
+                get_transaction: get_transaction,
+                one_hundred_millions: one_hundred_millions
             };
 
             // end btcService
@@ -195,6 +198,8 @@ angular.module('MoneyNetworkW2')
 
             // for MN <=> W2 integration
             var wallet_info = btcService.get_wallet_info() ;
+            var one_hundred_millions = btcService.one_hundred_millions ;
+            // console.log(service + ': one_hundred_millions = ' + one_hundred_millions) ;
 
             // localStorage wrapper. avoid some ZeroNet callbacks. cache localStorage in ls hash
             // ls.save_login[auth_address] = { choice: '0', '1', '2' or '3', login: <choice 1: encrypted or unencrypted login> }
@@ -308,7 +313,7 @@ angular.module('MoneyNetworkW2')
                                 "properties": {
                                     "action": { "type": 'string', "pattern": '^(Send|Request)$'},
                                     "code": {"type": 'string', "minLength": 2, "maxLength": 5},
-                                    "amount": {"type": 'number'},
+                                    "amount": {"type": ['number', 'string'], "description": 'number or string with a formatted number (number.toFixed)'},
                                     "json": {
                                         "type": 'object',
                                         "properties": {
@@ -1207,8 +1212,8 @@ angular.module('MoneyNetworkW2')
                             url: 'https://en.bitcoin.it/wiki/Testnet',
                             fee_info: 'Fee is calculated by external API (btc.com) and subtracted from amount. Calculated from the last X block in block chain. Lowest fee that still had more than an 80% chance to be confirmed in the next block.',
                             units: [
-                                { unit: 'BitCoin', factor: 1 },
-                                { unit: 'Satoshi', factor: 0.00000001 }
+                                { unit: 'BitCoin', factor: 1, decimals: 8 },
+                                { unit: 'Satoshi', factor: 0.00000001, decimals: 0 }
                             ]
                         }];
                         wallet.api_url = 'https://www.blocktrail.com/api/docs' ;
@@ -1458,7 +1463,15 @@ angular.module('MoneyNetworkW2')
                         if (session_files.indexOf(filename) == -1) delete_files.push(filename) ;
                     }
                     console.log(pgm + 'delete_files = ' + JSON.stringify(delete_files)) ;
-                    if (!delete_files.length) return ;
+                    if (!delete_files.length) {
+                        if (z_publish_pending) {
+                            console.log(pgm + 'pending publish. wallet.json updated? temporary session files deleted? publish to distribute changes to other users');
+                            z_publish({publish: true, reason: 'cleanup_offline_session_files. pending publish'}, function (res) {
+                                if (ls_updated) ls_save() ;
+                            });
+                        }
+                        return ;
+                    }
 
                     MoneyNetworkAPILib.start_transaction(pgm, function (transaction_timestamp) {
                         var pgm = service + '.cleanup_offline_session_files start_transaction callback 2: ';
@@ -1481,7 +1494,7 @@ angular.module('MoneyNetworkW2')
                                     }) ;
                                 }
                                 else if (z_publish_pending) {
-                                    console.log(pgm + 'pending publish. See wallet.json file was updated. publish to distribute info to other users');
+                                    console.log(pgm + 'pending publish. wallet.json updated? temporary session files deleted? publish to distribute changes to other users');
                                     z_publish({publish: true, reason: 'cleanup_offline_session_files. pending publish'}, function (res) {
                                         if (ls_updated) ls_save() ;
                                     });
@@ -2148,16 +2161,28 @@ angular.module('MoneyNetworkW2')
                                 var pgm = service + '.process_incoming_message.' + request.msgtype + '/' + group_debug_seq + ': ';
                                 var send_money, request_money, i, money_transaction, jsons, step_1_confirm,
                                     step_2_open_wallet, step_3_check_balance, step_4_get_new_address,
-                                    step_5_close_wallet, step_6_done_ok;
+                                    step_5_close_wallet, step_6_done_ok, amount2;
+
+                                // check amount. must be a number (round to 8 decimals) or a string with 8 decimals
+                                for (i = 0; i < request.money_transactions.length; i++) {
+                                    money_transaction = request.money_transactions[i];
+                                    if (typeof money_transaction.amount == 'number') money_transaction.amount.toFixed(8);
+                                    else {
+                                        // string. must be bitcoin amount with 8 decimals
+                                        amount2 = parseFloat(money_transaction.amount).toFixed(8) ;
+                                        if (money_transaction.amount != amount2) return send_response('Expected amount in bitcoins with 8 decimals. "' + money_transaction.amount + '" != "' + amount2 + '"') ;
+                                    }
+                                }
 
                                 // check permissions
-                                send_money = false;
-                                request_money = false;
+                                send_money = 0;
+                                request_money = 0;
                                 jsons = [];
                                 for (i = 0; i < request.money_transactions.length; i++) {
                                     money_transaction = request.money_transactions[i];
-                                    if (money_transaction.action == 'Send') send_money = send_money + money_transaction.amount;
-                                    if (money_transaction.action == 'Request') request_money = request_money + money_transaction.amount;
+                                    amount2 = typeof money_transaction.amount == 'number' ? money_transaction.amount : parseFloat(money_transaction.amount) ;
+                                    if (money_transaction.action == 'Send') send_money = send_money + amount2;
+                                    if (money_transaction.action == 'Request') request_money = request_money + amount2;
                                     jsons.push({});
                                 }
                                 console.log(pgm + 'send_money = ' + send_money + ', request_money = ' + request_money);
@@ -2575,7 +2600,7 @@ angular.module('MoneyNetworkW2')
                         (function check_mt(){
                             try {
                                 var send_money, request_money, jsons, i, money_transaction, step_1_load_session, step_2_confirm,
-                                    step_3_open_wallet, step_4_check_balance, step_5_get_new_address, step_6_more;
+                                    step_3_open_wallet, step_4_check_balance, step_5_get_new_address, step_6_more, amount2;
 
                                 console.log(pgm + 'request = ' + JSON.stringify(request));
                                 //request = {
@@ -2595,21 +2620,32 @@ angular.module('MoneyNetworkW2')
                                 //    "money_transactionid": "3R1R46sRFEal8zWx0wYvYyo6VDLJmpFzVNsyIOhglPV4bcUgXqUDLOWrOkZA"
                                 //};
 
+                                // check amount. must be a number (round to 8 decimals) or a string with 8 decimals
+                                for (i = 0; i < request.money_transactions.length; i++) {
+                                    money_transaction = request.money_transactions[i];
+                                    if (typeof money_transaction.amount == 'number') money_transaction.amount.toFixed(8);
+                                    else {
+                                        // string. must be bitcoin amount with 8 decimals
+                                        amount2 = parseFloat(money_transaction.amount).toFixed(8) ;
+                                        if (money_transaction.amount != amount2) return send_response('Expected amount in bitcoins with 8 decimals. "' + money_transaction.amount + '" != "' + amount2 + '"') ;
+                                    }
+                                }
 
                                 // check permissions. reverse action from incoming money transaction (send <=> request)
-                                send_money = false;
-                                request_money = false;
+                                send_money = 0;
+                                request_money = 0;
                                 jsons = [];
                                 for (i = 0; i < request.money_transactions.length; i++) {
                                     money_transaction = request.money_transactions[i];
                                     if (!money_transaction.json) return send_response('Invalid money transaction without json');
+                                    amount2 = typeof money_transaction.amount == 'number' ? money_transaction.amount : parseFloat(money_transaction.amount) ;
                                     if (money_transaction.action == 'Send') {
                                         if (!money_transaction.json.return_address) return send_response('Invalid send money transaction without a return address');
-                                        request_money = request_money + money_transaction.amount;
+                                        request_money = request_money + amount2;
                                     } // reverse action
                                     if (money_transaction.action == 'Request') {
                                         if (!money_transaction.json.address) return send_response('Invalid request money transaction without an address');
-                                        send_money = send_money + money_transaction.amount;
+                                        send_money = send_money + amount2;
                                     } // reverse action
                                     jsons.push({});
                                 }
@@ -3705,8 +3741,8 @@ angular.module('MoneyNetworkW2')
                                                                 money_transaction = session_info.money_transactions[i];
                                                                 if (money_transaction.action != 'Send') return send_money(i + 1); // Receive money. must be started by contact wallet
                                                                 if (money_transaction.code != 'tBTC') return send_money(i + 1); // not test Bitcoins
-                                                                amount_bitcoin = money_transaction.amount;
-                                                                amount_satoshi = '' + Math.round(amount_bitcoin * 100000000);
+                                                                amount_bitcoin = typeof money_transaction.amount == 'number' ? money_transaction.amount : parseFloat(money_transaction.amount);
+                                                                amount_satoshi = '' + Math.round(amount_bitcoin * one_hundred_millions);
                                                                 if (money_transaction.btc_send_at) {
                                                                     console.log(pgm + 'money transaction has already been sent to btc. money_transaction = ' + JSON.stringify(money_transaction));
                                                                     return send_money(i + 1);
@@ -3727,8 +3763,8 @@ angular.module('MoneyNetworkW2')
                                                                         }
                                                                         else {
                                                                             money_transaction.btc_send_ok = result;
-                                                                            amount_btc = money_transaction.amount.toFixed(8) ;
-                                                                            amount_satoshi = Math.round(money_transaction.amount * 100000000) ;
+                                                                            amount_btc = amount_bitcoin.toFixed(8) ;
+                                                                            amount_satoshi = Math.round(amount_bitcoin * one_hundred_millions) ;
                                                                             // report_error(pgm, [amount_btc + ' tBTC / ' + amount_satoshi + ' test satoshi', 'was sent to ' + session_info.contact.alias], {group_debug_seq: group_debug_seq, end_group_operation: false, type: 'done'}) ;
                                                                             report_error(pgm, [amount_btc + ' tBTC / ' + amount_satoshi + ' test satoshi', 'was sent to ' + session_info.contact.alias], {type: 'done'}) ; // new group_debug_seq for notification
                                                                         }
@@ -4055,8 +4091,8 @@ angular.module('MoneyNetworkW2')
                                                         // is receiver. action must be Request
                                                         if (money_transaction.action != 'Request') throw pgm + 'invalid call. send_money. Is receiver and action is not Request' ;
                                                         if (money_transaction.btc_send_ok) return send_or_check_money(i + 1); // stop. money has already been sent
-                                                        amount_bitcoin = money_transaction.amount;
-                                                        amount_satoshi = '' + Math.round(amount_bitcoin * 100000000);
+                                                        amount_bitcoin = typeof money_transaction.amount == 'number' ? money_transaction.amount : parseFloat(money_transaction.amount);
+                                                        amount_satoshi = '' + Math.round(amount_bitcoin * one_hundred_millions);
                                                         money_transaction.btc_send_at = new Date().getTime();
                                                         // wallet to wallet communication. send money operation has already been confirmed in UI. confirm = false
                                                         btcService.send_money(money_transaction.json.address, amount_satoshi, false, function (err, result) {
@@ -4073,8 +4109,8 @@ angular.module('MoneyNetworkW2')
                                                                 }
                                                                 else {
                                                                     money_transaction.btc_send_ok = result;
-                                                                    amount_btc = money_transaction.amount.toFixed(8) ;
-                                                                    amount_satoshi = Math.round(amount_btc * 100000000) ;
+                                                                    amount_btc = amount_bitcoin.toFixed(8) ;
+                                                                    amount_satoshi = Math.round(amount_bitcoin * one_hundred_millions) ;
                                                                     // report_error(pgm, [amount_btc + ' tBTC / ' + amount_satoshi + ' test satoshi', 'was sent to ' + session_info.contact.alias], {group_debug_seq: group_debug_seq, end_group_operation: false, type: 'done'}) ;
                                                                     report_error(pgm, [amount_btc + ' tBTC / ' + amount_satoshi + ' test satoshi', 'was sent to ' + session_info.contact.alias], {type: 'done'}) ; // new group_debug_seq for notification
                                                                 }
@@ -4101,7 +4137,7 @@ angular.module('MoneyNetworkW2')
                                                         if (money_transaction.action != 'Send') throw pgm + 'invalid call. Is receiver and action is not Send' ;
                                                         if (!money_transaction.btc_receive_ok) throw pgm + 'invalid call. No txhash received from sender' ;
                                                         btcService.get_transaction(money_transaction.btc_receive_ok, function (err, tx) {
-                                                            var expected_amount, received_amount, j, output, amount_btc, amount_satoshi ;
+                                                            var amount_bitcoin, expected_amount, received_amount, j, output, amount_btc, amount_satoshi ;
                                                             console.log(pgm + 'err = ' + JSON.stringify(err)) ;
                                                             console.log(pgm + 'tx = ' + JSON.stringify(tx)) ;
                                                             if (err && err.crossDomain) return btc_cross_domain_error('Cannot verify bitcoin transactionid', restart_receive_message, session_info, group_debug_seq) ; // halt processing
@@ -4133,7 +4169,8 @@ angular.module('MoneyNetworkW2')
                                                                 return send_or_check_money(i + 1);
                                                             }
                                                             // check amount
-                                                            expected_amount = Math.round(money_transaction.amount * 100000000) ;
+                                                            amount_bitcoin = typeof money_transaction.amount == 'number' ? money_transaction.amount : parseFloat(money_transaction.amount) ;
+                                                            expected_amount = Math.round(amount_bitcoin * one_hundred_millions) ;
                                                             received_amount = 0 ;
                                                             for (j=0 ; j<tx.outputs.length ; j++) {
                                                                 output = tx.outputs[j] ;
@@ -4142,7 +4179,7 @@ angular.module('MoneyNetworkW2')
                                                             console.log(pgm + 'expected_amount = ' + expected_amount + ', received_amount = ' + received_amount) ;
                                                             if (Math.round(Math.abs(expected_amount - received_amount)) == 0) {
                                                                 console.log(pgm + 'Everything is fine. todo: notification in UI.') ;
-                                                                amount_btc = money_transaction.amount.toFixed(8) ;
+                                                                amount_btc = amount_bitcoin.toFixed(8) ;
                                                                 amount_satoshi = expected_amount ;
                                                                 // report_error(pgm, [amount_btc + ' tBTC / ' + amount_satoshi + ' test satoshi', 'was received from ' + session_info.contact.alias], {group_debug_seq: group_debug_seq, end_group_operation: false, type: 'done'}) ;
                                                                 report_error(pgm, [amount_btc + ' tBTC / ' + amount_satoshi + ' test satoshi', 'was received from ' + session_info.contact.alias], {type: 'done'}) ; // use new group_debug_seq for notification
@@ -4454,7 +4491,7 @@ angular.module('MoneyNetworkW2')
 
                                                         // check bitcoin transactionid
                                                         btcService.get_transaction(money_transaction.btc_receive_ok, function (err, tx) {
-                                                            var expected_amount, received_amount, j, output, amount_btc, amount_satoshi ;
+                                                            var amount_bitcoin, expected_amount, received_amount, j, output, amount_btc, amount_satoshi ;
                                                             console.log(pgm + 'err = ' + JSON.stringify(err)) ;
                                                             console.log(pgm + 'tx = ' + JSON.stringify(tx)) ;
                                                             if (err && err.crossDomain) return btc_cross_domain_error('Cannot verify bitcoin transactionid', restart_receive_message, session_info, group_debug_seq) ; // halt processing
@@ -4487,7 +4524,8 @@ angular.module('MoneyNetworkW2')
                                                                 return check_money(i + 1);
                                                             }
                                                             // check amount
-                                                            expected_amount = Math.round(money_transaction.amount * 100000000) ;
+                                                            amount_bitcoin = typeof money_transaction.amount == 'number' ? money_transaction.amount : parseFloat(money_transaction.amount) ;
+                                                            expected_amount = Math.round(amount_bitcoin * one_hundred_millions) ;
                                                             received_amount = 0 ;
                                                             for (j=0 ; j<tx.outputs.length ; j++) {
                                                                 output = tx.outputs[j] ;
@@ -4495,7 +4533,7 @@ angular.module('MoneyNetworkW2')
                                                             }
                                                             console.log(pgm + 'expected_amount = ' + expected_amount + ', received_amount = ' + received_amount) ;
                                                             if (Math.round(Math.abs(expected_amount - received_amount)) == 0) {
-                                                                amount_btc = money_transaction.amount.toFixed(8) ;
+                                                                amount_btc = amount_bitcoin.toFixed(8) ;
                                                                 amount_satoshi = expected_amount ;
                                                                 // report_error(pgm, [amount_btc + ' tBTC / ' + amount_satoshi + ' test satoshi', 'was received from ' + session_info.contact.alias], {group_debug_seq: group_debug_seq, end_group_operation: false, type: 'done'}) ;
                                                                 report_error(pgm, [amount_btc + ' tBTC / ' + amount_satoshi + ' test satoshi', 'was received from ' + session_info.contact.alias], {type: 'done'}) ; // use new group_debug_seq for notification
@@ -4716,7 +4754,7 @@ angular.module('MoneyNetworkW2')
                                     // check files
                                     if (!session_info.files) session_info.files = {} ;
                                     if (!session_info.files[request.filename]) {
-                                        console.log(pgm + 'todo: abort processing? ' + request.filename + ' is not in files') ;
+                                        console.log(pgm + 'warning. ' + request.filename + ' is not in files. Maybe a w2_cleanup_mt message?') ;
                                         console.log(pgm + 'files = ' + JSON.stringify(session_info.files)) ;
                                     }
                                     try {
