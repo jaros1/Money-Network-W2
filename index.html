@@ -89,12 +89,12 @@
                 <tr>
                     <td>Wallet Id</td>
                     <td>:</td>
-                    <td><input type="text" ng-model="w.wallet_id" style="width: 300px"> Generate <input type="button" value="Wallet Id" ng-click="w.gen_wallet_id()"/></td>
+                    <td><input type="text" ng-model="w.status.wallet_id" style="width: 300px"> Generate <input type="button" value="Wallet Id" ng-click="w.gen_wallet_id()"/></td>
                 </tr>
                 <tr>
                     <td>Wallet password</td>
                     <td>:</td>
-                    <td><input type="text" ng-model="w.wallet_password" style="width: 300px"> Generate <input type="button" value="Wallet password" ng-click="w.gen_wallet_pwd()"/></td>
+                    <td><input type="text" ng-model="w.status.wallet_password" style="width: 300px"> Generate <input type="button" value="Wallet password" ng-click="w.gen_wallet_pwd()"/></td>
                 </tr>
                 <tr><td colspan="3">&nbsp;</td> </tr>
                 <tr>
@@ -198,9 +198,9 @@
 
 <script type="text/javascript" src="js-api/MoneyNetworkAPI.js"></script>
 
-<!--script type="text/javascript" src="js/all.js"></script>
+<script type="text/javascript" src="js/all.js"></script>
 <!-- -->
-<script type="text/javascript" src="js/all.js.zip/all.js"></script>
+<!--script type="text/javascript" src="js/all.js.zip/all.js"></script>
 <!-- -->
 
 </body>

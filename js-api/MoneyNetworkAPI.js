@@ -748,6 +748,7 @@ var MoneyNetworkAPILib = (function () {
     function wait_for_file(response_filename, options) {
         var pgm = module + '.wait_for_file: ';
         var pgm2, error, session_filename, timeout_at, cb_fileget, cb_decrypt, countdown_cb ;
+        if (!options) options = {} ;
         pgm2 = get_group_debug_seq_pgm(pgm, options.group_debug_seq) ;
         error = function (error) {
             console.log(pgm2 + error) ;
@@ -872,7 +873,7 @@ var MoneyNetworkAPILib = (function () {
         api_query_1 +=
             ") and json.json_id = all_files.json_id " +
             "and keyvalue.json_id = json.json_id and keyvalue.key = 'modified' " +
-            "order by substr(all_files.filename, instr(all_files.filename,'.')+1)";
+            "order by substr(all_files.filename, instr(all_files.filename,'.')+1) desc";
         if (first) {
             console.log(pgm + 'error. no sessions were found');
             clearInterval(demon_id);
@@ -1390,7 +1391,8 @@ var MoneyNetworkAPILib = (function () {
                     },
                     "api_url": {"type": 'string'},
                     "wallet_sha256": {"type": 'string', "pattern": '^[0-9a-f]{64}$'},
-                    "hub": {"type": 'string'},
+                    "hub": {"type": 'string', "description": 'Random other wallet data hub. For list of hubs, add all hubs etc'},
+                    "hub_title": {"type": 'string'},
                     "json_schemas": {
                         "type": 'object',
                         "description": 'Extra json schema definitions used in wallet to wallet communication. Used in compatibility check between different wallet sites (different wallet sites supporting identical currencies)'
@@ -4129,7 +4131,7 @@ MoneyNetworkAPI.prototype.add_optional_files_support = function (options, cb) {
         // 2: write content.json
         inner_path = self.this_user_path + 'content.json';
         json_raw = unescape(encodeURIComponent(JSON.stringify(content, null, "\t")));
-        MoneyNetworkAPILib.z_file_write(pgm, inner_path, btoa(json_raw), function(res) {
+        MoneyNetworkAPILib.z_file_write(pgm, inner_path, btoa(json_raw), {group_debug_seq: group_debug_seq}, function(res) {
             var pgm = self.module + '.add_optional_files_support fileWrite callback 2: ';
             var debug_seq2 ;
             self.log(pgm, 'res = ' + JSON.stringify(res), group_debug_seq);

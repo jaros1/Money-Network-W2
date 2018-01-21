@@ -11,7 +11,7 @@
       ]
     },
     ".+/data/users/.+/wallet.json": {
-      "to_keyvalue": [ "wallet_address", "wallet_domain", "wallet_title", "wallet_description", "wallet_sha256" ]
+      "to_keyvalue": [ "wallet_address", "wallet_domain", "wallet_title", "wallet_description", "wallet_sha256", "hub", "hub_title" ]
     }
   },
   "tables": {

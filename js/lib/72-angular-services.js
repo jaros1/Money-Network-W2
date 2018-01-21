@@ -300,6 +300,19 @@ angular.module('MoneyNetworkW2')
             // inject extra json schemas into MoneyNetworkAPI (internal wallet to wallet communication)
             var extra_json_schemas = {
 
+                "w2_pubkeys": {
+                    "type": 'object',
+                    "title": 'Send pubkeys (JSEncrypt and cryptMessage) to other wallet session',
+                    "description": 'Sent from send_mt and start_mt post processing',
+                    "properties": {
+                        "msgtype": {"type": 'string', "pattern": '^w2_pubkeys$'},
+                        "pubkey": {"type": 'string'},
+                        "pubkey2": {"type": 'string'}
+                    },
+                    "required": ['msgtype', 'pubkey', 'pubkey2'],
+                    "additionalProperties": false
+                }, // w2_pubkeys
+
                 "w2_check_mt": {
                     "type": 'object',
                     "title": 'Return bitcoin addresses and check money transactions',
@@ -388,13 +401,13 @@ angular.module('MoneyNetworkW2')
             // message workflow between sender of money transaction(s) and receiver of money transaction(s)
             var message_workflow = {
                 sender: {
-                    start: 'pubkeys',           // 1: send_mt             => send pubkeys
+                    start: 'w2_pubkeys',        // 1: send_mt             => send w2_pubkeys
                     w2_check_mt: 'w2_start_mt', // 3: receive w2_check_mt => send w2_start_mt
                     w2_end_mt: 'w2_cleanup_mt'  // 5: receive w2_end_mt   => send w2_cleanup_mt
                 },
                 receiver: {
-                    start: 'pubkeys',           // 1: start_mt            => send pubkeys
-                    pubkeys: 'w2_check_mt',     // 2: receive pubkeys     => send w2_check_mt
+                    start: 'w2_pubkeys',        // 1: start_mt            => send w2_pubkeys
+                    w2_pubkeys: 'w2_check_mt',  // 2: receive w2_pubkeys  => send w2_check_mt
                     w2_start_mt: 'w2_end_mt',   // 4: receive w2_start_mt => send w2_end_mt
                     w2_cleanup_mt: 'end'        // 6: receive w2_cleanup_mt
                 }
@@ -408,7 +421,7 @@ angular.module('MoneyNetworkW2')
             function get_wallet_login(save_wallet_login, cb) {
                 var pgm = service + '.get_wallet_login: ' ;
                 var error, auth_address, user_login_info, login, encrypted_json, request ;
-                if (['1','2','3'].indexOf(save_wallet_login) == -1) return cb(null, null, "Invalid call. save_wallet_login must be equal '1', '2' or '3'") ;
+                if (['1','2'].indexOf(save_wallet_login) == -1) return cb(null, null, "Invalid call. save_wallet_login must be equal '1' or '2'") ;
                 if (save_wallet_login == '1') {
                     // wallet login is saved encrypted (cryptMessage) in W2 localStorage
                     if (!ls.save_login) return cb(null, null, 'save_login hash was not found in localStorage') ;
@@ -432,9 +445,9 @@ angular.module('MoneyNetworkW2')
                             ls_save() ;
                             return cb(null, null, error) ;
                         }
-                        status.save_wallet_id = login.wallet_id ;
-                        status.save_wallet_password = login.wallet_password ;
-                        return cb(status.save_wallet_id, status.save_wallet_password, null) ;
+                        status.wallet_id = login.wallet_id ;
+                        status.wallet_password = login.wallet_password ;
+                        return cb(status.wallet_id, status.wallet_password, null) ;
                         setTimeout(load_w_sessions, 0) ;
                     }
                     // ZeroNet certificate present. decrypt login
@@ -445,9 +458,9 @@ angular.module('MoneyNetworkW2')
                         console.log(pgm + 'json = ' + JSON.stringify(json)) ;
                         if (!json) cb(null, null, 'decrypt error. encrypted_json was ' + JSON.stringify(user_login_info)) ;
                         else {
-                            status.save_wallet_id = json.wallet_id ;
-                            status.save_wallet_password = json.wallet_password ;
-                            cb(status.save_wallet_id, status.save_wallet_password, null) ;
+                            status.wallet_id = json.wallet_id ;
+                            status.wallet_password = json.wallet_password ;
+                            cb(status.wallet_id, status.wallet_password, null) ;
                             setTimeout(load_w_sessions, 0) ;
                         }
                     }) ; // decrypt_json callback
@@ -500,9 +513,9 @@ angular.module('MoneyNetworkW2')
                             // OK. received wallet login from MN
                             console.log(pgm + 'data[0] = ' + JSON.stringify(data[0])) ;
                             // data[0] = {"key":"login","value":{"wallet_id":"UZGToFfXOz7GKCogsOOuxJYndjcmt2","wallet_password":"bGaGK/+w(Qm4Wi}fAyz:CcgxWuen)F"}}
-                            status.save_wallet_id = data[0].value.wallet_id ;
-                            status.save_wallet_password = data[0].value.wallet_password ;
-                            cb(status.save_wallet_id, status.save_wallet_password, null);
+                            status.wallet_id = data[0].value.wallet_id ;
+                            status.wallet_password = data[0].value.wallet_password ;
+                            cb(status.wallet_id, status.wallet_password, null);
                             setTimeout(load_w_sessions, 0) ;
                         }) ; // decrypt_row callback
 
@@ -537,8 +550,8 @@ angular.module('MoneyNetworkW2')
                 ls_save();
 
                 // for get_balance request
-                status.save_wallet_id = wallet_id ;
-                status.save_wallet_password = wallet_password ;
+                status.wallet_id = wallet_id ;
+                status.wallet_password = wallet_password ;
                 setTimeout(load_w_sessions, 0) ;
 
                 // get and add W2 pubkey2 to encryption setup (self encrypt using ZeroNet certificate)
@@ -794,12 +807,12 @@ angular.module('MoneyNetworkW2')
             function get_default_wallet_hub () {
                 var pgm = service + '.get_default_wallet_hub: ' ;
                 var default_wallet_hub, default_hubs, hub, hubs, i ;
-                default_wallet_hub = '1HXzvtSLuvxZfh6LgdaqTk4FSVf7x8w7NJ' ;
+                default_wallet_hub = {hub: '1HXzvtSLuvxZfh6LgdaqTk4FSVf7x8w7NJ', title: 'W2 Wallet data hub'} ;
                 console.log(pgm + 'ZeroFrame.site_info.content = ' + JSON.stringify(ZeroFrame.site_info.content));
                 default_hubs = ZeroFrame.site_info.content.settings.default_hubs ;
                 if (!default_hubs) return default_wallet_hub ;
                 hubs = [] ;
-                for (hub in default_hubs) hubs.push(hub) ;
+                for (hub in default_hubs) hubs.push({hub: hub, title: default_hubs[hub].title}) ;
                 if (!hubs.length) return default_wallet_hub ;
                 i = Math.floor(Math.random() * hubs.length);
                 return hubs[i] ;
@@ -814,7 +827,7 @@ angular.module('MoneyNetworkW2')
                     get_my_wallet_hub_cbs.push(cb) ;
                     return ;
                 }
-                if (z_cache.my_wallet_data_hub) return cb(z_cache.my_wallet_data_hub, z_cache.other_wallet_data_hub) ;
+                if (z_cache.my_wallet_data_hub) return cb(z_cache.my_wallet_data_hub, z_cache.other_wallet_data_hub, z_cache.other_wallet_data_hub_title) ;
                 z_cache.my_wallet_data_hub = true ;
 
                 // get a list of MN wallet data hubs
@@ -827,7 +840,9 @@ angular.module('MoneyNetworkW2')
                     wallet_data_hubs = [] ;
                     if (!merger_sites || merger_sites.error) console.log(pgm + 'mergerSiteList failed. merger_sites = ' + JSON.stringify(merger_sites)) ;
                     else for (hub in merger_sites) {
-                        if (merger_sites[hub].content.title.match(/^W2 /i)) wallet_data_hubs.push(hub);
+                        if (merger_sites[hub].content.title.match(/^W2 /i)) {
+                            wallet_data_hubs.push({hub: hub, title: merger_sites[hub].content.title});
+                        }
                     }
                     console.log(pgm + 'wallet_data_hubs = ' + JSON.stringify(wallet_data_hubs));
                     // user_data_hubs = ["1PgyTnnACGd1XRdpfiDihgKwYRRnzgz2zh","1922ZMkwZdFjKbSAdFR1zA5YBHMsZC51uc"]
@@ -855,13 +870,14 @@ angular.module('MoneyNetworkW2')
                         var pgm = service + '.get_my_wallet_hub dbQuery callback 2: ' ;
                         var i, run_callbacks, wallet_hub_selected, get_and_add_default_wallet_hub ;
                         MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq1, (!res || res.error) ? 'Failed. error = ' + JSON.stringify(res) : 'OK. Returned ' + res.length + ' rows');
+
                         run_callbacks = function () {
                             var pgm = service + '.get_my_wallet_hub.run_callbacks: ' ;
                             console.log(pgm + 'my_wallet_hub = ' + z_cache.my_wallet_data_hub + ', other_wallet_hub = ' + z_cache.other_wallet_data_hub) ;
-                            cb(z_cache.my_wallet_data_hub, z_cache.other_wallet_data_hub) ;
+                            cb(z_cache.my_wallet_data_hub, z_cache.other_wallet_data_hub, z_cache.other_wallet_data_hub_title) ;
                             while (get_my_wallet_hub_cbs.length) {
                                 cb = get_my_wallet_hub_cbs.shift() ;
-                                cb(z_cache.my_wallet_data_hub, z_cache.other_wallet_data_hub)
+                                cb(z_cache.my_wallet_data_hub, z_cache.other_wallet_data_hub, z_cache.other_wallet_data_hub_title)
                             }
                         }; // run_callbacks
 
@@ -874,9 +890,12 @@ angular.module('MoneyNetworkW2')
                                 return run_callbacks() ;
                             }
                             other_wallet_data_hubs = [] ;
-                            for (i=0 ; i<wallet_data_hubs.length ; i++) other_wallet_data_hubs.push(wallet_data_hubs[i].hub) ;
+                            for (i=0 ; i<wallet_data_hubs.length ; i++) {
+                                if (wallet_data_hubs[i].hub != z_cache.my_wallet_data_hub) other_wallet_data_hubs.push(wallet_data_hubs[i].hub) ;
+                            }
                             i = Math.floor(Math.random() * other_wallet_data_hubs.length);
-                            z_cache.other_wallet_data_hub = other_wallet_data_hubs[i] ;
+                            z_cache.other_wallet_data_hub = other_wallet_data_hubs[i].hub ;
+                            z_cache.other_wallet_data_hub_title = other_wallet_data_hubs[i].title ;
                             return run_callbacks() ;
                         }; // wallet_hub_selected
 
@@ -892,7 +911,7 @@ angular.module('MoneyNetworkW2')
                                 MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq, res ? 'OK' : 'Failed');
                                 console.log(pgm + 'res = '+ JSON.stringify(res));
                                 if (res == 'ok') {
-                                    z_cache.my_wallet_data_hub = my_wallet_data_hub ;
+                                    z_cache.my_wallet_data_hub = my_wallet_data_hub.hub ;
                                     wallet_hub_selected() ;
                                     return ;
                                 }
@@ -909,7 +928,6 @@ angular.module('MoneyNetworkW2')
                         if (res.length) {
                             // old wallet
                             z_cache.my_wallet_data_hub = res[0].hub ; // return hub for last updated content.json
-                            console.log(pgm + 'hub = ' + z_cache.my_wallet_data_hub) ;
                             return wallet_hub_selected() ;
                         }
                         // new wallet. get wallet data hub from
@@ -917,7 +935,7 @@ angular.module('MoneyNetworkW2')
                         // 2) default_hubs from site_info.content.sessions.default_hubs
                         if (wallet_data_hubs.length) {
                             i = Math.floor(Math.random() * wallet_data_hubs.length);
-                            z_cache.my_wallet_data_hub = wallet_data_hubs[i] ;
+                            z_cache.my_wallet_data_hub = wallet_data_hubs[i].hub ;
                             console.log(pgm + 'hub = ' + z_cache.my_wallet_data_hub) ;
                             wallet_hub_selected() ;
                         }
@@ -945,7 +963,7 @@ angular.module('MoneyNetworkW2')
                 }
                 if (z_cache.user_path) return cb(z_cache.user_path) ; // OK
                 z_cache.user_path = true ;
-                get_my_wallet_hub(function (my_hub) {
+                get_my_wallet_hub(function (my_hub, other_wallet_data_hub, other_wallet_data_hub_title) {
                     z_cache.user_path = 'merged-' + get_merged_type() + '/' + my_hub + '/data/users/' + ZeroFrame.site_info.auth_address + '/' ;
                     MoneyNetworkAPILib.config({this_user_path: z_cache.user_path}) ;
                     cb(z_cache.user_path);
@@ -956,7 +974,7 @@ angular.module('MoneyNetworkW2')
             // initialize. delete old status.json file - no longer needed
             function delete_status_json (cb) {
                 var pgm = service + '.delete_status_json: ' ;
-                get_my_wallet_hub(function (my_hub) {
+                get_my_wallet_hub(function (my_hub, other_wallet_data_hub, other_wallet_data_hub_title) {
                     var pgm = service + '.delete_status_json get_my_wallet_hub callback 1: ' ;
                     var directory, w2_query_8, debug_seq ;
                     directory = my_hub + '/data/users/' + ZeroFrame.site_info.auth_address ;
@@ -1184,7 +1202,7 @@ angular.module('MoneyNetworkW2')
                 var pgm = service + '.update_wallet_json: ';
                 if (!cb) cb = function () {};
 
-                get_my_wallet_hub(function (hub, random_other_hub) {
+                get_my_wallet_hub(function (hub, other_wallet_data_hub, other_wallet_data_hub_title) {
                     get_wallet_json(function (wallet) {
                         var pgm = service + '.update_wallet_json get_wallet_json callback 2: ';
                         var old_wallet_str, old_wallet_json, error, key, wallet_sha256, w2_query_3, debug_seq2 ;
@@ -1218,7 +1236,10 @@ angular.module('MoneyNetworkW2')
                         }];
                         wallet.api_url = 'https://www.blocktrail.com/api/docs' ;
                         // random wallet data hub. for list of wallet hubs
-                        if (!wallet.hub) wallet.hub = random_other_hub ;
+                        if (!wallet.hub) {
+                            wallet.hub = other_wallet_data_hub ;
+                            wallet.hub_title = other_wallet_data_hub_title ;
+                        }
                         // extra info for cross wallet site integration. identical currencies, schemas and workflow. maybe compatible
                         wallet.json_schemas = extra_json_schemas ;
                         wallet.message_workflow = message_workflow ;
@@ -1878,7 +1899,7 @@ angular.module('MoneyNetworkW2')
             // cleanup old outgoing files, example:
             // - is "sender"
             // - is receiving w2_check_mt message from "receiver"
-            // - "receiver" must have received "pubkeys" message from "sender"
+            // - "receiver" must have received 'pubkeys' message from "sender"
             // - find and delete pubkeys message from sender to receiver
             function delete_old_msg (options, cb) {
                 var pgm = service + '.delete_old_msg: ';
@@ -2095,11 +2116,11 @@ angular.module('MoneyNetworkW2')
                                     // wallet not open (not created, not logged in etc)
                                     if (!status.permissions.open_wallet) return send_response('open_wallet operation is not authorized');
                                     if (!request.open_wallet) return send_response('Wallet is not open and open_wallet was not requested');
-                                    else if (!status.save_wallet_id || !status.save_wallet_password) return send_response('Wallet is not open and no wallet login was found');
+                                    else if (!status.wallet_id || !status.wallet_password) return send_response('Wallet is not open and no wallet login was found');
                                     else if (request.close_wallet && !status.permissions.close_wallet) return send_response('close_wallet operation was requested but is not authorized');
                                     else {
                                         // open test bitcoin wallet (also get_balance request)
-                                        btcService.init_wallet(status.save_wallet_id, status.save_wallet_password, function (error) {
+                                        btcService.init_wallet(status.wallet_id, status.wallet_password, function (error) {
                                             try {
                                                 if (error) {
                                                     // open wallet or get_balance request failed
@@ -2320,7 +2341,7 @@ angular.module('MoneyNetworkW2')
                                     }
                                     else {
                                         // open test bitcoin wallet (also get_balance request)
-                                        btcService.init_wallet(status.save_wallet_id, status.save_wallet_password, function (error) {
+                                        btcService.init_wallet(status.wallet_id, status.wallet_password, function (error) {
                                             try {
                                                 if (error && (wallet_info.status != 'Open')) {
                                                     ZeroFrame.cmd("wrapperNotification", ['error', 'Open wallet request failed with<br>' + error]) ;
@@ -2342,7 +2363,7 @@ angular.module('MoneyNetworkW2')
                                         // wallet not open (not created, not logged in etc)
                                         if (!status.permissions.open_wallet) return send_response('Cannot send money transaction. Open wallet operation is not authorized');
                                         if (!request.open_wallet) return send_response('Cannot send money transaction. Wallet is not open and open_wallet was not requested');
-                                        else if (!status.save_wallet_id || !status.save_wallet_password) return send_response('Cannot send money transaction. Wallet is not open and no wallet login was found');
+                                        else if (!status.wallet_id || !status.wallet_password) return send_response('Cannot send money transaction. Wallet is not open and no wallet login was found');
                                     }
                                     if (request.close_wallet && !status.permissions.close_wallet) return send_response('Cannot send money transaction. Close wallet operation was requested but is not authorized');
                                     console.log(pgm + 'todo: add transactions details in confirm dialog');
@@ -2490,7 +2511,7 @@ angular.module('MoneyNetworkW2')
                                             var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_5_save_pubkeys_msg/' + group_debug_seq + ': ';
                                             var request2, error, options;
                                             request2 = {
-                                                msgtype: 'pubkeys',
+                                                msgtype: 'w2_pubkeys',
                                                 pubkey: session_info.pubkey, // for JSEncrypt
                                                 pubkey2: session_info.pubkey2 // for cryptMessage
                                             };
@@ -2499,6 +2520,7 @@ angular.module('MoneyNetworkW2')
                                             options = {
                                                 encryptions: [3],
                                                 optional: session_info.ip_external ? 'o' : null,
+                                                subsystem: 'w2',
                                                 files: session_info.files,
                                                 status: '1: pubkeys sent, waiting for w2_check_mt',
                                                 group_debug_seq: group_debug_seq
@@ -2508,8 +2530,7 @@ angular.module('MoneyNetworkW2')
                                                     var error;
                                                     if (!response2 || response2.error) {
                                                         error = ['Money transaction post processing failed', 'pubkeys message was not send', 'error = ' + JSON.stringify(response2)];
-                                                        console.log(pgm + error.join('. '));
-                                                        ZeroFrame.cmd('wrapperNotification', ['error', error.join('<br>')]);
+                                                        report_error(pgm, error, {group_debug_seq: group_debug_seq}) ;
                                                         return;
                                                     }
                                                     console.log(pgm + 'response2        = ' + JSON.stringify(response2));
@@ -2803,7 +2824,7 @@ angular.module('MoneyNetworkW2')
                                     }
                                     else {
                                         // open test bitcoin wallet (also get_balance request)
-                                        btcService.init_wallet(status.save_wallet_id, status.save_wallet_password, function (error) {
+                                        btcService.init_wallet(status.wallet_id, status.wallet_password, function (error) {
                                             try {
                                                 if (error && (wallet_info.status != 'Open')) return send_response('Open wallet request failed with error = ' + error);
                                                 if (error && send_money) console.log(pgm + 'warning. money request and get_balance request failed with error = ' + error);
@@ -2822,7 +2843,7 @@ angular.module('MoneyNetworkW2')
                                         // wallet not open (not created, not logged in etc)
                                         if (!status.permissions.open_wallet) return send_response('Cannot receive money transaction. Open wallet operation is not authorized');
                                         if (!request.open_wallet) return send_response('Cannot receive money transaction. Wallet is not open and open_wallet was not requested');
-                                        else if (!status.save_wallet_id || !status.save_wallet_password) return send_response('Cannot receive money transaction. Wallet is not open and no wallet login was found');
+                                        else if (!status.wallet_id || !status.wallet_password) return send_response('Cannot receive money transaction. Wallet is not open and no wallet login was found');
                                     }
                                     if (request.close_wallet && !status.permissions.close_wallet) return send_response('Cannot receive money transaction. Close wallet operation was requested but is not authorized');
                                     console.log(pgm + 'todo: add transactions details in confirm dialog');
@@ -3126,7 +3147,7 @@ angular.module('MoneyNetworkW2')
                                                     var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_5_save_pubkeys_msg/' + group_debug_seq + ': ';
                                                     var request2, error, optional, options;
                                                     request2 = {
-                                                        msgtype: 'pubkeys',
+                                                        msgtype: 'w2_pubkeys',
                                                         pubkey: session_info.pubkey, // for JSEncrypt
                                                         pubkey2: session_info.pubkey2 // for cryptMessage
                                                     };
@@ -3134,6 +3155,7 @@ angular.module('MoneyNetworkW2')
                                                     options = {
                                                         encryptions: [3],
                                                         optional: session_info.ip_external ? 'o' : null,
+                                                        subsystem: 'w2',
                                                         files: session_info.files,
                                                         status: '1: pubkeys sent, waiting for pubkeys',
                                                         group_debug_seq: group_debug_seq
@@ -3143,8 +3165,7 @@ angular.module('MoneyNetworkW2')
                                                             var error;
                                                             if (!response2 || response2.error) {
                                                                 error = ['Money transaction post processing failed', 'pubkeys message was not send', 'error = ' + JSON.stringify(response2)];
-                                                                console.log(pgm + error.join('. '));
-                                                                ZeroFrame.cmd('wrapperNotification', ['error', error.join('<br>')]);
+                                                                report_error(pgm, error, {group_debug_seq: group_debug_seq}) ;
                                                                 return;
                                                             }
                                                             console.log(pgm + 'response2        = ' + JSON.stringify(response2));
@@ -3246,8 +3267,19 @@ angular.module('MoneyNetworkW2')
                         // end start_mt
                     }
                     else if (request.msgtype == 'pubkeys') {
-                        // pubkeys message handshake between wallet sessions.
-                        (function pubkeys(){
+                        // error. pubkeys message from MN should be processes by read_pubkeys function (new session)
+                        (function pubkeys() {
+                            var pgm = service + '.process_incoming_message.' + request.msgtype + '/' + group_debug_seq + ': ';
+                            console.log(pgm + 'Error. request = ' + JSON.stringify(request)) ;
+                            console.log(pgm + 'pubkeys message from MN session should be processed by read_pubkeys function after new wallet session with new sessionid') ;
+                            console.log(pgm + 'Please check log for errors in read_pubkeys function or wallet startup processing') ;
+                            // do not send any response
+                            response_timestamp = null ;
+                        })() ;
+                    }
+                    else if (request.msgtype == 'w2_pubkeys') {
+                        // w2_pubkeys message handshake between wallet sessions.
+                        (function w2_pubkeys(){
                             var pgm = service + '.process_incoming_message.' + request.msgtype + '/' + group_debug_seq + ': ';
                             var auth_address, sha256, encrypted_session_info, error;
                             try {
@@ -3508,10 +3540,10 @@ angular.module('MoneyNetworkW2')
                                         // cleanup old outgoing files:
                                         // - is "sender"
                                         // - is receiving w2_check_mt message from "receiver"
-                                        // - "receiver" must have received "pubkeys" message from "sender"
+                                        // - "receiver" must have received 'w2_pubkeys' message from "sender"
                                         // - find and delete old pubkeys message from sender to receiver
                                         delete_pubkeys_msg = function (cb) {
-                                            delete_old_msg({session_info: session_info, msg_name: 'pubkeys', encrypt: encrypt2, group_debug_seq: group_debug_seq}, cb) ;
+                                            delete_old_msg({session_info: session_info, msg_name: 'w2_pubkeys', encrypt: encrypt2, group_debug_seq: group_debug_seq}, cb) ;
                                         } ; // delete_pubkeys_msg
 
                                         delete_pubkeys_msg(function() {
@@ -3670,14 +3702,14 @@ angular.module('MoneyNetworkW2')
                                                             }
                                                             if (!is_wallet_required) return cb(); // nothing to send
                                                             // wallet log in is required
-                                                            if (!status.save_wallet_id || !status.save_wallet_password) {
+                                                            if (!status.wallet_id || !status.wallet_password) {
                                                                 error = ['Money transaction failed', 'Cannot send money', 'No wallet log in was found'];
                                                                 console.log(pgm + 'todo: mark money transaction as aborted in ls');
                                                                 console.log(pgm + 'todo: update file with money transaction status');
                                                                 return report_error(pgm, error, {group_debug_seq: group_debug_seq});
                                                             }
                                                             // open wallet
-                                                            btcService.init_wallet(status.save_wallet_id, status.save_wallet_password, function (error) {
+                                                            btcService.init_wallet(status.wallet_id, status.wallet_password, function (error) {
                                                                 try {
                                                                     if (error && (wallet_info.status != 'Open')) {
                                                                         if (error.match(/Access-Control-Allow-Origin/)) return btc_cross_domain_error('Cannot open wallet', restart_receive_message, session_info, group_debug_seq) ; // halt processing
@@ -3881,10 +3913,10 @@ angular.module('MoneyNetworkW2')
                                         // cleanup old outgoing files:
                                         // - is "receiver"
                                         // - is receiving w2_start_mt message from "sender"
-                                        // - "sender" must have received "pubkeys" and "w2_check_mt" messages from "receiver"
+                                        // - "sender" must have received 'w2_pubkeys' and "w2_check_mt" messages from "receiver"
                                         // - find and delete old pubkeys and w2_check_mt messages from receiver to sender
                                         delete_old_messages = function (cb) {
-                                            delete_old_msg({session_info: session_info, msg_name: 'pubkeys', encrypt: encrypt2, group_debug_seq: group_debug_seq}, function() {
+                                            delete_old_msg({session_info: session_info, msg_name: 'w2_pubkeys', encrypt: encrypt2, group_debug_seq: group_debug_seq}, function() {
                                                 delete_old_msg({session_info: session_info, msg_name: 'w2_check_mt', encrypt: encrypt2, group_debug_seq: group_debug_seq}, cb) ;
                                             }) ;
                                         } ; // delete_w2_check_mt_msg
@@ -4039,7 +4071,7 @@ angular.module('MoneyNetworkW2')
                                                     }
                                                     if (!is_wallet_required) return cb() ; // nothing to send and no transaction ids to validate
                                                     // wallet log in is required
-                                                    if (!status.save_wallet_id || !status.save_wallet_password) {
+                                                    if (!status.wallet_id || !status.wallet_password) {
                                                         error = ['Money transaction failed', 'Cannot open wallet', 'No wallet log in was found'] ;
                                                         console.log(pgm + 'todo: save received transaction in ls (no_pay_ok>0 or no_pay_error>0)');
                                                         console.log(pgm + 'todo: update file with money transaction status');
@@ -4047,7 +4079,7 @@ angular.module('MoneyNetworkW2')
                                                         return report_error(pgm, error, {group_debug_seq: group_debug_seq}) ;
                                                     }
                                                     // open wallet
-                                                    btcService.init_wallet(status.save_wallet_id, status.save_wallet_password, function (error) {
+                                                    btcService.init_wallet(status.wallet_id, status.wallet_password, function (error) {
                                                         try {
                                                             if (error && (wallet_info.status != 'Open')) {
                                                                 if (error.match(/Access-Control-Allow-Origin/)) return btc_cross_domain_error('Cannot open wallet', restart_receive_message, session_info, group_debug_seq) ; // halt processing
@@ -4425,14 +4457,14 @@ angular.module('MoneyNetworkW2')
                                                     if (wallet_was_open) return cb() ;
                                                     if (!no_pay_ok) return cb() ;
                                                     // wallet log in is required
-                                                    if (!status.save_wallet_id || !status.save_wallet_password) {
+                                                    if (!status.wallet_id || !status.wallet_password) {
                                                         error = ['Money transaction failed', 'Cannot open wallet', 'No wallet log in was found'] ;
                                                         console.log(pgm + 'todo: save received transaction in ls (no_pay_ok>0 or no_pay_error>0)');
                                                         console.log(pgm + 'todo: update file with money transaction status');
                                                         return report_error(pgm, error, {group_debug_seq: group_debug_seq}) ;
                                                     }
                                                     // open wallet
-                                                    btcService.init_wallet(status.save_wallet_id, status.save_wallet_password, function (error) {
+                                                    btcService.init_wallet(status.wallet_id, status.wallet_password, function (error) {
                                                         try {
                                                             if (error && (wallet_info.status != 'Open')) {
                                                                 if (error.match(/Access-Control-Allow-Origin/)) return btc_cross_domain_error('Cannot open wallet', restart_receive_message, session_info, group_debug_seq) ; // halt processing
@@ -4912,7 +4944,7 @@ angular.module('MoneyNetworkW2')
             // session can be restored with ZeroNet cert + MN login
             var session_pwd1, session_pwd2 ;
 
-            // read first "pubkeys" message from MN session
+            // read first 'pubkeys' message from MN session
             // optional file with file format <other_session_filename>.<timestamp>
             // pubkey used by JSEncrypt (client) and pubkey2 used by cryptMessage (ZeroNet)
             function read_pubkeys (cb) {
@@ -5226,7 +5258,7 @@ angular.module('MoneyNetworkW2')
                 }; // request1
                 request2 = function (cb) {
                     var pgm = service + '.check_merger_permission.request2: ';
-                    get_my_wallet_hub(function (hub) {
+                    get_my_wallet_hub(function (hub, other_wallet_data_hub, other_wallet_data_hub_title) {
                         var debug_seq ;
                         debug_seq = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, null, 'mergerSiteAdd') ;
                         ZeroFrame.cmd("mergerSiteAdd", [hub], function (res) {
@@ -5258,7 +5290,7 @@ angular.module('MoneyNetworkW2')
                     var pgm = service + '.check_merger_permission mergerSiteList callback 2: ';
                     MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq, merger_sites ? 'OK' : 'Error. Not found') ;
                     console.log(pgm + 'merger_sites = ', JSON.stringify(merger_sites));
-                    get_my_wallet_hub(function (hub) {
+                    get_my_wallet_hub(function (hub, other_wallet_data_hub, other_wallet_data_hub_title) {
                         if (merger_sites[hub] == "MoneyNetwork") cb(true);
                         else request2(cb);
                     });
@@ -5514,196 +5546,216 @@ angular.module('MoneyNetworkW2')
                             console.log(pgm + 'step 4: update wallet.json') ;
                             update_wallet_json(function (res) {
                                 var pgm = service + '.initialize update_wallet_json callback 4: ';
-                                var done;
+                                var optional_get_wallet_login;
                                 console.log(pgm + 'update_wallet_json. res = ' + JSON.stringify(res));
 
-                                // extend cb.
-                                // - lookup save_login[].choice (radio group) from ls
-                                // - cleanup old outgoing files
-                                done = function (sessionid) {
-                                    var pgm = service + '.initialize.done: ';
-                                    var save_wallet_login, w2_query_5, directory, debug_seq;
-                                    // sessionid found. remember login.
+                                // save_login == '1'. wallet login saved on W2 localStorage
+                                optional_get_wallet_login = function (cb) {
                                     if (!ls.save_login) ls.save_login = {};
-                                    // console.log(pgm + 'ls.save_login = ' + JSON.stringify(ls.save_login)) ;
                                     if (!ls.save_login[old_auth_address]) ls.save_login[old_auth_address] = {choice: '0'};
-                                    save_wallet_login = ls.save_login[old_auth_address].choice;
-                                    ls_save();
+                                    if (ls.save_login[old_auth_address].choice != '1') return cb() ; // skip. not saved or 2: saved in MN ls
+                                    // wallet log in saved in w2 ls. restore now
+                                    get_wallet_login('1', function(wallet_id, wallet_password, error) {
+                                        console.log(pgm + 'wallet_id = ' + wallet_id + ', wallet_password = ' + wallet_password + ', error = ' + error) ;
+                                        console.log(pgm + 'status = ' + JSON.stringify(status)) ;
+                                        if (!error) $rootScope.$apply() ;
+                                        cb() ;
+                                    }) ;
+                                } ;
+                                optional_get_wallet_login(function(){
+                                    var done ;
 
-                                    // cleanup old outgoing money transaction files
-                                    // do not cleanup -o offline and normal files.See cleanup_offline_session_files
-                                    // find outgoing money transactions
+                                    // extend cb.
+                                    // - lookup save_login[].choice (radio group) from ls
+                                    // - cleanup old outgoing files
+                                    done = function (sessionid) {
+                                        var pgm = service + '.initialize.done: ';
+                                        var save_wallet_login, w2_query_5, directory, debug_seq;
+                                        // sessionid found. remember login.
+                                        if (!ls.save_login) ls.save_login = {};
+                                        // console.log(pgm + 'ls.save_login = ' + JSON.stringify(ls.save_login)) ;
+                                        if (!ls.save_login[old_auth_address]) ls.save_login[old_auth_address] = {choice: '0'};
+                                        save_wallet_login = ls.save_login[old_auth_address].choice;
+                                        ls_save();
 
-                                    // query 1. simple get all optional files for current user directory
-                                    // todo: optional files and actual files on file system can be out of sync. Should delete files_optional + sign to be sure that optional files and file system matches
-                                    directory = z_cache.my_wallet_data_hub + "/data/users/" + ZeroFrame.site_info.auth_address;
-                                    w2_query_5 =
-                                        "select files_optional.filename from json, files_optional " +
-                                        "where directory like '" + directory + "' " +
-                                        "and file_name = 'content.json' " +
-                                        "and files_optional.json_id = json.json_id";
-                                    console.log(pgm + 'w2_query_5 = ' + w2_query_5);
-                                    debug_seq = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, 'w2 query 5', 'dbQuery');
-                                    ZeroFrame.cmd("dbQuery", [w2_query_5], function (files) {
-                                        var pgm = service + '.initialize.done dbQuery 1: ';
-                                        var files, i, re, get_file_info, m, optional;
-                                        MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq, (!files || files.error) ? 'Failed. error = ' + JSON.stringify(res) : 'OK. Returned ' + files.length + ' rows');
-                                        if (files.error) {
-                                            console.log(pgm + 'query failed. error = ' + files.error);
-                                            console.log(pgm + 'w2_query_5 = ' + w2_query_5);
-                                            return;
-                                        }
-                                        // keeping only -i, -e and -p optional files in cleanup loop
-                                        // todo: must add a manual cleanup for offline and manual files. Not cannot used timestamp
-                                        re = new RegExp('^[0-9a-f]{10}(-i|-e|-o|-io|-p)\.[0-9]{13}$');
-                                        for (i = files.length - 1; i >= 0; i--) {
-                                            m = files[i].filename.match(re);
-                                            if (!m) {
-                                                // not a money transaction file
-                                                files.splice(i, 1);
-                                                continue;
+                                        // cleanup old outgoing money transaction files
+                                        // do not cleanup -o offline and normal files.See cleanup_offline_session_files
+                                        // find outgoing money transactions
+
+                                        // query 1. simple get all optional files for current user directory
+                                        // todo: optional files and actual files on file system can be out of sync. Should delete files_optional + sign to be sure that optional files and file system matches
+                                        directory = z_cache.my_wallet_data_hub + "/data/users/" + ZeroFrame.site_info.auth_address;
+                                        w2_query_5 =
+                                            "select files_optional.filename from json, files_optional " +
+                                            "where directory like '" + directory + "' " +
+                                            "and file_name = 'content.json' " +
+                                            "and files_optional.json_id = json.json_id";
+                                        console.log(pgm + 'w2_query_5 = ' + w2_query_5);
+                                        debug_seq = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, 'w2 query 5', 'dbQuery');
+                                        ZeroFrame.cmd("dbQuery", [w2_query_5], function (files) {
+                                            var pgm = service + '.initialize.done dbQuery 1: ';
+                                            var files, i, re, get_file_info, m, optional;
+                                            MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq, (!files || files.error) ? 'Failed. error = ' + JSON.stringify(res) : 'OK. Returned ' + files.length + ' rows');
+                                            if (files.error) {
+                                                console.log(pgm + 'query failed. error = ' + files.error);
+                                                console.log(pgm + 'w2_query_5 = ' + w2_query_5);
+                                                return;
                                             }
-                                            optional = m[1];
-                                            if (['-i', '-e', '-p'].indexOf(optional) == -1) {
-                                                // offline transaction or normal file (fallback for offline transaction)
-                                                files.splice(i, 1);
-                                            }
-                                        }
-                                        console.log(pgm + 'files = ' + JSON.stringify(files));
-
-                                        // get file info before starting file deletes. must only delete outgoing optional files
-                                        console.log(pgm + 'checking file_info for optional files list. do not delete incoming not downloaded optional files');
-                                        get_file_info = function (i, cb) {
-                                            var pgm = service + '.initialize.cb.get_file_info: ';
-                                            var inner_path, debug_seq;
-                                            if (i >= files.length) {
-                                                // done with file info lookup. continue with delete files
-                                                console.log(pgm + 'done with file info lookup. i = ' + i + ', files.length = ' + files.length + ' continue with delete files');
-                                                return cb();
-                                            }
-                                            inner_path = 'merged-' + get_merged_type() + '/' + directory + '/' + files[i].filename;
-                                            debug_seq = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path, 'optionalFileInfo');
-                                            ZeroFrame.cmd("optionalFileInfo", [inner_path], function (file_info) {
-                                                MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq, file_info ? 'OK' : 'Not found');
-                                                console.log(pgm + 'i = ' + i + ', inner_path = ' + inner_path + ', file_info = ' + JSON.stringify(file_info));
-                                                //i = 0, inner_path = merged-MoneyNetwork/1HXzvtSLuvxZfh6LgdaqTk4FSVf7x8w7NJ/data/users/18DbeZgtVCcLghmtzvg4Uv8uRQAwR8wnDQ/aaca9a8ff7.1509003997742, file_info = null
-
-                                                files[i].file_info = file_info;
-                                                get_file_info(i + 1, cb);
-                                            }); // optionalFileInfo callback
-                                        }; // check_files
-                                        get_file_info(0, function () {
-                                            var pgm = service + '.initialize.done get_file_info callback 2: ';
-                                            var delete_tmp_files, i, filename, file_info, this_session_filename, timestamp, delete_ok, delete_failed, delete_tmp_file;
-
-                                            console.log(pgm + 'files with file_info = ' + JSON.stringify(files));
-                                            //files with file_info = [{
-                                            //    "filename": "aaca9a8ff7.1509003997742",
-                                            //    "file_info": null
-                                            //}];
-
-                                            delete_tmp_files = [];
-                                            for (i = 0; i < files.length; i++) {
-                                                filename = files[i].filename;
-                                                file_info = files[i].file_info;
-                                                if (!file_info) {
-                                                    console.log(pgm + 'info_info (normal file or deleted optional file) = empty!');
+                                            // keeping only -i, -e and -p optional files in cleanup loop
+                                            // todo: must add a manual cleanup for offline and manual files. Not cannot used timestamp
+                                            re = new RegExp('^[0-9a-f]{10}(-i|-e|-o|-io|-p)\.[0-9]{13}$');
+                                            for (i = files.length - 1; i >= 0; i--) {
+                                                m = files[i].filename.match(re);
+                                                if (!m) {
+                                                    // not a money transaction file
+                                                    files.splice(i, 1);
                                                     continue;
                                                 }
-                                                if (file_info.is_downloaded && (file_info.time_added == file_info.time_downloaded)) {
-                                                    console.log(pgm + 'file_info (outgoing optional file) = ' + JSON.stringify(file_info));
+                                                optional = m[1];
+                                                if (['-i', '-e', '-p'].indexOf(optional) == -1) {
+                                                    // offline transaction or normal file (fallback for offline transaction)
+                                                    files.splice(i, 1);
                                                 }
-                                                else {
-                                                    console.log(pgm + 'file_info (ingoing optional file) = ' + JSON.stringify(file_info));
-                                                    continue;
-                                                }
-                                                this_session_filename = filename.substr(0, 10);
-                                                if (this_session_filename != encrypt2.this_session_filename) {
-                                                    // unknown (old) session
-                                                    delete_tmp_files.push(filename);
-                                                    continue;
-                                                }
-                                                timestamp = parseInt(filename.substr(-13));
-                                                if (!encrypt2.session_at) {
-                                                    console.log(pgm + 'no session_at timestamp was found for this_session_filename = ' + this_session_filename + '. maybe not restored session. using service_started_at');
-                                                    encrypt2.session_at = service_started_at;
-                                                }
-                                                if (timestamp < encrypt2.session_at) {
-                                                    // old outgoing money transaction message
-                                                    delete_tmp_files.push(filename);
-                                                }
-                                            } // i
-                                            console.log(pgm + 'delete_tmp_files = ' + JSON.stringify(delete_tmp_files));
-                                            // delete_tmp_files = ["041e012302-i.1515156194073","041e012302-i.1515156203845","041e012302-i.1515156196983","041e012302-i.1515156195931","041e012302-i.1515156194945","041e012302-i.1515156204913","041e012302-i.1515156164248","041e012302-i.1515156586064"]
+                                            }
+                                            console.log(pgm + 'files = ' + JSON.stringify(files));
 
-                                            // delete file loop
-                                            delete_ok = [];
-                                            delete_failed = [];
-                                            delete_tmp_file = function (transaction_timestamp) {
-                                                var pgm = service + '.initialize.done.delete_tmp_file: ';
-                                                var filename, inner_path;
-                                                if (!delete_tmp_files.length) {
-                                                    // finish deleting old temporary optional files (-i, -e and -p)
-                                                    MoneyNetworkAPILib.end_transaction(transaction_timestamp);
-                                                    if (!delete_ok.length) {
-                                                        // nothing to sign
-                                                        cb(sessionid, save_wallet_login);
+                                            // get file info before starting file deletes. must only delete outgoing optional files
+                                            console.log(pgm + 'checking file_info for optional files list. do not delete incoming not downloaded optional files');
+                                            get_file_info = function (i, cb) {
+                                                var pgm = service + '.initialize.cb.get_file_info: ';
+                                                var inner_path, debug_seq;
+                                                if (i >= files.length) {
+                                                    // done with file info lookup. continue with delete files
+                                                    console.log(pgm + 'done with file info lookup. i = ' + i + ', files.length = ' + files.length + ' continue with delete files');
+                                                    return cb();
+                                                }
+                                                inner_path = 'merged-' + get_merged_type() + '/' + directory + '/' + files[i].filename;
+                                                debug_seq = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path, 'optionalFileInfo');
+                                                ZeroFrame.cmd("optionalFileInfo", [inner_path], function (file_info) {
+                                                    MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq, file_info ? 'OK' : 'Not found');
+                                                    console.log(pgm + 'i = ' + i + ', inner_path = ' + inner_path + ', file_info = ' + JSON.stringify(file_info));
+                                                    //i = 0, inner_path = merged-MoneyNetwork/1HXzvtSLuvxZfh6LgdaqTk4FSVf7x8w7NJ/data/users/18DbeZgtVCcLghmtzvg4Uv8uRQAwR8wnDQ/aaca9a8ff7.1509003997742, file_info = null
+
+                                                    files[i].file_info = file_info;
+                                                    get_file_info(i + 1, cb);
+                                                }); // optionalFileInfo callback
+                                            }; // check_files
+                                            get_file_info(0, function () {
+                                                var pgm = service + '.initialize.done get_file_info callback 2: ';
+                                                var delete_tmp_files, i, filename, file_info, this_session_filename, timestamp, delete_ok, delete_failed, delete_tmp_file;
+
+                                                console.log(pgm + 'files with file_info = ' + JSON.stringify(files));
+                                                //files with file_info = [{
+                                                //    "filename": "aaca9a8ff7.1509003997742",
+                                                //    "file_info": null
+                                                //}];
+
+                                                delete_tmp_files = [];
+                                                for (i = 0; i < files.length; i++) {
+                                                    filename = files[i].filename;
+                                                    file_info = files[i].file_info;
+                                                    if (!file_info) {
+                                                        console.log(pgm + 'info_info (normal file or deleted optional file) = empty!');
+                                                        continue;
                                                     }
-                                                    // sign only. publish: false. publish is pending. see publish in cleanup_offline_session_files
-                                                    else z_publish({}, function (res) {
-                                                        cb(sessionid, save_wallet_login);
+                                                    if (file_info.is_downloaded && (file_info.time_added == file_info.time_downloaded)) {
+                                                        console.log(pgm + 'file_info (outgoing optional file) = ' + JSON.stringify(file_info));
+                                                    }
+                                                    else {
+                                                        console.log(pgm + 'file_info (ingoing optional file) = ' + JSON.stringify(file_info));
+                                                        continue;
+                                                    }
+                                                    this_session_filename = filename.substr(0, 10);
+                                                    if (this_session_filename != encrypt2.this_session_filename) {
+                                                        // unknown (old) session
+                                                        delete_tmp_files.push(filename);
+                                                        continue;
+                                                    }
+                                                    timestamp = parseInt(filename.substr(-13));
+                                                    if (!encrypt2.session_at) {
+                                                        console.log(pgm + 'no session_at timestamp was found for this_session_filename = ' + this_session_filename + '. maybe not restored session. using service_started_at');
+                                                        encrypt2.session_at = service_started_at;
+                                                    }
+                                                    if (timestamp < encrypt2.session_at) {
+                                                        // old outgoing money transaction message
+                                                        delete_tmp_files.push(filename);
+                                                    }
+                                                } // i
+                                                console.log(pgm + 'delete_tmp_files = ' + JSON.stringify(delete_tmp_files));
+                                                // delete_tmp_files = ["041e012302-i.1515156194073","041e012302-i.1515156203845","041e012302-i.1515156196983","041e012302-i.1515156195931","041e012302-i.1515156194945","041e012302-i.1515156204913","041e012302-i.1515156164248","041e012302-i.1515156586064"]
+
+                                                // delete file loop
+                                                delete_ok = [];
+                                                delete_failed = [];
+                                                delete_tmp_file = function (transaction_timestamp) {
+                                                    var pgm = service + '.initialize.done.delete_tmp_file: ';
+                                                    var filename, inner_path;
+                                                    if (!delete_tmp_files.length) {
+                                                        // finish deleting old temporary optional files (-i, -e and -p)
+                                                        MoneyNetworkAPILib.end_transaction(transaction_timestamp);
+                                                        if (!delete_ok.length) {
+                                                            // nothing to sign
+                                                            cb(sessionid, save_wallet_login);
+                                                        }
+                                                        // sign only. publish: false. publish is pending. see publish in cleanup_offline_session_files
+                                                        else z_publish({}, function (res) {
+                                                            cb(sessionid, save_wallet_login);
+                                                        });
+                                                        return;
+                                                    } // done
+
+                                                    filename = delete_tmp_files.shift();
+                                                    inner_path = 'merged-' + get_merged_type() + '/' + z_cache.my_wallet_data_hub + '/data/users/' + ZeroFrame.site_info.auth_address + '/' + filename;
+
+                                                    // issue #1140. https://github.com/HelloZeroNet/ZeroNet/issues/1140
+                                                    // false Delete error: [Errno 2] No such file or directory error returned from fileDelete
+                                                    MoneyNetworkAPILib.z_file_delete(pgm, inner_path, function (res) {
+                                                        if (res == 'ok') delete_ok.push(filename);
+                                                        else delete_failed.push(filename);
+                                                        delete_tmp_file(transaction_timestamp);
                                                     });
-                                                    return;
-                                                } // done
 
-                                                filename = delete_tmp_files.shift();
-                                                inner_path = 'merged-' + get_merged_type() + '/' + z_cache.my_wallet_data_hub + '/data/users/' + ZeroFrame.site_info.auth_address + '/' + filename;
+                                                }; // delete_tmp_file
 
-                                                // issue #1140. https://github.com/HelloZeroNet/ZeroNet/issues/1140
-                                                // false Delete error: [Errno 2] No such file or directory error returned from fileDelete
-                                                MoneyNetworkAPILib.z_file_delete(pgm, inner_path, function (res) {
-                                                    if (res == 'ok') delete_ok.push(filename);
-                                                    else delete_failed.push(filename);
+                                                // start delete file loop
+                                                // transaction. don't delete files while publishing
+                                                MoneyNetworkAPILib.start_transaction(pgm, function (transaction_timestamp) {
                                                     delete_tmp_file(transaction_timestamp);
                                                 });
 
-                                            }; // delete_tmp_file
+                                            }); // done get_file_info callback 2
 
-                                            // start delete file loop
-                                            // transaction. don't delete files while publishing
-                                            MoneyNetworkAPILib.start_transaction(pgm, function (transaction_timestamp) {
-                                                delete_tmp_file(transaction_timestamp);
-                                            });
+                                        }); // done dbQuery callback 1
 
-                                        }); // done get_file_info callback 2
+                                    }; // done
 
-                                    }); // done dbQuery callback 1
+                                    // todo: save_login = '1'. get wallet login before trying
 
-                                }; // done
-
-                                // check for old (1. priority) or new (2. priority) session
-                                // step 5 - check old session
-                                console.log(pgm + 'step 5: check old session');
-                                is_old_session(function (sessionid) {
-                                    var pgm = service + '.initialize is_old_session callback 5: ';
-                                    console.log(pgm + 'sessionid = ' + JSON.stringify(sessionid));
-                                    if (sessionid) {
-                                        $rootScope.$apply();
-                                        return done(sessionid);
-                                    } // session was restored from localStorage
-                                    // step 6 - check new session
-                                    console.log(pgm + 'step 6: check new session');
-                                    is_new_session(function (sessionid) {
-                                        var pgm = service + '.initialize is_new_session callback 6: ';
+                                    // check for old (1. priority) or new (2. priority) session
+                                    // step 5 - check old session
+                                    console.log(pgm + 'step 5: check old session');
+                                    is_old_session(function (sessionid) {
+                                        var pgm = service + '.initialize is_old_session callback 5: ';
                                         console.log(pgm + 'sessionid = ' + JSON.stringify(sessionid));
-                                        if (!sessionid) return done(null);
-                                        $rootScope.$apply();
-                                        save_mn_session(function () {
-                                            done(sessionid)
-                                        });
-                                    }); // is_new_session callback 6
+                                        if (sessionid) {
+                                            $rootScope.$apply();
+                                            return done(sessionid);
+                                        } // session was restored from localStorage
+                                        // step 6 - check new session
+                                        console.log(pgm + 'step 6: check new session');
+                                        is_new_session(function (sessionid) {
+                                            var pgm = service + '.initialize is_new_session callback 6: ';
+                                            console.log(pgm + 'sessionid = ' + JSON.stringify(sessionid));
+                                            if (!sessionid) return done(null);
+                                            $rootScope.$apply();
+                                            save_mn_session(function () {
+                                                done(sessionid)
+                                            });
+                                        }); // is_new_session callback 6
 
-                                }); // is_old_session callback 5
+                                    }); // is_old_session callback 5
+
+                                }) ;
 
                             }); // update_wallet_json callback 4
 

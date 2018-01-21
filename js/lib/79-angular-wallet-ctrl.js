@@ -47,10 +47,6 @@ angular.module('MoneyNetworkW2')
                     var pgm = controller + ' get_wallet_login callback: ' ;
                     console.log(pgm + 'wallet_id = ' + wallet_id + ', wallet_password = ' + wallet_password + ', error = ' + error) ;
                     if (error) ZeroFrame.cmd("wrapperNotification", ['error', error, 10000]) ;
-                    else {
-                        self.wallet_id = wallet_id ;
-                        self.wallet_password = wallet_password ;
-                    }
                     self.status.save_login_disabled = false ;
                     console.log(pgm + 'self.status.save_login_disabled = ' + self.status.save_login_disabled) ;
                     $rootScope.$apply() ;
@@ -99,7 +95,7 @@ angular.module('MoneyNetworkW2')
                 self.status.save_login = old_save_wallet_login;
                 return ;
             }
-            W2Service.save_wallet_login(self.status.save_login, self.wallet_id, self.wallet_password, function(res) {
+            W2Service.save_wallet_login(self.status.save_login, self.status.wallet_id, self.status.wallet_password, function(res) {
                 console.log(pgm + 'res = ' + JSON.stringify(res)) ;
 
             }) ;
@@ -175,18 +171,18 @@ angular.module('MoneyNetworkW2')
 
         // generate random wallet ID and password
         self.gen_wallet_id = function() {
-            if (self.wallet_id) {
+            if (self.status.wallet_id) {
                 ZeroFrame.cmd("wrapperNotification", ["info", 'Old Wallet Id was not replaced', 5000]);
                 return ;
             }
-            self.wallet_id = W2Service.generate_random_string(30, false) ;
+            self.status.wallet_id = W2Service.generate_random_string(30, false) ;
         };
         self.gen_wallet_pwd = function() {
-            if (self.wallet_password) {
+            if (self.status.wallet_password) {
                 ZeroFrame.cmd("wrapperNotification", ["info", 'Old Wallet Password was not replaced', 5000]);
                 return ;
             }
-            self.wallet_password = W2Service.generate_random_string(30, true) ;
+            self.status.wallet_password = W2Service.generate_random_string(30, true) ;
         };
 
 
@@ -195,7 +191,7 @@ angular.module('MoneyNetworkW2')
 
         // wallet operations
         self.create_new_wallet = function () {
-            btcService.create_new_wallet(self.wallet_id, self.wallet_password, function (error) {
+            btcService.create_new_wallet(self.status.wallet_id, self.status.wallet_password, function (error) {
                 if (error) ZeroFrame.cmd("wrapperNotification", ["error", error]);
                 else {
                     ZeroFrame.cmd("wrapperNotification", ["done", 'New Bitcoin wallet was created OK.<br>Please save backup info<br>See console log', 5000]);
@@ -206,7 +202,7 @@ angular.module('MoneyNetworkW2')
 
         self.init_wallet = function () {
             var pgm = controller + '.init_wallet: ' ;
-            btcService.init_wallet(self.wallet_id, self.wallet_password, function (error) {
+            btcService.init_wallet(self.status.wallet_id, self.status.wallet_password, function (error) {
                 if (error) ZeroFrame.cmd("wrapperNotification", ["error", error]);
                 else {
                     ZeroFrame.cmd("wrapperNotification", ["info", 'Bitcoin wallet was initialized OK.', 5000]);
@@ -247,8 +243,8 @@ angular.module('MoneyNetworkW2')
                 else {
                     ZeroFrame.cmd("wrapperNotification", ["done", 'Bitcoin wallet was deleted', 5000]);
                     // clear form
-                    self.wallet_id = null ;
-                    self.wallet_password = null ;
+                    self.status.wallet_id = null ;
+                    self.status.wallet_password = null ;
                     self.send_address = null ;
                     self.send_amount = null ;
                     self.receiver_address = null ;
