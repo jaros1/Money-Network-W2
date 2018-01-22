@@ -899,7 +899,7 @@ angular.module('MoneyNetworkW2')
                                 ', other_wallet_data_hub_title = ' + z_cache.other_wallet_data_hub_title) ;
 
                             // prevent user from removing user data hub with user data.
-                            set_disabled_job = function () { all_hubs_set_disabled(z_cache.my_wallet_data_hub) } ;
+                            set_disabled_job = function () { MoneyNetworkAPILib.all_hubs_set_disabled(z_cache.my_wallet_data_hub) } ;
                             $timeout(set_disabled_job) ;
 
                             cb(z_cache.my_wallet_data_hub, z_cache.other_wallet_data_hub, z_cache.other_wallet_data_hub_title) ;
@@ -5827,163 +5827,6 @@ angular.module('MoneyNetworkW2')
             } // send_balance
 
 
-            // see https://github.com/jaros1/Money-Network/issues/302
-            var all_hubs = [] ;
-            var get_all_hubs_cbs = [] ;
-            var get_all_hubs_running = false ;
-            function get_all_hubs (refresh, cb) {
-                var pgm = service + '.get_all_hubs: ' ;
-                var mn_query_21, debug_seq ;
-
-                if (!cb) cb = function() {} ;
-                if (all_hubs.length && !refresh) return cb(all_hubs) ;
-                if (get_all_hubs_running) {
-                    // wait. previous get_all_hubs call is executing
-                    get_all_hubs_cbs.push(function() {get_all_hubs (refresh, cb) }) ;
-                    return ;
-                }
-                get_all_hubs_running = true ;
-
-                mn_query_21 =
-                    "select hub, hub_type, hub_title, count(*) as  no_users " +
-                    "from (" +
-                    "   select " +
-                    "      case when hub1 is not null and hub1 <> '1JeHa67QEvrrFpsSow82fLypw8LoRcmCXk' then hub1 else hub2 end as hub, " +
-                    "      hub_type, " +
-                    "      hub_title " +
-                    "   from ( " +
-                    "      select " +
-                    "         hub.value as hub1, " +
-                    "         substr(json.directory, 1, instr(json.directory,'/')-1) as hub2, " +
-                    "         case json.file_name when 'data.json' then 'user' else 'wallet' end as hub_type, " +
-                    "         (select keyvalue.value from keyvalue " +
-                    "          where keyvalue.key = 'hub_title' " +
-                    "          and keyvalue.json_id = hub.json_id) as hub_title " +
-                    "      from keyvalue as hub, json " +
-                    "      where hub.key = 'hub' " +
-                    "      and json.json_id = hub.json_id " +
-                    "      and json.file_name in ('data.json', 'wallet.json'))) " +
-                    "group by hub, hub_type, hub_title" ;
-
-                console.log(pgm + 'mn query 21 = ' + mn_query_21);
-                debug_seq = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, 'mn query 21', 'dbQuery', true) ;
-                ZeroFrame.cmd("dbQuery", [mn_query_21], function (res) {
-                    var pgm = service + '.get_all_hubs dbQuery callback 1: ';
-                    var old_hub, old_i, i;
-                    MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq, (!res || res.error) ? 'Failed. error = ' + JSON.stringify(res) : 'OK. Returned ' + res.length + ' rows');
-                    if (res.error) {
-                        console.log(pgm + 'get all hubs query failed. error = ' + res.error);
-                        console.log(pgm + 'mn query 21 = ' + mn_query_21);
-                        return;
-                    }
-                    // console.log(pgm + 'res (1) = ' + JSON.stringify(res)) ;
-
-                    // sort by: 1) hub, 2) rows without title before rows with title, 3) number of users
-                    res.sort(function (a,b) {
-                        if (a.hub != b.hub) return a.hub < b.hub ? -1 : 1 ;
-                        if (a.title && !b.title) return 1 ;
-                        if (!a.title && b.title) return -1 ;
-                        return (b.no_users- a.no_users) ;
-                    }) ;
-                    // console.log(pgm + 'res (2) = ' + JSON.stringify(res)) ;
-
-                    // keep last row for each hub
-                    old_hub = 'x' ;
-                    old_i = -1 ;
-                    for (i=res.length-1 ; i>=0 ; i--) {
-                        if (res[i].hub == old_hub) {
-                            res[old_i].no_users = res[old_i].no_users + res[i].no_users
-                            res.splice(i,1) ;
-                        }
-                        else {
-                            old_hub = res[i].hub ;
-                            old_i = i ;
-                        }
-                    } // for i
-                    // console.log(pgm + 'res (3) = ' + JSON.stringify(res)) ;
-
-                    all_hubs.splice(0,all_hubs.length) ;
-                    for (i=0 ; i<res.length ; i++) all_hubs.push({hub: res[i].hub, hub_type: res[i].hub_type, hub_title: res[i].hub_title, no_users: res[i].no_users}) ;
-                    // console.log(pgm + 'all_hubs (1) = ' + JSON.stringify(all_hubs)) ;
-
-                    // check existing merger sites
-                    ZeroFrame.cmd("mergerSiteList", [true], function (merger_sites) {
-                        var pgm = service + '.get_all_hubs mergerSiteList callback 2: ';
-                        var i, hub, hub_type ;
-                        console.log(pgm + 'merger_sites (1) = ' + JSON.stringify(merger_sites)) ;
-
-                        for (i=0 ; i<all_hubs.length ; i++) {
-                            hub = all_hubs[i].hub ;
-                            if (merger_sites[hub]) {
-                                all_hubs[i].hub_added = true ;
-                                all_hubs[i].hub_title = merger_sites[hub].content.title ;
-                                all_hubs[i].peers = merger_sites[hub].settings.peers ;
-                                all_hubs[i].url = '/' + (merger_sites[hub].content.domain || hub) ;
-                                delete merger_sites[hub] ;
-                            }
-                            else all_hubs[i].hub_added = false ;
-                        } // for i
-                        // console.log(pgm + 'all_hubs (2) = ' + JSON.stringify(all_hubs)) ;
-                        // console.log(pgm + 'merger_sites (2) = ' + JSON.stringify(merger_sites)) ;
-
-                        // add merger sites without any users. fx failed hub 1922ZMkwZdFjKbSAdFR1zA5YBHMsZC51uc User data hub U2
-                        for (i=all_hubs.length-1 ; i>=0 ; i--) if (!all_hubs[i].no_users) all_hubs.splice(0,i) ;
-                        for (hub in merger_sites) {
-                            hub_type = 'n/a' ;
-                            if (merger_sites[hub].content.title.match(/user data hub/i) ||
-                                merger_sites[hub].content.description.match(/user data hub/i)) hub_type = 'user';
-                            else if (merger_sites[hub].content.title.match(/wallet data hub/i) ||
-                                merger_sites[hub].content.description.match(/wallet data hub/i)) hub_type = 'wallet';
-                            else hub_type = 'n/a' ;
-                            all_hubs.push({
-                                hub: hub,
-                                hub_type: hub_type,
-                                hub_title: merger_sites[hub].content.title,
-                                no_users: 0,
-                                hub_added: true,
-                                peers: merger_sites[hub].settings.peers,
-                                url: '/' + (merger_sites[hub].content.domain || hub)
-                            })
-                        }
-                        console.log(pgm + 'all_hubs (3) = ' + JSON.stringify(all_hubs)) ;
-                        //all_hubs (3) = [
-                        //    {"hub":"182Uot1yJ6mZEwQYE5LX1P5f6VPyJ9gUGe","hub_type":"user",  "hub_title":"U1 User data hub",  "no_users":134,"add_hub":false,"peers":0},
-                        //    {"hub":"1HXzvtSLuvxZfh6LgdaqTk4FSVf7x8w7NJ","hub_type":"wallet","hub_title":"W2 Wallet data hub","no_users":36, "add_hub":false,"peers":0},
-                        //    {"hub":"1PgyTnnACGd1XRdpfiDihgKwYRRnzgz2zh","hub_type":"user",  "hub_title":"U3 User data hub",  "no_users":108,"add_hub":false,"peers":8},
-                        //    {"hub":"1922ZMkwZdFjKbSAdFR1zA5YBHMsZC51uc",                    "hub_title":"U2 User data hub",  "no_users":0,  "add_hub":false,"peers":0}];
-
-                        // done
-                        cb(all_hubs) ;
-
-                        // any callback waiting for this get_all_hubs call to finish?
-                        get_all_hubs_running = false ;
-                        if (get_all_hubs_cbs.length) {
-                            cb = get_all_hubs_cbs.shift() ;
-                            cb() ;
-                        }
-
-                    }) ; // mergerSiteList callback 2
-
-                }); // dbQuery callback 1
-
-            } // get_all_hubs
-
-            // log in. i_am_online. prevent user from removing my user data hub from MoneyNetwork
-            function all_hubs_set_disabled (my_user_hub) {
-                get_all_hubs(true, function (all_hubs) {
-                    var i ;
-                    for (i=0 ; i<all_hubs.length ; i++) all_hubs[i].disabled = (my_user_hub == all_hubs[i].hub) ;
-                }) ;
-            }
-
-            // log out. clear disabled flag in all_hubs
-            function all_hubs_clear_disabled () {
-                get_all_hubs(false, function (all_hubs) {
-                    var i ;
-                    for (i=0 ; i<all_hubs.length ; i++) all_hubs[i].disabled = false ;
-                }) ;
-            }
-
             // open wallet url in a new browser tab
             // write warning in console.log. exception is raised in parent frame and cannot be catch here
             function open_window (pgm, url) {
@@ -6006,8 +5849,6 @@ angular.module('MoneyNetworkW2')
                 get_status: get_status,
                 save_permissions: save_permissions,
                 send_balance: send_balance,
-                get_all_hubs: get_all_hubs,
-                all_hubs_clear_disabled: all_hubs_clear_disabled,
                 open_window: open_window
             };
 

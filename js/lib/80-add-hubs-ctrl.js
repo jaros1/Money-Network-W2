@@ -11,7 +11,7 @@ angular.module('MoneyNetworkW2')
 
         // get a list of all user and wallet data hubs. For add hub site(s) UI
         self.all_hubs = [] ;
-        moneyNetworkW2Service.get_all_hubs(false, function (all_hubs) {
+        MoneyNetworkAPILib.get_all_hubs(false, function (all_hubs) {
             var pgm = controller + ' get_all_hubs callback: ' ;
             var retry ;
             self.all_hubs = all_hubs ;
