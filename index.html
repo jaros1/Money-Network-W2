@@ -6,6 +6,29 @@
     <meta name="keywords" content="money">
     <link rel="stylesheet" media="all" href="css/all.css"/>
 
+    <script type="text/ng-template" id="addHubs">
+        Add more hubs. Get content from more MoneyNetwork hubs and help distribute MoneyNetwork content.
+        User Data Hub: user data (user info and chat) used by MoneyNetwork.
+        Wallet Data Hub: wallet data (wallet info and money transactions) used by MoneyNetwork wallets.<br>
+        Use checkbox to add/remove hubs. Use url to see info about hub (will also add site).
+        <div style="width: 100%" ng-controller="AddHubsCtrl as c">
+            <div ng-repeat="h in c.all_hubs|orderBy:h.hub_title" style="float: left">
+                <input type="checkbox" ng-model="h.hub_added" ng-change="c.add_remove_hub(h)" ng-disabled="h.disabled">
+                <a href="" ng-click="c.open_hub_url(h)">
+                    <span ng-bind="h.hub_title || h.hub"></span>
+                            <span ng-show="h.hasOwnProperty('no_users')">
+                                - <span ng-bind="h.no_users"></span> users
+                            </span>
+                            <span ng-show="h.hasOwnProperty('peers')">
+                                - <span ng-bind="h.peers"></span> peers
+                            </span>
+                </a>
+                &nbsp;&nbsp;&nbsp;
+            </div>
+        </div>
+        <!-- end addHubs -->
+    </script>
+
     <script type="text/ng-template" id="wallet.html">
 
         <div>
@@ -143,9 +166,11 @@
                 </tbody>
             </table>
         </div>
+        <br><br>
 
-        <br>
-        <br>
+        <p ng-include="'addHubs'"></p>
+        <br><br>
+
         <p>
             Summary:
         <ul style="list-style-type:disc">
@@ -173,11 +198,12 @@
             </tbody>
         </table>
         <br>
+
+
         <p>
             Contact info: I am not using ZeroMail.
             Send a <a href="/moneynetwork.bit/?path=/chat2/jro@zeroid.bit" target="_top" rel="noopener noreferrer">PM ✉</a>
             , use "@jro:" in ZeroMe or create a <a href="https://github.com/jaros1/Money-Network-W2" target="_top" rel="noopener noreferrer">GitHub</a> issue with question or issue.
-
         </p>
 
         <!-- end wallet.html -->
