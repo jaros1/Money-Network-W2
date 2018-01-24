@@ -209,12 +209,19 @@ angular.module('MoneyNetworkW2')
         }])
 
 
-    .factory('MoneyNetworkW2Service', ['$timeout', '$rootScope', '$window', '$location', 'btcService',
-        function ($timeout, $rootScope, $window, $location, btcService) {
+    .factory('MoneyNetworkW2Service', ['$timeout', '$rootScope', '$window', '$location', 'btcService', 'brFilter',
+        function ($timeout, $rootScope, $window, $location, btcService, br) {
             var service = 'MoneyNetworkW2Service';
             console.log(service + ' loaded');
 
             var service_started_at = new Date().getTime() ;
+
+            // insert <br> into long notifications. For example JSON.stringify
+            function z_wrapper_notification (array) {
+                array[1] = br(array[1]) ;
+                ZeroFrame.cmd("wrapperNotification", array) ;
+            } // z_wrapper_notification
+
 
             // for MN <=> W2 integration
             var wallet_info = btcService.get_wallet_info() ;
@@ -1082,7 +1089,7 @@ angular.module('MoneyNetworkW2')
                                 pgm2 = MoneyNetworkAPILib.get_group_debug_seq_pgm(pgm, group_debug_seq);
                                 console.log(pgm2 + 'res = ' + JSON.stringify(res));
                                 if (res != "ok") {
-                                    ZeroFrame.cmd("wrapperNotification", ["error", "Failed to " + (publish ? "publish" : "sign") + ": " + res.error, 5000]);
+                                    z_wrapper_notification(["error", "Failed to " + (publish ? "publish" : "sign") + ": " + res.error, 5000]);
                                     // error - repeat sitePublish in 30, 60, 120, 240 etc seconds (device maybe offline or no peers)
                                     if (!z_publish_interval) z_publish_interval = 30;
                                     else z_publish_interval = z_publish_interval * 2;
@@ -1109,7 +1116,7 @@ angular.module('MoneyNetworkW2')
                             MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq, res == 'ok' ? 'OK' : 'Failed. error = ' + JSON.stringify(res));
                             console.log(pgm2 + 'res = ' + res);
                             if (res != "ok") {
-                                ZeroFrame.cmd("wrapperNotification", ["error", "Failed to " + (publish ? "publish" : "sign") + ": " + res.error, 5000]);
+                                z_wrapper_notification(["error", "Failed to " + (publish ? "publish" : "sign") + ": " + res.error, 5000]);
                                 return cb(res.error); // sign only. must be a serious error
                             }
                             // sign OK
@@ -1696,7 +1703,7 @@ angular.module('MoneyNetworkW2')
                 if (options.w2) {
                     notification = [options.type, error.join('<br>')] ;
                     if (options.timeout) notification.push(options.timeout) ;
-                    ZeroFrame.cmd("wrapperNotification", notification);
+                    z_wrapper_notification(notification);
                 }
                 if (!options.mn) {
                     if (options.end_group_operation) MoneyNetworkAPILib.debug_group_operation_end(options.group_debug_seq, pgm + error.join('. ')) ;
@@ -2329,7 +2336,7 @@ angular.module('MoneyNetworkW2')
                                         try {
                                             var money_transaction;
                                             if (error) {
-                                                ZeroFrame.cmd("wrapperNotification", ['error', 'Get new bitcoin address failed with<br>' + error]) ;
+                                                z_wrapper_notification(['error', 'Get new bitcoin address failed with<br>' + error]) ;
                                                 return send_response('Could not get a new bitcoin address. error = ' + error);
                                             }
                                             money_transaction = request.money_transactions[i];
@@ -2372,7 +2379,7 @@ angular.module('MoneyNetworkW2')
                                         btcService.init_wallet(status.wallet_id, status.wallet_password, function (error) {
                                             try {
                                                 if (error && (wallet_info.status != 'Open')) {
-                                                    ZeroFrame.cmd("wrapperNotification", ['error', 'Open wallet request failed with<br>' + error]) ;
+                                                    z_wrapper_notification(['error', 'Open wallet request failed with<br>' + error]) ;
                                                     return send_response('Open wallet request failed with error = ' + error);
                                                 }
                                                 if (error && send_money) console.log(pgm + 'warning. sending money and get_balance request failed with error = ' + error);
@@ -3109,7 +3116,7 @@ angular.module('MoneyNetworkW2')
                                                             errors.unshift('Start money transaction failed') ;
                                                             console.log(pgm + 'error: ' + errors.join('. ')) ;
                                                             // notification in w2
-                                                            ZeroFrame.cmd('wrapperNotification', ['error', errors.join('<br>')]) ;
+                                                            z_wrapper_notification(['error', errors.join('<br>')]) ;
                                                             // notification in mn
                                                             group_debug_seq = MoneyNetworkAPILib.debug_group_operation_start() ;
                                                             pgm = service + '.process_incoming_message.' + request.msgtype + ' read_w_session callback 2/' + group_debug_seq + ': ';
@@ -3320,7 +3327,7 @@ angular.module('MoneyNetworkW2')
                                         if (!session_info) {
                                             error = ['Wallet session handshake failed', 'Money transaction was aborted', 'Unknown sessionid ' + encrypt2.sessionid];
                                             console.log(pgm + 'error. ' + error.join('. '));
-                                            ZeroFrame.cmd('wrapperNotification', ['error', error.join('<br>')]);
+                                            z_wrapper_notification(['error', error.join('<br>')]);
                                             // todo: send notification to mn using global encrypt2 object
                                             return; // no error response. this is a offline message
                                         }

@@ -13,6 +13,12 @@ angular.module('MoneyNetworkW2')
         var sessionid ;
         if (W2Service.is_sessionid()) return ; // 1: wait for redirect without sessionid in URL
 
+        // insert <br> into long notifications. For example JSON.stringify
+        function z_wrapper_notification (array) {
+            W2Service.z_wrapper_notification(array) ;
+        } // z_wrapper_notification
+
+
         // 2-6: startup sequence
         // 2: check merger permission
         // 3: check ZeroNet login
@@ -46,7 +52,7 @@ angular.module('MoneyNetworkW2')
                 W2Service.get_wallet_login(self.status.save_login, function(wallet_id, wallet_password, error) {
                     var pgm = controller + ' get_wallet_login callback: ' ;
                     console.log(pgm + 'wallet_id = ' + wallet_id + ', wallet_password = ' + wallet_password + ', error = ' + error) ;
-                    if (error) ZeroFrame.cmd("wrapperNotification", ['error', error, 10000]) ;
+                    if (error) z_wrapper_notification(['error', error, 10000]) ;
                     self.status.save_login_disabled = false ;
                     console.log(pgm + 'self.status.save_login_disabled = ' + self.status.save_login_disabled) ;
                     $rootScope.$apply() ;
@@ -172,14 +178,14 @@ angular.module('MoneyNetworkW2')
         // generate random wallet ID and password
         self.gen_wallet_id = function() {
             if (self.status.wallet_id) {
-                ZeroFrame.cmd("wrapperNotification", ["info", 'Old Wallet Id was not replaced', 5000]);
+                z_wrapper_notification(["info", 'Old Wallet Id was not replaced', 5000]);
                 return ;
             }
             self.status.wallet_id = W2Service.generate_random_string(30, false) ;
         };
         self.gen_wallet_pwd = function() {
             if (self.status.wallet_password) {
-                ZeroFrame.cmd("wrapperNotification", ["info", 'Old Wallet Password was not replaced', 5000]);
+                z_wrapper_notification(["info", 'Old Wallet Password was not replaced', 5000]);
                 return ;
             }
             self.status.wallet_password = W2Service.generate_random_string(30, true) ;
@@ -192,9 +198,9 @@ angular.module('MoneyNetworkW2')
         // wallet operations
         self.create_new_wallet = function () {
             btcService.create_new_wallet(self.status.wallet_id, self.status.wallet_password, function (error) {
-                if (error) ZeroFrame.cmd("wrapperNotification", ["error", error]);
+                if (error) z_wrapper_notification(["error", error]);
                 else {
-                    ZeroFrame.cmd("wrapperNotification", ["done", 'New Bitcoin wallet was created OK.<br>Please save backup info<br>See console log', 5000]);
+                    z_wrapper_notification(["done", 'New Bitcoin wallet was created OK.<br>Please save backup info<br>See console log', 5000]);
                     $rootScope.$apply() ;
                 }
             }) ;
@@ -203,9 +209,9 @@ angular.module('MoneyNetworkW2')
         self.init_wallet = function () {
             var pgm = controller + '.init_wallet: ' ;
             btcService.init_wallet(self.status.wallet_id, self.status.wallet_password, function (error) {
-                if (error) ZeroFrame.cmd("wrapperNotification", ["error", error]);
+                if (error) z_wrapper_notification(["error", error]);
                 else {
-                    ZeroFrame.cmd("wrapperNotification", ["info", 'Bitcoin wallet was initialized OK.', 5000]);
+                    z_wrapper_notification(["info", 'Bitcoin wallet was initialized OK.', 5000]);
                     $rootScope.$apply() ;
                     if (!self.status.sessionid) return ; // no MN session
                     // send balance to MN
@@ -218,9 +224,9 @@ angular.module('MoneyNetworkW2')
 
         self.get_balance = function () {
             var pgm = controller + '.get_balance: ' ;
-            if (self.wallet_info.status != 'Open') return ZeroFrame.cmd("wrapperNotification", ["info", "No bitcoin wallet found", 3000]) ;
+            if (self.wallet_info.status != 'Open') return z_wrapper_notification(["info", "No bitcoin wallet found", 3000]) ;
             btcService.get_balance(function(error) {
-                if (error) return ZeroFrame.cmd("wrapperNotification", ["error", error]);
+                if (error) return z_wrapper_notification(["error", error]);
                 $rootScope.$apply() ;
                 if (!self.status.sessionid) return ; // no MN session
                 // send balance to MN
@@ -232,16 +238,16 @@ angular.module('MoneyNetworkW2')
 
         self.close_wallet = function () {
             btcService.close_wallet(function (error) {
-                if (error) ZeroFrame.cmd("wrapperNotification", ["error", error]);
-                else ZeroFrame.cmd("wrapperNotification", ["info", 'Bitcoin wallet closed', 5000]);
+                if (error) z_wrapper_notification(["error", error]);
+                else z_wrapper_notification(["info", 'Bitcoin wallet closed', 5000]);
             })
         } ; // close_wallet
 
         self.delete_wallet = function () {
             btcService.delete_wallet(function (error) {
-                if (error) ZeroFrame.cmd("wrapperNotification", ["error", error]);
+                if (error) z_wrapper_notification(["error", error]);
                 else {
-                    ZeroFrame.cmd("wrapperNotification", ["done", 'Bitcoin wallet was deleted', 5000]);
+                    z_wrapper_notification(["done", 'Bitcoin wallet was deleted', 5000]);
                     // clear form
                     self.status.wallet_id = null ;
                     self.status.wallet_password = null ;
@@ -254,9 +260,9 @@ angular.module('MoneyNetworkW2')
         }; // delete_wallet
 
         self.get_new_address = function () {
-            if (self.wallet_info.status != 'Open') return ZeroFrame.cmd("wrapperNotification", ["info", "No bitcoin wallet found", 3000]) ;
+            if (self.wallet_info.status != 'Open') z_wrapper_notification(["info", "No bitcoin wallet found", 3000]) ;
             else self.receiver_address = btcService.get_new_address(function (err, address) {
-                if (err) return ZeroFrame.cmd("wrapperNotification", ['error', 'Could not get a new address. error = ' + err]) ;
+                if (err) return z_wrapper_notification(['error', 'Could not get a new address. error = ' + err]) ;
                 else {
                     self.receiver_address = address ;
                     $rootScope.$apply() ;
@@ -266,17 +272,17 @@ angular.module('MoneyNetworkW2')
 
         self.send_money = function () {
             var pgm = controller + '.send_money: ' ;
-            if (self.wallet_info.status != 'Open') return ZeroFrame.cmd("wrapperNotification", ["info", "No bitcoin wallet found", 3000]) ;
-            if (!self.send_address || !self.send_amount) return ZeroFrame.cmd("wrapperNotification", ["error", "Receiver and/or amount is missing", 5000]) ;
-            if (!self.send_amount.match(/^[0-9]+$/)) return ZeroFrame.cmd("wrapperNotification", ["error", "Amount must be an integer (Satoshi)", 5000]) ;
+            if (self.wallet_info.status != 'Open') z_wrapper_notification(["info", "No bitcoin wallet found", 3000]) ;
+            if (!self.send_address || !self.send_amount) z_wrapper_notification(["error", "Receiver and/or amount is missing", 5000]) ;
+            if (!self.send_amount.match(/^[0-9]+$/)) return z_wrapper_notification(["error", "Amount must be an integer (Satoshi)", 5000]) ;
             // manuel send money action in w2. confirm = true. ask user to confirm money transaction
             btcService.send_money(self.send_address, self.send_amount, true, function (err, result) {
                 if (err) {
                     if ((typeof err == 'object') && err.message) err = err.message ;
                     console.log(pgm + 'err = ' + JSON.stringify(err)) ;
-                    ZeroFrame.cmd("wrapperNotification", ["error", err]) ;
+                    z_wrapper_notification(["error", err]) ;
                 }
-                else ZeroFrame.cmd("wrapperNotification", ["done", "Money was send<br>result = " + JSON.stringify(result)]);
+                else z_wrapper_notification(["done", "Money was send<br>result = " + JSON.stringify(result)]);
             }) ;
         }; // send_money
 
