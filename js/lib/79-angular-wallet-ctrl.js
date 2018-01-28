@@ -143,7 +143,7 @@ angular.module('MoneyNetworkW2')
                     self.status.permissions.all = false;
                 }
             }
-            else if (name == 'confirm') {
+            else if (['confirm', 'backup', 'restore', 'confirm_backup_restore'].indexOf(name) != -1) {
                 // no operation
             }
             else if (self.status.permissions[name]) self.status.permissions.none = false;

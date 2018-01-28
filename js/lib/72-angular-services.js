@@ -3312,6 +3312,159 @@ angular.module('MoneyNetworkW2')
                             response_timestamp = null ;
                         })() ;
                     }
+                    else if (request.msgtype == 'request_wallet_ls') {
+                        // backup/restore. MN is requesting a full localStorage copy.
+                        // see permission section "Grant MoneyNetwork session permission to: backup X and restore X localStorage data. Confirm backup and restore: X
+                        (function request_wallet_ls(){
+                            var pgm = service + '.process_incoming_message.' + request.msgtype + '/' + group_debug_seq + ': ';
+                            var step_1_confirm, step_2_backup ;
+                            console.log(pgm + 'request = ' + JSON.stringify(request)) ;
+
+                            if (!status.permissions || !status.permissions.backup) return send_response('backup operation is not authorized');
+
+                            // callback chain:
+
+                            // optional confirm backup. confirm box in W2. notification to MN. timeout in MN session is 60 seconds. confirm box 45 seconds
+                            step_2_backup = function () {
+                                var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_2_backup/' + group_debug_seq + ': ';
+                                response.msgtype = 'wallet_ls' ;
+                                response.ls = JSON.stringify(ls) ;
+                                send_response() ;
+                            }; // step_2_backup
+
+                            step_1_confirm = function() {
+                                var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_1_confirm/' + group_debug_seq + ': ';
+                                var confirm_status, confirm_timeout_fnk, message ;
+                                if (!status.permissions.confirm_backup_restore) return step_2_backup() ;
+
+                                // user must confirm backup request in W2
+                                confirm_status = {done: false};
+                                confirm_timeout_fnk = function () {
+                                    if (confirm_status.done) return; // confirm dialog done
+                                    confirm_status.done = true;
+                                    send_response('Confirm backup timeout')
+                                };
+                                setTimeout(confirm_timeout_fnk, 45000);
+
+                                // 1: confirm dialog in W2
+                                message = 'MN backup request. Send full W2 localStorage backup to MN?' ;
+                                ZeroFrame.cmd("wrapperConfirm", [message, 'OK'], function (confirm) {
+                                    if (confirm_status.done) return; // confirm dialog done (OK or timeout)
+                                    confirm_status.done = true ;
+                                    if (!confirm) return send_response('backup request was rejected');
+                                    // backup request was confirmed. continue
+                                    step_2_backup();
+                                }) ;
+
+                                // 2: notification in MN session. xxx
+                                report_error(pgm, 'Please confirm backup request in W2', {log: false, w2: false, type:'info', timeout: 10000}) ;
+
+                            }; // step_1_confirm
+
+                            step_1_confirm() ;
+
+                        })() ;
+                        // response is handled in request_wallet_ls block
+                        return ;
+
+                    }
+
+                    else if (request.msgtype == 'restore_wallet_ls') {
+                        // backup/restore. MN is requesting a full localStorage copy.
+                        // see permission section "Grant MoneyNetwork session permission to: backup X and restore X localStorage data. Confirm backup and restore: X
+                        (function restore_wallet_ls() {
+                            var pgm = service + '.process_incoming_message.' + request.msgtype + '/' + group_debug_seq + ': ';
+                            var step_1_confirm, step_2_restore ;
+
+                            console.log(pgm + 'request = ' + JSON.stringify(request)) ;
+
+                            // validate request. ls and wallet must be JSON.stringify objects
+                            try {
+                                JSON.parse(request.ls) ;
+                            }
+                            catch (e) {
+                                return send_response('invalid restore_wallet_ls request. request.ls is not a JSON.stringify string') ;
+                            }
+                            try {
+                                JSON.parse(request.wallet) ;
+                            }
+                            catch (e) {
+                                return send_response('invalid restore_wallet_ls request. request.wallet is not a JSON.stringify string') ;
+                            }
+
+                            // check permissions
+                            if (!status.permissions || !status.permissions.restore) return send_response('restore operation is not authorized');
+
+                            // callback chain:
+
+                            // optional confirm restore. confirm box in W2. notification to MN. timeout in MN session is 60 seconds. confirm box 45 seconds
+                            step_2_restore = function () {
+                                var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_2_restore/' + group_debug_seq + ': ';
+                                // send OK response to MN session, wait a few seconds to allow MN to read OK response and start restore process
+                                send_response(null, function () {
+
+                                    // OK restore_wallet_ls response was sent to mn. get a new group debug seq for this start_mt post processing.
+                                    var group_debug_seq, pgm;
+                                    group_debug_seq = MoneyNetworkAPILib.debug_group_operation_start();
+                                    pgm = service + '.process_incoming_message.' + request.msgtype + ' send_response callback 1/' + group_debug_seq + ': ';
+                                    console.log(pgm + 'OK start_mt response was send to MN. continue with restore_wallet_ls post processing');
+                                    console.log(pgm + 'Using group_debug_seq ' + group_debug_seq + ' for this post restore_wallet_ls processing operation');
+
+                                    console.log(pgm + 'todo: 1) wait a few seconds before starting restore. MN session will wait max 60 seconds for restore_wallet_ls OK response') ;
+                                    console.log(pgm + 'todo: 2) display nnotification in W2') ;
+                                    console.log(pgm + 'todo: 3) display spinner with countdown in W2') ;
+                                    console.log(pgm + 'todo: 4) delete all old zeronet files') ;
+                                    console.log(pgm + 'todo: 5) write new wallet.json') ;
+                                    console.log(pgm + 'todo: 6) sign and optional publish new wallet.json') ;
+                                    console.log(pgm + 'todo: 7) best with a publish after new MN-W2 session handshake') ;
+                                    console.log(pgm + 'todo: 8) restore localStorage') ;
+                                    console.log(pgm + 'todo: 9) angularJS reload session data / page reload or ?');
+                                    MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq);
+
+
+
+                                }) ;
+                                return ;
+
+                            }; // step_2_backup
+
+                            step_1_confirm = function() {
+                                var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_1_confirm/' + group_debug_seq + ': ';
+                                var confirm_status, confirm_timeout_fnk, message ;
+                                if (!status.permissions.confirm_backup_restore) return step_2_restore() ;
+
+                                // user must confirm backup request in W2
+                                confirm_status = {done: false};
+                                confirm_timeout_fnk = function () {
+                                    if (confirm_status.done) return; // confirm dialog done
+                                    confirm_status.done = true;
+                                    send_response('Confirm backup timeout')
+                                };
+                                setTimeout(confirm_timeout_fnk, 45000);
+
+                                // 1: confirm dialog in W2
+                                // todo: add restore info: timestamp, filename, size etc
+                                message = 'MN restore request. Allow full W2 localStorage restore.<br>All existing data will be deleted. No way back' ;
+                                ZeroFrame.cmd("wrapperConfirm", [message, 'OK'], function (confirm) {
+                                    if (confirm_status.done) return; // confirm dialog done (OK or timeout)
+                                    confirm_status.done = true ;
+                                    if (!confirm) return send_response('backup request was rejected');
+                                    // restore request was confirmed. continue
+                                    step_2_restore();
+                                }) ;
+
+                                // 2: notification in MN session. xxx
+                                report_error(pgm, 'Please confirm backup restore in W2', {log: false, w2: false, type:'info', timeout: 10000}) ;
+
+                            }; // step_1_confirm
+
+                            step_1_confirm() ;
+
+                        })() ;
+                        // response is handled in request_wallet_ls block
+                        return ;
+                    }
+
                     else if (request.msgtype == 'w2_pubkeys') {
                         // w2_pubkeys message handshake between wallet sessions.
                         (function w2_pubkeys(){
@@ -3516,7 +3669,7 @@ angular.module('MoneyNetworkW2')
                             }
                         })() ;
                         return; // no response to offline pubkeys message
-                        // pubkeys
+                        // w2_pubkeys
                     }
                     else if (request.msgtype == 'w2_check_mt') {
                         // after pubkeys session handshake. Now running full encryption
@@ -5489,6 +5642,7 @@ angular.module('MoneyNetworkW2')
                                     //    info.disabled = true;
                                     //    return test2_open_url.run();
                                     //}
+
                                     //else console.log(pgm + 'ping old sessionid ' + status.sessionid + ' OK') ;
                                     cb(status.sessionid) ;
                                 }) ; // send_message callback 5

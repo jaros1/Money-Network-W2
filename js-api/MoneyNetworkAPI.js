@@ -1667,6 +1667,45 @@ var MoneyNetworkAPILib = (function () {
                 },
                 "required": ['msgtype', 'filename'],
                 "additionalProperties": false
+            },
+
+            // backup/restore wallet ls. for full MN ls backup including wallet localStorage data
+            "request_wallet_ls": {
+                "type": 'object',
+                "title": 'MN: request full localStorage copy from wallet session',
+                "description": 'Used for full MN and wallets localStorage backup/restore',
+                "properties": {
+                    "msgtype": {"type": 'string', "pattern": '^request_wallet_ls$'}
+                },
+                "required": ['msgtype'],
+                "additionalProperties": false
+            },
+
+            "wallet_ls": {
+                "type": 'object',
+                "title": 'Wallet: return string with full localStorage copy to MN session',
+                "description": 'Used for full MN and wallets localStorage backup/restore. ls: JSON.stringify localStorage data',
+                "properties": {
+                    "msgtype": {"type": 'string', "pattern": '^wallet_ls$'},
+                    "ls": {"type": 'string'}
+                },
+                "required": ['msgtype', 'ls'],
+                "additionalProperties": false
+            },
+
+            "restore_wallet_ls": {
+                "type": 'object',
+                "title": 'MN: ask wallet to restore previous localStorage backup',
+                "description": 'Used for full MN and wallets localStorage backup/restore. ls: JSON.stringify localStorage. wallet: JSON.stringify wallet.json file. timestamp and filename: backup timestamp and filename',
+                "properties": {
+                    "msgtype": {"type": 'string', "pattern": '^restore_wallet_ls$'},
+                    "ls": {"type": 'string'},
+                    "wallet": {"type": 'string'},
+                    "timestamp": {"type": 'number', "multipleOf": 1.0},
+                    "filename": {"type": 'string'}
+                },
+                "required": ['msgtype', 'ls', 'wallet', 'timestamp'],
+                "additionalProperties": false
             }
 
         } // api
@@ -1732,6 +1771,7 @@ var MoneyNetworkAPILib = (function () {
             else if ((request_msgtype == 'prepare_mt_request') && (json.msgtype == 'prepare_mt_response')) null; // OK combination
             else if ((request_msgtype == 'get_published') && (json.msgtype == 'published')) null; // OK combination
             else if ((request_msgtype == 'queue_publish') && (json.msgtype == 'start_publish')) null; // OK combination
+            else if ((request_msgtype == 'request_wallet_ls') && (json.msgtype == 'wallet_ls')) null; // OK combination
             else return 'Invalid ' + request_msgtype + ' request ' + json.msgtype + ' response combination';
         }
         if (typeof tv4 === 'undefined') {
@@ -1853,6 +1893,7 @@ var MoneyNetworkAPILib = (function () {
             if (!wallet_info_cache[sha256]) continue ; // not in cache
             // found in cache
             results[sha256] = JSON.parse(JSON.stringify(wallet_info_cache[sha256])) ;
+            console.log(pgm + 'OK. wallet_sha256 ' + sha256 + ' was in cache. wallet_info = ' + JSON.stringify(results[sha256])) ;
             wallet_sha256.splice(i,1) ;
         }
         if (!wallet_sha256.length) return cb(results, refresh_angular_ui) ; // all sha256 values were found in cache
@@ -2548,6 +2589,7 @@ var MoneyNetworkAPILib = (function () {
             next_cb_id++ ;
             cb_id = -next_cb_id ;
             console.log(pgm2 + 'ratelimit error detected. inserting queue_publish request with cb_id = ' + cb_id) ;
+            console.log(pgm + 'issue #267 must be tested OK') ;
             queue_publish({client: true, cb_id: cb_id, encrypt: encrypt, group_debug_seq: group_debug_seq, reason: 'ratelimit error'}, function(cb_id, encrypt) {
                 var pgm = module + '.ratelimit_error queue_publish callback 1: ' ;
                 var pgm2, timestamp_x, timestamp, request ;
@@ -2562,6 +2604,7 @@ var MoneyNetworkAPILib = (function () {
                     return ;
                 } // for
                 // callback released from publish queue. send start_publish message to wallet session
+                console.log(pgm + 'issue #267 must be tested OK') ;
                 request = {
                     msgtype: 'start_publish',
                     cb_id: cb_id
@@ -2588,6 +2631,7 @@ var MoneyNetworkAPILib = (function () {
                     }
                     // OK queue_publish. publish started in wallet session. wait for published message from wallet session
                     console.log(pgm2 + 'OK start_publish response from wallet session. wait for published message before continue with next row in publish queue');
+                    console.log(pgm + 'issue #267 must be tested OK') ;
                     debug_group_operation_end(group_debug_seq) ;
 
                 }) ; // send_message callback 2
