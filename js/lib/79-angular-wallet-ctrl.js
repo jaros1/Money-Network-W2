@@ -47,7 +47,17 @@ angular.module('MoneyNetworkW2')
                     self.status.save_login_disabled = false ;
                     return ;
                 }
-                // '1': wallet login is saved encrypted (cryptMessage) in MoneyNetworkW2 localStorage (session is not required)
+                if (self.status.save_login == '1') {
+                    // OK: wallet login was restored in initialize
+                    self.status.save_login_disabled = false ;
+                    return ;
+                }
+                if (self.status.restoring) {
+                    // stop. restoring backup
+                    self.status.save_login_disabled = false ;
+                    return ;
+                }
+
                 // '2': wallet login is saved encrypted (symmetric) in MoneyNetwork localStorage (session is required)
                 W2Service.get_wallet_login(self.status.save_login, function(wallet_id, wallet_password, error) {
                     var pgm = controller + ' get_wallet_login callback: ' ;
@@ -67,6 +77,7 @@ angular.module('MoneyNetworkW2')
             console.log(pgm + 'click');
             ZeroFrame.cmd("certSelect", [["moneynetwork.bit", "nanasi", "zeroid.bit", "kaffie.bit"]], function() {
                 var pgm = controller + '.select_zeronet_cert certSelect callback: ' ;
+                if (self.status.restoring) return ; // restoring backup
                 W2Service.initialize(false);
             });
         };
@@ -80,6 +91,7 @@ angular.module('MoneyNetworkW2')
         self.zeronet_cert_changed = function () {
             var pgm = controller + '.zeronet_cert_changed: ' ;
             if (ZeroFrame.site_info.cert_user_id && (self.status.old_cert_user_id == ZeroFrame.site_info.cert_user_id)) return ;
+            if (self.status.restoring) return ; // restoring backup
             console.log(pgm + 'old_cert_user_id = ' + self.status.old_cert_user_id) ;
             console.log(pgm + 'ZeroFrame.site_info = ' + JSON.stringify(ZeroFrame.site_info));
             console.log(pgm + 'calling initialize') ;
@@ -101,6 +113,7 @@ angular.module('MoneyNetworkW2')
                 self.status.save_login = old_save_wallet_login;
                 return ;
             }
+            if (self.status.restoring) return ; // restoring backup
             W2Service.save_wallet_login(self.status.save_login, self.status.wallet_id, self.status.wallet_password, function(res) {
                 console.log(pgm + 'res = ' + JSON.stringify(res)) ;
 
@@ -123,6 +136,7 @@ angular.module('MoneyNetworkW2')
         self.permissions_changed = function (name) {
             var pgm = controller + '.permissions_changed: ';
             var permissions, i, old_permissions;
+            if (self.status.restoring) return ; // restoring backup
             permissions = ['open_wallet', 'get_balance', 'send_money', 'receive_money', 'pay', 'receive_payment', 'close_wallet'];
             // console.log(pgm + 'permissions = ' + JSON.stringify(self.status.permissions) + ', name = ' + JSON.stringify(name));
             if (name == 'all') {
@@ -164,6 +178,7 @@ angular.module('MoneyNetworkW2')
         self.add_site = function () {
             var pgm = controller + '.add_site: ' ;
             var text ;
+            if (self.status.restoring) return ; // restoring backup
             text = 'Test done and test data deleted?<br>Redirect and add this site to MoneyNetwork?' ;
             ZeroFrame.cmd("wrapperConfirm", [text, "OK"], function (ok) {
                 var url ;
@@ -177,6 +192,7 @@ angular.module('MoneyNetworkW2')
 
         // generate random wallet ID and password
         self.gen_wallet_id = function() {
+            if (self.status.restoring) return ; // restoring backup
             if (self.status.wallet_id) {
                 z_wrapper_notification(["info", 'Old Wallet Id was not replaced', 5000]);
                 return ;
@@ -184,6 +200,7 @@ angular.module('MoneyNetworkW2')
             self.status.wallet_id = W2Service.generate_random_string(30, false) ;
         };
         self.gen_wallet_pwd = function() {
+            if (self.status.restoring) return ; // restoring backup
             if (self.status.wallet_password) {
                 z_wrapper_notification(["info", 'Old Wallet Password was not replaced', 5000]);
                 return ;
@@ -197,6 +214,7 @@ angular.module('MoneyNetworkW2')
 
         // wallet operations
         self.create_new_wallet = function () {
+            if (self.status.restoring) return ; // restoring backup
             btcService.create_new_wallet(self.status.wallet_id, self.status.wallet_password, function (error) {
                 if (error) z_wrapper_notification(["error", error]);
                 else {
@@ -208,6 +226,7 @@ angular.module('MoneyNetworkW2')
 
         self.init_wallet = function () {
             var pgm = controller + '.init_wallet: ' ;
+            if (self.status.restoring) return ; // restoring backup
             btcService.init_wallet(self.status.wallet_id, self.status.wallet_password, function (error) {
                 if (error) z_wrapper_notification(["error", error]);
                 else {
@@ -224,6 +243,7 @@ angular.module('MoneyNetworkW2')
 
         self.get_balance = function () {
             var pgm = controller + '.get_balance: ' ;
+            if (self.status.restoring) return ; // restoring backup
             if (self.wallet_info.status != 'Open') return z_wrapper_notification(["info", "No bitcoin wallet found", 3000]) ;
             btcService.get_balance(function(error) {
                 if (error) return z_wrapper_notification(["error", error]);
@@ -237,6 +257,7 @@ angular.module('MoneyNetworkW2')
         } ; // get_balance
 
         self.close_wallet = function () {
+            if (self.status.restoring) return ; // restoring backup
             btcService.close_wallet(function (error) {
                 if (error) z_wrapper_notification(["error", error]);
                 else z_wrapper_notification(["info", 'Bitcoin wallet closed', 5000]);
@@ -244,6 +265,7 @@ angular.module('MoneyNetworkW2')
         } ; // close_wallet
 
         self.delete_wallet = function () {
+            if (self.status.restoring) return ; // restoring backup
             btcService.delete_wallet(function (error) {
                 if (error) z_wrapper_notification(["error", error]);
                 else {
@@ -260,6 +282,7 @@ angular.module('MoneyNetworkW2')
         }; // delete_wallet
 
         self.get_new_address = function () {
+            if (self.status.restoring) return ; // restoring backup
             if (self.wallet_info.status != 'Open') z_wrapper_notification(["info", "No bitcoin wallet found", 3000]) ;
             else self.receiver_address = btcService.get_new_address(function (err, address) {
                 if (err) return z_wrapper_notification(['error', 'Could not get a new address. error = ' + err]) ;
@@ -272,6 +295,7 @@ angular.module('MoneyNetworkW2')
 
         self.send_money = function () {
             var pgm = controller + '.send_money: ' ;
+            if (self.status.restoring) return ; // restoring backup
             if (self.wallet_info.status != 'Open') z_wrapper_notification(["info", "No bitcoin wallet found", 3000]) ;
             if (!self.send_address || !self.send_amount) z_wrapper_notification(["error", "Receiver and/or amount is missing", 5000]) ;
             if (!self.send_amount.match(/^[0-9]+$/)) return z_wrapper_notification(["error", "Amount must be an integer (Satoshi)", 5000]) ;

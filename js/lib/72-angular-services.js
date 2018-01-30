@@ -299,6 +299,12 @@ angular.module('MoneyNetworkW2')
                 }
 
                 delete ls.is_loading ;
+
+                if (ls.wallet_backup_restored) {
+                    z_wrapper_notification(['done', 'OK. W2 was restored from backup<br>filename: ' + ls.wallet_backup_restored.filename]) ;
+                    delete ls.wallet_backup_restored ;
+                }
+
                 // run callbacks waiting for ls and site_info to be ready. see ls_bind
                 while (ls_cbs.length) {
                     cb = ls_cbs.shift() ;
@@ -316,6 +322,7 @@ angular.module('MoneyNetworkW2')
             function ls_save() {
                 var pgm = service + '.ls_save: ' ;
                 // console.log(pgm + 'ls = ' + JSON.stringify(ls)) ;
+                if (status.restoring) return ;
                 ZeroFrame.cmd("wrapperSetLocalStorage", [ls], function () {}) ;
             } // ls_save
 
@@ -679,7 +686,8 @@ angular.module('MoneyNetworkW2')
                 save_login: '0', // radio group '0', '1' (W2 LS) or '2' (MN LS)
                 save_login_disabled: true, // radio group disabled while checking save_wallet_login status
                 permissions: {}, // MoneyNetwork permissions to wallet operations
-                offline: [] // array with offline outgoing money transaction
+                offline: [], // array with offline outgoing money transaction
+                restoring: false // set to true doing restore operation. stop all processes
             } ;
             function get_status () { return status }
 
@@ -1064,6 +1072,7 @@ angular.module('MoneyNetworkW2')
             function z_publish(options, cb) {
                 var pgm = service + '.z_publish: ';
                 var pgm2, publish, group_debug_seq, reason, inner_path;
+                if (status.restoring) return ; // restoring backup
                 if (!options) options = {};
                 publish = options.publish;
                 group_debug_seq = options.group_debug_seq;
@@ -1134,6 +1143,7 @@ angular.module('MoneyNetworkW2')
 
             // inject wallet z_publish function into MoneyNetworkAPILib. used for waiting_for_file notifications (hanging fileGet operations)
             function waiting_for_file_publish (request_filename) {
+                if (status.restoring) return ; // restoring backup
                 z_publish({publish: true, reason: (request_filename ? request_filename : 'waiting_for_file')}) ;
             }
             MoneyNetworkAPILib.config({waiting_for_file_publish: waiting_for_file_publish}) ;
@@ -1360,6 +1370,7 @@ angular.module('MoneyNetworkW2')
             function save_w_session(session_info, options, cb) {
                 var pgm = service + '.save_w_session: ' ;
                 var pgm2, group_debug_seq, auth_address, sha256 ;
+                if (status.restoring) return ; // restoring backup
                 sessionid = session_info.money_transactionid ;
                 if (!options) options = {} ;
                 if (!cb) cb = function() {} ;
@@ -1457,6 +1468,11 @@ angular.module('MoneyNetworkW2')
             function cleanup_offline_session_files () {
                 var pgm = service + '.cleanup_offline_session_files: ';
                 var session_files, filename, directory, w2_query_7, debug_seq, auth_address, sha256, session_info, ls_updated ;
+                if (status.restoring) {
+                    // stop. restore process is running
+                    console.log(pgm + 'stop. restore operation is running') ;
+                    return ;
+                }
                 if (!ls.w_files) ls.w_files = {} ;
                 // migration. any files in session_info.files that is not in w_files
                 // session_info is encrypted with user cert. ls.w_files is not encrypted and for all certs
@@ -1540,6 +1556,11 @@ angular.module('MoneyNetworkW2')
                             var pgm = service + '.cleanup_offline_session_files.delete_file: ';
                             var filename, inner_path ;
                             filename = delete_files.shift() ;
+                            if (status.restoring) {
+                                // stop. restore process is running
+                                console.log(pgm + 'stop. restore operation is running') ;
+                                return ;
+                            }
                             if (!filename) {
                                 MoneyNetworkAPILib.end_transaction(transaction_timestamp) ;
                                 if (no_deleted) console.log(pgm + no_deleted + ' files were deleted.') ;
@@ -1591,6 +1612,12 @@ angular.module('MoneyNetworkW2')
                     console.log(pgm + 'stop. not logged in') ;
                     return ;
                 }
+                if (status.restoring) {
+                    // stop. restore process is running
+                    console.log(pgm + 'stop. restore operation is running') ;
+                    return ;
+
+                }
                 auth_address = ZeroFrame.site_info.auth_address;
                 if (!ls.w_sessions[auth_address]) return; // no wallet sessions was found for this auth_address
                 sha256_values = Object.keys(ls.w_sessions[auth_address]);
@@ -1612,6 +1639,11 @@ angular.module('MoneyNetworkW2')
                         var pgm2, sha256, encrypted_session_info;
                         pgm2 = MoneyNetworkAPILib.get_group_debug_seq_pgm(pgm, group_debug_seq);
                         sha256 = sha256_values.shift();
+                        if (status.restoring) {
+                            // stop. restore process is running
+                            console.log(pgm + 'stop. restore operation is running') ;
+                            return ;
+                        }
                         if (!sha256) {
                             MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq) ;
                             console.log(pgm2 + 'done loading old wallet sessions. ' + no_loaded + ' wallet sessions were loaded. ' + no_not_loaded + ' wallet sessions were not loaded') ;
@@ -2008,6 +2040,11 @@ angular.module('MoneyNetworkW2')
                 pgm = service + '.process_incoming_message: ';
 
                 try {
+                    if (status.restoring) {
+                        console.log(pgm + 'restoring wallet. ignoring incoming ' + inner_path + ' message') ;
+                        return ;
+                    }
+
                     // get a group debug seq. track all connected log messages. there can be many running processes
                     if (extra && extra.group_debug_seq) group_debug_seq = extra.group_debug_seq ;
                     else group_debug_seq = MoneyNetworkAPILib.debug_group_operation_start();
@@ -3312,48 +3349,77 @@ angular.module('MoneyNetworkW2')
                             response_timestamp = null ;
                         })() ;
                     }
-                    else if (request.msgtype == 'request_wallet_ls') {
+                    else if (request.msgtype == 'request_wallet_backup') {
                         // backup/restore. MN is requesting a full localStorage copy.
                         // see permission section "Grant MoneyNetwork session permission to: backup X and restore X localStorage data. Confirm backup and restore: X
-                        (function request_wallet_ls(){
+                        (function request_wallet_backup(){
                             var pgm = service + '.process_incoming_message.' + request.msgtype + '/' + group_debug_seq + ': ';
-                            var step_1_confirm, step_2_backup ;
+                            var filenames, user_path, step_1_confirm, step_2_read_content_json, step_3_send_backup_msg ;
                             console.log(pgm + 'request = ' + JSON.stringify(request)) ;
 
                             if (!status.permissions || !status.permissions.backup) return send_response('backup operation is not authorized');
 
+                            // list with filenames to be included in backup. MN session will read and include files in backup file.
+                            filenames = ['content.json'] ;
+
                             // callback chain:
 
                             // optional confirm backup. confirm box in W2. notification to MN. timeout in MN session is 60 seconds. confirm box 45 seconds
-                            step_2_backup = function () {
-                                var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_2_backup/' + group_debug_seq + ': ';
-                                response.msgtype = 'wallet_ls' ;
+                            step_3_send_backup_msg = function () {
+                                var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_4_send_backup_msg/' + group_debug_seq + ': ';
+                                response.msgtype = 'wallet_backup' ;
                                 response.ls = JSON.stringify(ls) ;
+                                if (filenames.length) response.filenames = filenames ;
+                                console.log(pgm + 'response.filenames = ' + JSON.stringify(response.filenames)) ;
+                                // response.filenames = ["content.json","f02116f927.1516784183846","wallet.json"]
                                 send_response() ;
                             }; // step_2_backup
 
+                            // get a list of files to be included in backup. MN session will read and add files to backup
+                            step_2_read_content_json = function() {
+                                var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_2_read_content_json/' + group_debug_seq + ': ';
+                                get_user_path(function (my_user_path) {
+                                    user_path = my_user_path ;
+                                    get_content_json(function (content) {
+                                        var filename, re, m ;
+                                        if (!content) send_response('System error. Could not find content.json file');
+                                        filenames.push('content.json') ;
+                                        for (filename in content.files) filenames.push(filename) ;
+                                        re = new RegExp('^[0-9a-f]{10}(-i|-e|-o|-io|-p)\.[0-9]{13}$'); // pattern for MoneyNetworkAPI files.
+                                        if (content.files_optional) for (filename in content.files_optional) {
+                                            m=filename.match(re)  ;
+                                            if (m && (['-i', '-e', '-p'].indexOf(m[1]) != -1)) continue ; // skip temporary MoneyNetworkAPI files
+                                            filenames.push(filename) ;
+                                        }
+                                        step_3_send_backup_msg() ;
+                                    })
+                                }) ;
+
+                            }; // step_2_read_content_json
+
+                            // optional confirm backup request from MN. See "Confirm backup and restore" checkbox
                             step_1_confirm = function() {
                                 var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_1_confirm/' + group_debug_seq + ': ';
                                 var confirm_status, confirm_timeout_fnk, message ;
-                                if (!status.permissions.confirm_backup_restore) return step_2_backup() ;
+                                if (!status.permissions.confirm_backup_restore) return step_2_read_content_json() ;
 
                                 // user must confirm backup request in W2
                                 confirm_status = {done: false};
                                 confirm_timeout_fnk = function () {
                                     if (confirm_status.done) return; // confirm dialog done
                                     confirm_status.done = true;
-                                    send_response('Confirm backup timeout')
+                                    send_response('Confirm backup timeout');
                                 };
                                 setTimeout(confirm_timeout_fnk, 45000);
 
                                 // 1: confirm dialog in W2
-                                message = 'MN backup request. Send full W2 localStorage backup to MN?' ;
+                                message = 'MN backup request<br>Send full W2 backup to MN?' ;
                                 ZeroFrame.cmd("wrapperConfirm", [message, 'OK'], function (confirm) {
                                     if (confirm_status.done) return; // confirm dialog done (OK or timeout)
                                     confirm_status.done = true ;
                                     if (!confirm) return send_response('backup request was rejected');
                                     // backup request was confirmed. continue
-                                    step_2_backup();
+                                    step_2_read_content_json();
                                 }) ;
 
                                 // 2: notification in MN session. xxx
@@ -3364,53 +3430,142 @@ angular.module('MoneyNetworkW2')
                             step_1_confirm() ;
 
                         })() ;
-                        // response is handled in request_wallet_ls block
+                        // response is handled in request_wallet_backup block
                         return ;
 
                     }
 
-                    else if (request.msgtype == 'restore_wallet_ls') {
+                    else if (request.msgtype == 'restore_wallet_backup') {
                         // backup/restore. MN is requesting a full localStorage copy.
                         // see permission section "Grant MoneyNetwork session permission to: backup X and restore X localStorage data. Confirm backup and restore: X
-                        (function restore_wallet_ls() {
+                        (function restore_wallet_backup() {
                             var pgm = service + '.process_incoming_message.' + request.msgtype + '/' + group_debug_seq + ': ';
-                            var step_1_confirm, step_2_restore ;
+                            var restore_ls, restore_files, step_1_confirm, step_2_send_ok_response, step_3_notification,
+                                step_4_delete_user_files, step_5_restore_files, step_7_restore_ls, step_8_restart_w2_session,
+                                user_path;
 
-                            console.log(pgm + 'request = ' + JSON.stringify(request)) ;
+                            // console.log(pgm + 'request = ' + JSON.stringify(request)) ;
 
-                            // validate request. ls and wallet must be JSON.stringify objects
+                            // validate request. ls must be a JSON.stringify strings
                             try {
-                                JSON.parse(request.ls) ;
+                                restore_ls = JSON.parse(request.ls) ;
                             }
                             catch (e) {
-                                return send_response('invalid restore_wallet_ls request. request.ls is not a JSON.stringify string') ;
+                                return send_response('invalid restore_wallet_backup request. request.ls is not a JSON.stringify string') ;
                             }
-                            try {
-                                JSON.parse(request.wallet) ;
-                            }
-                            catch (e) {
-                                return send_response('invalid restore_wallet_ls request. request.wallet is not a JSON.stringify string') ;
-                            }
+                            restore_files = request.files ;
 
                             // check permissions
                             if (!status.permissions || !status.permissions.restore) return send_response('restore operation is not authorized');
 
+
                             // callback chain:
 
+                            step_8_restart_w2_session = function (group_debug_seq) {
+                                var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_8_restart_w2_session/' + group_debug_seq + ': ';
+                                var job ;
+
+                                MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq);
+
+                                z_wrapper_notification(['done', 'W2 wallet was restored. Reloading page in 3 seconds']) ;
+
+                                job = function() { $window.location.reload() } ;
+                                $timeout(job, 3000) ;
+
+                            } ; // step_8_restart_w2_session
+
+                            step_7_restore_ls = function (group_debug_seq) {
+                                var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_7_restore_ls/' + group_debug_seq + ': ';
+
+                                // todo: should sign and publish content.json after page reload!!!
+
+                                restore_ls.wallet_backup_restored = {
+                                    now: new Date().getTime(),
+                                    timestamp: request.timestamp,
+                                    filename: request.filename
+                                } ;
+
+                                ZeroFrame.cmd("wrapperSetLocalStorage", [restore_ls], function () {}) ;
+
+                                step_8_restart_w2_session(group_debug_seq) ;
+
+                            } ; // step_7_restore_ls
+
+                            step_5_restore_files = function (group_debug_seq) {
+                                var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_6_restore_wallet_json/' + group_debug_seq + ': ';
+                                var row ;
+
+                                if (!restore_files || !restore_files.length) return step_7_restore_ls(group_debug_seq) ;
+                                row = restore_files.shift() ;
+                                inner_path = user_path + row.filename ;
+                                MoneyNetworkAPILib.z_file_write(pgm, inner_path, btoa(row.content), {group_debug_seq: group_debug_seq}, function (res) {
+                                    if (!res || (res != 'ok')) console.log(pgm + 'fileWrite failed for ' + filename + '. error = ' + JSON.stringify(res)) ;
+                                    step_5_restore_files() ;
+                                }) ;
+
+                            } ; // step_6_restore_wallet_json
+
+                            step_4_delete_user_files = function (group_debug_seq) {
+                                var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_4_delete_user_files/' + group_debug_seq + ': ';
+
+                                z_wrapper_notification(['info', 'W2 wallet restored started. Please wait', 10000]) ;
+
+                                get_content_json(function (content) {
+                                    var delete_files, filename, delete_file ;
+
+                                    if (!content) {
+                                        console.log(pgm + 'error. content.json file has not found. continue with restore of files from backup') ;
+                                        return step_5_restore_files(group_debug_seq) ;
+                                    }
+                                    delete_files = [] ;
+                                    for (filename in content.files) delete_files.push(filename) ;
+                                    if (content.files_optional) for (filename in content.files_optional) delete_files.push(filename) ;
+
+                                    // delete file loop
+                                    delete_file = function() {
+                                        var filename ;
+                                        filename = delete_files.shift() ;
+                                        if (!filename) return step_5_restore_files(group_debug_seq) ; // done. continue to restore
+                                        inner_path = user_path + filename ;
+                                        MoneyNetworkAPILib.z_file_delete(pgm, inner_path, function (res) {
+                                            if (!res || (res != 'ok')) console.log(pgm + 'fileDelete failed for ' + filename + '. error = ' + JSON.stringify(res)) ;
+                                            delete_file() ;
+                                        })
+
+                                    } ;
+                                    delete_file() ;
+                                }) ; // get_content_json
+
+                            } ; // step_4_delete_user_files
+
+                            // notification before restore. restore starts in 10 seconds. should allow MN to read OK response sent in step_2_send_ok_response
+                            step_3_notification = function (group_debug_seq) {
+                                var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_3_notification/' + group_debug_seq + ': ';
+                                var job ;
+                                z_wrapper_notification(['info', 'W2 wallet restore starts in 10 seconds. Please wait', 10000]) ;
+                                // wait 10 seconds and start restore
+                                job = function () { step_4_delete_user_files(group_debug_seq)} ;
+                                $timeout(job, 10000) ;
+
+                                // stop all running operations doing restore
+                                status.restoring = true ;
+                                MoneyNetworkAPILib.clear_all_data() ;
+
+                            } ; // step_3_notification
+
                             // optional confirm restore. confirm box in W2. notification to MN. timeout in MN session is 60 seconds. confirm box 45 seconds
-                            step_2_restore = function () {
-                                var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_2_restore/' + group_debug_seq + ': ';
+                            step_2_send_ok_response = function () {
                                 // send OK response to MN session, wait a few seconds to allow MN to read OK response and start restore process
                                 send_response(null, function () {
 
-                                    // OK restore_wallet_ls response was sent to mn. get a new group debug seq for this start_mt post processing.
+                                    // OK restore_wallet_backup response was sent to mn. get a new group debug seq for this start_mt post processing.
                                     var group_debug_seq, pgm;
                                     group_debug_seq = MoneyNetworkAPILib.debug_group_operation_start();
-                                    pgm = service + '.process_incoming_message.' + request.msgtype + ' send_response callback 1/' + group_debug_seq + ': ';
-                                    console.log(pgm + 'OK start_mt response was send to MN. continue with restore_wallet_ls post processing');
-                                    console.log(pgm + 'Using group_debug_seq ' + group_debug_seq + ' for this post restore_wallet_ls processing operation');
+                                    var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_2_send_ok_response/' + group_debug_seq + ': ';
+                                    console.log(pgm + 'OK start_mt response was send to MN. continue with restore_wallet_backup post processing');
+                                    console.log(pgm + 'Using group_debug_seq ' + group_debug_seq + ' for this post restore_wallet_backup processing operation');
 
-                                    console.log(pgm + 'todo: 1) wait a few seconds before starting restore. MN session will wait max 60 seconds for restore_wallet_ls OK response') ;
+                                    console.log(pgm + 'todo: 1) wait a few seconds before starting restore. MN session will wait max 60 seconds for restore_wallet_backup OK response') ;
                                     console.log(pgm + 'todo: 2) display nnotification in W2') ;
                                     console.log(pgm + 'todo: 3) display spinner with countdown in W2') ;
                                     console.log(pgm + 'todo: 4) delete all old zeronet files') ;
@@ -3419,19 +3574,21 @@ angular.module('MoneyNetworkW2')
                                     console.log(pgm + 'todo: 7) best with a publish after new MN-W2 session handshake') ;
                                     console.log(pgm + 'todo: 8) restore localStorage') ;
                                     console.log(pgm + 'todo: 9) angularJS reload session data / page reload or ?');
-                                    MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq);
 
-
+                                    get_user_path(function (path) {
+                                        user_path = path ;
+                                        step_3_notification(group_debug_seq) ;
+                                    }) ;
 
                                 }) ;
-                                return ;
 
-                            }; // step_2_backup
+                            }; // step_2_send_ok_response
 
+                            // optional confirm restore. See "Confirm backup and restore" checkbox
                             step_1_confirm = function() {
                                 var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_1_confirm/' + group_debug_seq + ': ';
                                 var confirm_status, confirm_timeout_fnk, message ;
-                                if (!status.permissions.confirm_backup_restore) return step_2_restore() ;
+                                if (!status.permissions.confirm_backup_restore) return step_2_send_ok_response() ;
 
                                 // user must confirm backup request in W2
                                 confirm_status = {done: false};
@@ -3450,7 +3607,7 @@ angular.module('MoneyNetworkW2')
                                     confirm_status.done = true ;
                                     if (!confirm) return send_response('backup request was rejected');
                                     // restore request was confirmed. continue
-                                    step_2_restore();
+                                    step_2_send_ok_response();
                                 }) ;
 
                                 // 2: notification in MN session. xxx
@@ -3461,7 +3618,7 @@ angular.module('MoneyNetworkW2')
                             step_1_confirm() ;
 
                         })() ;
-                        // response is handled in request_wallet_ls block
+                        // response is handled in restore_wallet_backup block
                         return ;
                     }
 
@@ -5879,6 +6036,7 @@ angular.module('MoneyNetworkW2')
                                                 delete_tmp_file = function (transaction_timestamp) {
                                                     var pgm = service + '.initialize.done.delete_tmp_file: ';
                                                     var filename, inner_path;
+                                                    if (status.restoring) return cb(sessionid, save_wallet_login) ; // stop. restore operation started
                                                     if (!delete_tmp_files.length) {
                                                         // finish deleting old temporary optional files (-i, -e and -p)
                                                         MoneyNetworkAPILib.end_transaction(transaction_timestamp);
