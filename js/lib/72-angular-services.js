@@ -834,8 +834,8 @@ angular.module('MoneyNetworkW2')
             function z_file_get (pgm, options, cb) {
                 MoneyNetworkAPILib.z_file_get(pgm, options, cb);
             } // z_file_get
-            function z_file_write (pgm, inner_path, content, cb) {
-                MoneyNetworkAPILib.z_file_write(pgm, inner_path, content, {}, cb);
+            function z_file_write (pgm, inner_path, content, options, cb) {
+                MoneyNetworkAPILib.z_file_write(pgm, inner_path, content, options, cb);
             } // z_file_get
 
 
@@ -1185,7 +1185,7 @@ angular.module('MoneyNetworkW2')
                     inner_path = user_path + 'content.json' ;
                     // console.log(pgm + 'calling fileWrite. path = ' + inner_path) ;
                     debug_seq = MoneyNetworkAPILib(pgm, inner_path, 'fileWrite') ;
-                    z_file_write(pgm, inner_path, btoa(json_raw), function (res) {
+                    z_file_write(pgm, inner_path, btoa(json_raw), {}, function (res) {
                         var pgm = service + '.write_content_json fileWrite callback 2: ';
                         MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq, res == 'ok' ? 'OK' : 'Failed. error = ' + JSON.stringify(res));
                         console.log(pgm + 'res = ' + JSON.stringify(res)) ;
@@ -1233,7 +1233,7 @@ angular.module('MoneyNetworkW2')
                     inner_path = user_path + 'wallet.json' ;
                     // console.log(pgm + 'calling fileWrite. path = ' + inner_path) ;
                     debug_seq = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path, 'fileWrite') ;
-                    z_file_write(pgm, inner_path, btoa(json_raw), function (res) {
+                    z_file_write(pgm, inner_path, btoa(json_raw), {}, function (res) {
                         var pgm = service + '.write_wallet_json fileWrite callback 2: ';
                         MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq, res == 'ok' ? 'OK' : 'Failed. error = ' + JSON.stringify(res));
                         console.log(pgm + 'res = ' + JSON.stringify(res)) ;
@@ -3498,7 +3498,7 @@ angular.module('MoneyNetworkW2')
                                 if (!restore_files || !restore_files.length) return step_7_restore_ls(group_debug_seq) ;
                                 row = restore_files.shift() ;
                                 inner_path = user_path + row.filename ;
-                                MoneyNetworkAPILib.z_file_write(pgm, inner_path, btoa(row.content), {group_debug_seq: group_debug_seq}, function (res) {
+                                z_file_write(pgm, inner_path, btoa(row.content), {group_debug_seq: group_debug_seq}, function (res) {
                                     if (!res || (res != 'ok')) console.log(pgm + 'fileWrite failed for ' + filename + '. error = ' + JSON.stringify(res)) ;
                                     step_5_restore_files() ;
                                 }) ;
@@ -5177,7 +5177,7 @@ angular.module('MoneyNetworkW2')
                                                         new_filename = request.filename.substr(0,10) + '.' + request.filename.substr(-13) ;
                                                         new_inner_path = encrypt2.this_user_path + new_filename ;
                                                         // json_raw = unescape(encodeURIComponent(JSON.stringify(json, null, "\t")));
-                                                        MoneyNetworkAPILib.z_file_write(pgm, new_inner_path, btoa(json_str), {group_debug_seq: group_debug_seq}, function (res) {
+                                                        z_file_write(pgm, new_inner_path, btoa(json_str), {group_debug_seq: group_debug_seq}, function (res) {
                                                             var pgm = service + '.process_incoming_message.' + request.msgtype + ' z_file_write callback 4/' + group_debug_seq + ': ';
                                                             try {
                                                                 console.log(pgm + 'res = ' + JSON.stringify(res)) ;
@@ -6168,7 +6168,8 @@ angular.module('MoneyNetworkW2')
                 get_status: get_status,
                 save_permissions: save_permissions,
                 send_balance: send_balance,
-                open_window: open_window
+                open_window: open_window,
+                z_wrapper_notification:  z_wrapper_notification
             };
 
             // end W2Service
