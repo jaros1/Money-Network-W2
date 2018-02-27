@@ -29,12 +29,12 @@
    "size": 12616
   },
   "js-api/MoneyNetworkAPI.js": {
-   "sha512": "7944b18d6b3b02e611653191404376e4902e1353309d515905ec347e2704f127",
-   "size": 314720
+   "sha512": "d9a5fd452764d123be24e762e8b80a1a4f7b9fdb23de4776c811addf0d7b7372",
+   "size": 342137
   },
   "js/all.js.zip": {
-   "sha512": "81ef1579c7dbc957d4b63d5f527f5607abfa764aee167ba239e97057220daf5e",
-   "size": 1123327
+   "sha512": "8e923a6dcd5d21b07e4f4718c3f15800e1543353d983c177d7d5644f348284e8",
+   "size": 1126467
   },
   "screendumps/1000-w2-standalone-send-money.png": {
    "sha512": "c64693c318640591d6051cf6c2f29695f5171e0ee673d029255891730044a822",
@@ -101,21 +101,25 @@
   }
  },
  "inner_path": "content.json",
- "modified": 1517331729,
+ "modified": 1519732174,
  "postmessage_nonce_security": true,
  "settings": {
   "default_hubs": {
+   "17k1QzQRhpkJubxCxaCcD6ytqnp8cqUkXe": {
+    "description": "Money Network - W2 - Wallet data hub 2 - runner jro",
+    "title": "W2 Wallet data hub 2"
+   },
    "1HXzvtSLuvxZfh6LgdaqTk4FSVf7x8w7NJ": {
-    "description": "Money Network - W2 - Wallet hub - runner jro",
-    "title": "W2 - Wallet hub"
+    "description": "Money Network - W2 - Wallet data hub 1 - runner jro",
+    "title": "W2 Wallet data hub 1"
    }
   }
  },
  "signers_sign": "G07H0Zdvu6yUtEe7wxc515d5wVoZJpezNYNiKN8T1cwlBkZTYqZRbBzltNbJkstHlOMLxVLGQP6OdGCNEMCI8zE=",
  "signs": {
-  "1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1": "G6Kn2nY/Bcei7CGWTNTZMsghHSLmIaL2HHnQ21rJwldYbnva4NOV+HTZ90JgOXN+Sb5eYd20of96fPMe4vaP3us="
+  "1LqUnXPEgcS15UGwEgkbuTbKYZqAUwQ7L1": "HHA9EuDP2oJck/2SiEjHdDc52liebLxaEXlGAZs/NIo5VF/T+9SRNb0f2z4XoZJFUfwDdPuKym9KkyABQfFe6vE="
  },
  "signs_required": 1,
  "title": "MoneyNetworkW2",
- "zeronet_version": "0.6.1"
+ "zeronet_version": "0.6.2"
 }

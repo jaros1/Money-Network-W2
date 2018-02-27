@@ -65,15 +65,18 @@ ZeroFrame = (function() {
     ZeroFrame.prototype.route = function(cmd, message) {
         // this.log("ZeroFrame.prototype.route: cmd = " + cmd + ', message = ' + JSON.stringify(message));
         if (cmd == "setSiteInfo") {
-            // merger site: only save site_info for front end site & ignore site_info from data hubs
-            if (!this.site_info || (this.site_info.address == message.params.address)) this.site_info = message.params;
-            // this.log("ZeroFrame.prototype.route: site_info = " + JSON.stringify(this.site_info));
-            this.checkCertUserId() ;
+            // this.site_info = message.params;
+            if (!this.site_info || (this.site_info.address == message.params.address)) this.site_info = message.params; // main site. MN or Wallet
+            else {
+                // hub. user data hub (MN) or wallet data hub (wallet sites)
+                if (!this.merger_sites) this.merger_sites = {} ;
+                this.merger_sites[message.params.address] = message.params ;
+            }
             // execute any functions waiting for event
             if (message.params.event) {
                 for (var i=0 ; i<this.event_callbacks.length ; i++) this.event_callbacks[i].apply(undefined, message.params.event);
             }
-            // a little dirty. callback to authCtrl and update ZeroNet ID link in log in page
+            // a little dirty. callback to angularJS controller and update ZeroNet ID in view
             var link = document.getElementById('zeronet_cert_changed_link') ;
             if (!link) return ;
             try { link.click()} catch (err) {} ;
@@ -127,56 +130,10 @@ ZeroFrame = (function() {
             return function(site_info) {
                 _this.site_info = site_info;
                 // _this.log("ZeroFrame.prototype.onOpenWebsocket: siteInfo = " + JSON.stringify(site_info));
-                _this.checkCertUserId() ;
             };
         })(this));
         this.log("Websocket open");
     };
-
-    ZeroFrame.prototype.checkCertUserId = function() {
-        return ; // no certificate - no data saved on ZeroNet
-        // user must be logged in with a ZeroNet certificate (ZeroNet ID provider or anonymous Money Network certificate)
-        if (this.site_info.cert_user_id) return ; // already logged in
-        // login to ZeroNet with an anonymous money network account
-        // copy/paste from "Nanasi text board" - http://127.0.0.1:43110/16KzwuSAjFnivNimSHuRdPrYd1pNPhuHqN/
-        // short documention can be in posts on "Nanasi text board"
-        // http://127.0.0.1:43110/Talk.ZeroNetwork.bit/?Topic:6_13hcYDp4XW3GQo4LMtmPf8qUZLZcxFSmVw
-        var bitcoin_public_key = "1D2f1XV3zEDDvhDjcD9ugehNJEzv68Dhmf" ;
-        var bitcoin_private_key = "5KDc1KoCEPmxxbjvzNdQNCAguaVrFa89LdtfqCKb1PxeSdtmStC" ;
-        var bitcoin_keypair = bitcoin.ECPair.fromWIF(bitcoin_private_key);
-        var cert;
-        cert = bitcoin.message.sign(bitcoin_keypair, (this.site_info.auth_address + "#web/") + this.site_info.auth_address.slice(0, 13)).toString("base64");
-        // console.log(pgm + 'cert = ' + JSON.stringify(cert)) ;
-        // add cert - no certSelect dialog - continue with just created money network cert
-        // this.log("checkCertUserId: add moneynetwork cert");
-        this.cmd("wrapperConfirm", ['Create anonymous moneynetwork certificate?', 'OK'], (function(_this) {
-            return function (confirm) {
-                if (confirm) {
-                    // create anonymous moneynetwork.bit certificate
-                    _this.cmd("certAdd", ["moneynetwork.bit", "web", _this.site_info.auth_address.slice(0, 13), cert], function (res) {
-                            var pgm = "checkCertUserId: certAdd callback: ";
-                            // _this.log(pgm + 'res = ' + JSON.stringify(res));
-                            if (res.error) {
-                                _this.cmd("wrapperNotification", ["error", "Failed to create certificate: " + res.error, 10000]);
-                                return;
-                            }
-                            // certAdd OK. Recheck site_info. site_info.cert_user_id should be not null now. sometime user must select newly created cert
-                            _this.cmd("siteInfo", {}, function (site_info) {
-                                if (site_info.cert_user_id) return;
-                                _this.cmd("certSelect", [["moneynetwork.bit", "nanasi", "zeroid.bit", "kaffie.bit"]]);
-                            });
-                        }
-                    );
-                }
-                else {
-                    // certificate select only
-                    _this.cmd("certSelect", [["moneynetwork.bit", "nanasi", "zeroid.bit", "kaffie.bit"]]);
-                }
-            }
-        })(this));
-
-    };
-
 
     ZeroFrame.prototype.onCloseWebsocket = function() {
         var self, message_id, count, cb ;
