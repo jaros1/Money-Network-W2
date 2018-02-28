@@ -48,7 +48,7 @@ angular.module('MoneyNetworkW2')
 
         self.filter_hubs = function(hub_info) {
             var pgm = controller + ' filter_hubs: ';
-            console.log(pgm + 'hub_info = ' + JSON.stringify(hub_info)) ;
+            // console.log(pgm + 'hub_info = ' + JSON.stringify(hub_info)) ;
             if (hub_info.hub_type == 'user') return false ;
             if (!hub_info.hub_title) return true ;
             return hub_info.title.match(/w2 /i) ;
@@ -119,7 +119,16 @@ angular.module('MoneyNetworkW2')
                 moneyNetworkW2Service.move_user_profile(new_user_hub, function (res) {
                     var pgm = controller + '.my_wallet_data_hub_changed move_user_profile callback 2: ' ;
                     console.log(pgm + 'move_user_hub. res = ' + JSON.stringify(res)) ;
-                    if (res) {
+                    // note. ignore publish error. profile was moved but publish failed
+                    if ((res == 'ok') || res.error.match(/publish failed/i)) {
+                        msg = [
+                            'User profile was moved',
+                            'Any old MN-wallet sessions must be reconnected'
+                        ] ;
+                        moneyNetworkW2Service.z_wrapper_notification(['done', msg.join('<br>')]) ;
+                        self.old_wallet_data_hub = self.my_wallet_data_hub ;
+                    }
+                    else {
                         msg = [
                             'Move user profile failed',
                             'res = ' + JSON.stringify(res) +
@@ -129,14 +138,6 @@ angular.module('MoneyNetworkW2')
                         console.log(pgm + msg.join('. ')) ;
                         moneyNetworkW2Service.z_wrapper_notification(['error', msg.join('<br>')]) ;
                         self.my_wallet_data_hub = self.old_wallet_data_hub ;
-                    }
-                    else {
-                        msg = [
-                            'User profile was moved',
-                            'Any old MN-wallet sessions must be reconnected'
-                        ] ;
-                        moneyNetworkW2Service.z_wrapper_notification(['done', msg.join('<br>')]) ;
-                        self.old_wallet_data_hub = self.my_wallet_data_hub ;
                     }
 
                 }); // move_user_hub callback 2

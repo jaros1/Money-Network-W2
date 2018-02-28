@@ -859,19 +859,19 @@ angular.module('MoneyNetworkW2')
             // 1) doublet user profile - keep user profile on last updated wallet hub - delete user profile on other wallet data hubs
             // 2) move user profile (no peers) - delete profile on old wallet data hub
             function cleanup_wallet_hub (hub, cb) {
-                var pgm = service + '.delete_wallet_hub: ' ;
+                var pgm = service + '.cleanup_wallet_hub: ' ;
                 var inner_path0, debug_seq0 ;
                 if (!cb) cb = function() {} ;
                 // sign to update list of files
                 inner_path0 = 'merged-' + get_merged_type() + '/' + hub + '/data/users/' + ZeroFrame.site_info.auth_address + '/content.json' ;
                 debug_seq0 = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path0, 'siteSign') ;
                 ZeroFrame.cmd("siteSign", {inner_path: inner_path0, remove_missing_optional: true}, function (res1) {
-                    var pgm = service + '.delete_wallet_hub siteSign callback 1: ';
+                    var pgm = service + '.cleanup_wallet_hub siteSign callback 1: ';
                     MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq0, res1);
                     if (res1 != 'ok') console.log(pgm + inner_path0 + ' siteSign failed. error = ' + JSON.stringify(res1));
                     // read content.json and get list of files to be deleted
                     z_file_get(pgm, {inner_path: inner_path0}, function(content_str) {
-                        var pgm = service + '.delete_wallet_hub z_file_get callback 2: ';
+                        var pgm = service + '.cleanup_wallet_hub z_file_get callback 2: ';
                         var content, files, key, delete_file ;
                         content = JSON.parse(content_str) ;
                         files = [] ;
@@ -879,15 +879,14 @@ angular.module('MoneyNetworkW2')
                         if (content.files_optional) for (key in content.files_optional) files.push(key) ;
                         // delete files loop:
                         delete_file = function() {
-                            var pgm = service + '.delete_wallet_hub.delete_file 3: ' ;
+                            var pgm = service + '.cleanup_wallet_hub.delete_file 3: ' ;
                             var filename, debug_seq2, inner_path ;
                             filename = files.shift() ;
                             if (!filename) {
                                 // directory should be empty now. sign and publish. OK if publish fails. Could be a wallet data hub without peers.
                                 inner_path = 'merged-' + get_merged_type() + '/' + hub + '/data/users/' + ZeroFrame.site_info.auth_address + '/content.json' ;
                                 MoneyNetworkAPILib.z_site_publish({inner_path: inner_path, remove_missing_optional: true, encrypt: encrypt2, reason: 'cleanup old wallet'}, function (res4) {
-                                    var pgm = service + '.delete_wallet_hub z_site_publish callback 4a: ';
-                                    debug_z_api_operation_end(debug_seq2, res4);
+                                    var pgm = service + '.cleanup_wallet_hub z_site_publish callback 4a: ';
                                     if (res4 != 'ok') console.log(pgm + inner_path + ' publish failed. error = ' + JSON.stringify(res4));
                                     // done
                                     cb(res4) ;
@@ -896,7 +895,7 @@ angular.module('MoneyNetworkW2')
                             }
                             inner_path = 'merged-' + get_merged_type() + '/' + hub + '/data/users/' + ZeroFrame.site_info.auth_address + '/' + filename ;
                             MoneyNetworkAPILib.z_file_delete(pgm, inner_path, function (res2) {
-                                var pgm = service + '.delete_wallet_hub z_file_delete callback 4b: ';
+                                var pgm = service + '.cleanup_wallet_hub z_file_delete callback 4b: ';
                                 if (res2 != 'ok') console.log(pgm + 'error. fileDelete ' + inner_path + ' failed. error = ' + JSON.stringify(res2)) ;
                                 // delete next file
                                 delete_file() ;
@@ -1022,18 +1021,25 @@ angular.module('MoneyNetworkW2')
                                                                 filenames = Object.keys(content.files_optional) ;
                                                                 if (!filenames.length) {
 
+                                                                    // end move user profile transaction. using transaction in cleanup_wallet_hub
+                                                                    try {
+                                                                        MoneyNetworkAPILib.end_transaction(transaction_timestamp) ;
+                                                                    }
+                                                                    catch (e) {
+                                                                        console.log(pgm + 'warning. end_transaction failed. error = ' + e.message) ;
+                                                                        // warning. end_transaction failed. error = undefined
+                                                                    }
+
                                                                     // done copying optional file. delete old wallet data hub.
                                                                     cleanup_wallet_hub(z_cache.my_wallet_data_hub, function (res) {
                                                                         var pgm = service + '.move_user_profile cleanup_wallet_hub callback 11a: ';
                                                                         console.log(pgm + 'cleanup_wallet_hub. res = ' + JSON.stringify(res)) ;
+                                                                        // res = {"error":"Content publish failed."}
 
                                                                         // done. copied normal and optional files to new wallet hub. deleted files from old wallet hub. signed and published old empty wallet data hub. Now ready for new wallet data hub. sign and publish now
                                                                         z_cache.other_wallet_data_hub = my_wallet_hub ;
                                                                         z_cache.other_wallet_data_hub_title = merger_sites[my_wallet_hub].content.title ;
                                                                         z_cache.my_wallet_data_hub = new_wallet_hub ;
-
-                                                                        // end move user profile transaction. using transaction for publish
-                                                                        MoneyNetworkAPILib.end_transaction(transaction_timestamp) ;
 
                                                                         // sign and publish profile on new wallet data hub now
                                                                         z_publish({publish: true}, function (res) {
@@ -3107,6 +3113,7 @@ angular.module('MoneyNetworkW2')
                                         btcService.init_wallet(status.wallet_id, status.wallet_password, function (error) {
                                             try {
                                                 if (error && (wallet_info.status != 'Open')) {
+                                                    if (error == 'Origin is not allowed by Access-Control-Allow-Origin') error += '<br>Sometimes a VPN issue. Try disconnect from VPN' ;
                                                     z_wrapper_notification(['error', 'Open wallet request failed with<br>' + error]) ;
                                                     return send_response('Open wallet request failed with error = ' + error);
                                                 }
