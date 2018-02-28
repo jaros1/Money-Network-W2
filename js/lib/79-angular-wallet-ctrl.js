@@ -30,6 +30,10 @@ angular.module('MoneyNetworkW2')
                 var pgm = controller + ' ls_bind/initialize: ' ;
                 console.log(pgm + 'sessionid = ' + sessionid + ',  save_wallet_login = ' +  save_login) ;
 
+                // initialize: help download and help distribute all W2 wallet data files (money transactions)
+                W2Service.set_help() ;
+                $rootScope.$apply() ;
+
                 // startup. check if wallet login is saved in:
                 // - 1: wallet login is saved encrypted (cryptMessage) in MoneyNetworkW2 localStorage
                 // - 2: wallet login is saved encrypted (symmetric) in MoneyNetwork localStorage (session is required)
@@ -216,7 +220,10 @@ angular.module('MoneyNetworkW2')
         self.create_new_wallet = function () {
             if (self.status.restoring) return ; // restoring backup
             btcService.create_new_wallet(self.status.wallet_id, self.status.wallet_password, function (error) {
-                if (error) z_wrapper_notification(["error", error]);
+                if (error) {
+                    if (error == 'Origin is not allowed by Access-Control-Allow-Origin') error += '<br>Sometimes a VPN issue. Try disconnect from VPN' ;
+                    z_wrapper_notification(["error", error]);
+                }
                 else {
                     z_wrapper_notification(["done", 'New Bitcoin wallet was created OK.<br>Please save backup info<br>See console log', 5000]);
                     $rootScope.$apply() ;
@@ -228,7 +235,10 @@ angular.module('MoneyNetworkW2')
             var pgm = controller + '.init_wallet: ' ;
             if (self.status.restoring) return ; // restoring backup
             btcService.init_wallet(self.status.wallet_id, self.status.wallet_password, function (error) {
-                if (error) z_wrapper_notification(["error", error]);
+                if (error) {
+                    if (error == 'Origin is not allowed by Access-Control-Allow-Origin') error += '<br>Sometimes a VPN issue. Try disconnect from VPN' ;
+                    z_wrapper_notification(["error", error]);
+                }
                 else {
                     z_wrapper_notification(["info", 'Bitcoin wallet was initialized OK.', 5000]);
                     $rootScope.$apply() ;
@@ -246,7 +256,10 @@ angular.module('MoneyNetworkW2')
             if (self.status.restoring) return ; // restoring backup
             if (self.wallet_info.status != 'Open') return z_wrapper_notification(["info", "No bitcoin wallet found", 3000]) ;
             btcService.get_balance(function(error) {
-                if (error) return z_wrapper_notification(["error", error]);
+                if (error) {
+                    if (error == 'Origin is not allowed by Access-Control-Allow-Origin') error += '<br>Sometimes a VPN issue. Try disconnect from VPN' ;
+                    return z_wrapper_notification(["error", error]);
+                }
                 $rootScope.$apply() ;
                 if (!self.status.sessionid) return ; // no MN session
                 // send balance to MN
@@ -259,7 +272,10 @@ angular.module('MoneyNetworkW2')
         self.close_wallet = function () {
             if (self.status.restoring) return ; // restoring backup
             btcService.close_wallet(function (error) {
-                if (error) z_wrapper_notification(["error", error]);
+                if (error) {
+                    if (error == 'Origin is not allowed by Access-Control-Allow-Origin') error += '<br>Sometimes a VPN issue. Try disconnect from VPN' ;
+                    z_wrapper_notification(["error", error]);
+                }
                 else z_wrapper_notification(["info", 'Bitcoin wallet closed', 5000]);
             })
         } ; // close_wallet
@@ -267,7 +283,10 @@ angular.module('MoneyNetworkW2')
         self.delete_wallet = function () {
             if (self.status.restoring) return ; // restoring backup
             btcService.delete_wallet(function (error) {
-                if (error) z_wrapper_notification(["error", error]);
+                if (error) {
+                    if (error == 'Origin is not allowed by Access-Control-Allow-Origin') error += '<br>Sometimes a VPN issue. Try disconnect from VPN' ;
+                    z_wrapper_notification(["error", error]);
+                }
                 else {
                     z_wrapper_notification(["done", 'Bitcoin wallet was deleted', 5000]);
                     // clear form
@@ -285,7 +304,10 @@ angular.module('MoneyNetworkW2')
             if (self.status.restoring) return ; // restoring backup
             if (self.wallet_info.status != 'Open') z_wrapper_notification(["info", "No bitcoin wallet found", 3000]) ;
             else self.receiver_address = btcService.get_new_address(function (err, address) {
-                if (err) return z_wrapper_notification(['error', 'Could not get a new address. error = ' + err]) ;
+                if (err) {
+                    if (err == 'Origin is not allowed by Access-Control-Allow-Origin') err += '<br>Sometimes a VPN issue. Try disconnect from VPN' ;
+                    return z_wrapper_notification(['error', 'Could not get a new address. error = ' + err]) ;
+                }
                 else {
                     self.receiver_address = address ;
                     $rootScope.$apply() ;
@@ -304,6 +326,7 @@ angular.module('MoneyNetworkW2')
                 if (err) {
                     if ((typeof err == 'object') && err.message) err = err.message ;
                     console.log(pgm + 'err = ' + JSON.stringify(err)) ;
+                    if (err == 'Origin is not allowed by Access-Control-Allow-Origin') err += '<br>Sometimes a VPN issue. Try disconnect from VPN' ;
                     z_wrapper_notification(["error", err]) ;
                 }
                 else z_wrapper_notification(["done", "Money was send<br>result = " + JSON.stringify(result)]);

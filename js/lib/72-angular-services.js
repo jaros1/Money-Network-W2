@@ -854,7 +854,276 @@ angular.module('MoneyNetworkW2')
                 i = Math.floor(Math.random() * hubs.length);
                 return hubs[i] ;
             } // get_default_wallet_hub
-            
+
+            // delete old no longer used user profile
+            // 1) doublet user profile - keep user profile on last updated wallet hub - delete user profile on other wallet data hubs
+            // 2) move user profile (no peers) - delete profile on old wallet data hub
+            function cleanup_wallet_hub (hub, cb) {
+                var pgm = service + '.delete_wallet_hub: ' ;
+                var inner_path0, debug_seq0 ;
+                if (!cb) cb = function() {} ;
+                // sign to update list of files
+                inner_path0 = 'merged-' + get_merged_type() + '/' + hub + '/data/users/' + ZeroFrame.site_info.auth_address + '/content.json' ;
+                debug_seq0 = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path0, 'siteSign') ;
+                ZeroFrame.cmd("siteSign", {inner_path: inner_path0, remove_missing_optional: true}, function (res1) {
+                    var pgm = service + '.delete_wallet_hub siteSign callback 1: ';
+                    MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq0, res1);
+                    if (res1 != 'ok') console.log(pgm + inner_path0 + ' siteSign failed. error = ' + JSON.stringify(res1));
+                    // read content.json and get list of files to be deleted
+                    z_file_get(pgm, {inner_path: inner_path0}, function(content_str) {
+                        var pgm = service + '.delete_wallet_hub z_file_get callback 2: ';
+                        var content, files, key, delete_file ;
+                        content = JSON.parse(content_str) ;
+                        files = [] ;
+                        for (key in content.files) files.push(key) ;
+                        if (content.files_optional) for (key in content.files_optional) files.push(key) ;
+                        // delete files loop:
+                        delete_file = function() {
+                            var pgm = service + '.delete_wallet_hub.delete_file 3: ' ;
+                            var filename, debug_seq2, inner_path ;
+                            filename = files.shift() ;
+                            if (!filename) {
+                                // directory should be empty now. sign and publish. OK if publish fails. Could be a wallet data hub without peers.
+                                inner_path = 'merged-' + get_merged_type() + '/' + hub + '/data/users/' + ZeroFrame.site_info.auth_address + '/content.json' ;
+                                MoneyNetworkAPILib.z_site_publish({inner_path: inner_path, remove_missing_optional: true, encrypt: encrypt2, reason: 'cleanup old wallet'}, function (res4) {
+                                    var pgm = service + '.delete_wallet_hub z_site_publish callback 4a: ';
+                                    debug_z_api_operation_end(debug_seq2, res4);
+                                    if (res4 != 'ok') console.log(pgm + inner_path + ' publish failed. error = ' + JSON.stringify(res4));
+                                    // done
+                                    cb(res4) ;
+                                }) ;
+                                return ;
+                            }
+                            inner_path = 'merged-' + get_merged_type() + '/' + hub + '/data/users/' + ZeroFrame.site_info.auth_address + '/' + filename ;
+                            MoneyNetworkAPILib.z_file_delete(pgm, inner_path, function (res2) {
+                                var pgm = service + '.delete_wallet_hub z_file_delete callback 4b: ';
+                                if (res2 != 'ok') console.log(pgm + 'error. fileDelete ' + inner_path + ' failed. error = ' + JSON.stringify(res2)) ;
+                                // delete next file
+                                delete_file() ;
+                            }); // z_file_delete callback
+                        } ; // delete_file 3
+                        // start delete file loop
+                        delete_file() ;
+
+                    }) ; // z_file_get callback
+
+                }) ; // siteSign callback
+
+            } // delete_wallet_hub
+
+            // copy user files from current wallet data hub to new wallet data hub
+            // for example after failed publish without any peers or move user profile action in user interface
+            function move_user_profile(new_wallet_hub, cb) {
+                var pgm = service + '.move_user_profile: ' ;
+
+                // steps:
+                // 1 - sign current user profile
+                // 2 - read current content.json
+                // 3 - copy normal files to new wallet data hub
+                // 4 - sign new user profile and add optional pattern
+                // 5 - copy optional files
+                // 6 - delete old user profile
+                // 7 - sign and publish new user profile
+                // done
+
+                MoneyNetworkAPILib.start_transaction(pgm, function(transaction_timestamp) {
+
+                    var cb2 = function (res) {
+                        MoneyNetworkAPILib.end_transaction(transaction_timestamp) ;
+                        cb(res) ;
+                    } ;
+
+                    // get list of hub titles. For other_wallet_data_hub_title
+                    ZeroFrame.cmd("mergerSiteList", [true], function (merger_sites) {
+                        var pgm = service + '.move_user_profile mergerSiteList callback 1: ' ;
+
+                        // get current hub (to be moved)
+                        get_my_wallet_hub (function (my_wallet_hub, other_wallet_hub, other_wallet_hub_title) {
+                            var pgm = service + '.move_user_profile get_my_user_hub callback 2: ' ;
+                            var old_user_path, new_user_path, inner_path1, debug_seq1 ;
+
+                            if (!merger_sites[my_wallet_hub]) return cb2('error. current wallet data hub ' + my_wallet_hub + ' is not a merger site') ;
+                            if (!merger_sites[new_wallet_hub]) return cb2('error. new wallet hub ' + new_wallet_hub + ' is not a merger site') ;
+                            if (my_wallet_hub == new_user_path) return cb2('error. current wallet hub = new wallet hub = ' + new_wallet_hub) ;
+
+                            // 1: sign old user hub and update list of files
+                            old_user_path = "merged-" + get_merged_type() + "/" + my_wallet_hub + "/data/users/" + ZeroFrame.site_info.auth_address + '/';
+                            new_user_path = "merged-" + get_merged_type() + "/" + new_wallet_hub + "/data/users/" + ZeroFrame.site_info.auth_address + '/';
+                            inner_path1 = old_user_path + 'content.json' ;
+                            debug_seq1 = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, old_user_path + '/content.json', 'siteSign') ;
+                            ZeroFrame.cmd("siteSign", {inner_path: inner_path1, remove_missing_optional: true}, function (res) {
+                                var pgm = service + '.move_user_profile siteSign callback 3: ' ;
+                                MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq1, res);
+                                if (res != 'ok') {
+                                    // sign failed
+                                    console.log(pgm + 'error. cannot move user profile. siteSign for ' + inner_path1 + ' failed. error = ' + JSON.stringify(res)) ;
+                                    return cb2(res) ;
+                                }
+
+                                // 2 - sign ok. read old content.json and list of normal files
+                                z_file_get(pgm, {inner_path: inner_path1}, function (content_str, extra) {
+                                    var pgm = service + '.move_user_profile z_file_get callback 4: ' ;
+                                    var content, copy_normal_file ;
+                                    if (!content_str) {
+                                        console.log(pgm + 'error. cannot move user profile. ' + inner_path1 + ' was not found') ;
+                                        return cb2('error. cannot move user profile. ' + inner_path1 + ' was not found') ;
+                                    }
+                                    content = JSON.parse(content_str) ;
+                                    if (!content.files) content.files = {} ;
+
+                                    // 3. copy normal files
+                                    copy_normal_file = function() {
+                                        var pgm = service + '.move_user_profile copy_normal_file callback 5: ' ;
+
+                                        var filenames, filename, old_inner_path, new_inner_path, inner_path3, format, debug_seq3 ;
+                                        filenames = Object.keys(content.files) ;
+                                        if (!filenames.length) {
+                                            // 4: no more normal files to copy. sign new user profile without optional pattern
+                                            inner_path3 = new_user_path + 'content.json' ;
+                                            debug_seq3 = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path3, 'siteSign') ;
+                                            ZeroFrame.cmd("siteSign", {inner_path: inner_path3, remove_missing_optional: true}, function (res) {
+                                                var pgm = service + '.move_user_profile siteSign callback 6a: ';
+                                                MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq3, res);
+                                                if (res != 'ok') {
+                                                    // sign failed
+                                                    console.log(pgm + 'error. cannot move user profile. siteSign for ' + inner_path3 + ' failed. error = ' + JSON.stringify(res));
+                                                    return cb2('cannot move user profile. siteSign for ' + inner_path3 + ' failed. error = ' + JSON.stringify(res));
+                                                }
+                                                // sign new user profile OK. read new content.json. optional pattern must be added before copying optional files
+                                                z_file_get(pgm, {inner_path: inner_path3}, function (content_str, extra) {
+                                                    var pgm = service + '.move_user_profile z_file_get callback 7a: ';
+                                                    var content, json_raw ;
+                                                    // add optional pattern before merge_user operation
+                                                    content = JSON.parse(content_str) ;
+                                                    content.optional = Z_CONTENT_OPTIONAL ;
+                                                    json_raw = unescape(encodeURIComponent(JSON.stringify(content, null, "\t")));
+                                                    z_file_write(pgm, inner_path3, btoa(json_raw), {}, function (res) {
+                                                        var pgm = service + '.move_user_profile z_file_write callback 8a: ';
+                                                        if (res != 'ok') {
+                                                            console.log(pgm + 'error. cannot move user profile. fileWrite failed for new content.json ' + inner_path3 + '. res = ' + JSON.stringify(res)) ;
+                                                            return cb2('error. cannot move user profile. fileWrite failed for new content.json ' + inner_path3 + '. res = ' + JSON.stringify(res)) ;
+                                                        }
+                                                        // ok fileWrite. sign new user profile with optional pattern
+                                                        debug_seq3 = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path3, 'siteSign') ;
+                                                        ZeroFrame.cmd("siteSign", {inner_path: inner_path3, remove_missing_optional: true}, function (res) {
+                                                            var pgm = service + '.move_user_profile siteSign callback 9a: ';
+                                                            var copy_optional_file ;
+                                                            MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq3, res);
+                                                            if (res != 'ok') {
+                                                                console.log(pgm + 'error. cannot move user profile. siteSign failed for new content.json ' + inner_path3 + '. res = ' + JSON.stringify(res)) ;
+                                                                return cb2('error. cannot move user profile. siteSign failed for new content.json ' + inner_path3 + '. res = ' + JSON.stringify(res)) ;
+                                                            }
+                                                            // siteSign with optional file pattern OK. copy optional files from old user profile to new user profile
+
+                                                            copy_optional_file = function() {
+                                                                var pgm = service + '.move_user_profile copy_optional_file callback 10a: ';
+                                                                var filenames, filename, old_inner_path, new_inner_path ;
+                                                                if (!content.files_optional) content.files_optional = {} ;
+                                                                filenames = Object.keys(content.files_optional) ;
+                                                                if (!filenames.length) {
+
+                                                                    // done copying optional file. delete old wallet data hub.
+                                                                    cleanup_wallet_hub(z_cache.my_wallet_data_hub, function (res) {
+                                                                        var pgm = service + '.move_user_profile cleanup_wallet_hub callback 11a: ';
+                                                                        console.log(pgm + 'cleanup_wallet_hub. res = ' + JSON.stringify(res)) ;
+
+                                                                        // done. copied normal and optional files to new wallet hub. deleted files from old wallet hub. signed and published old empty wallet data hub. Now ready for new wallet data hub. sign and publish now
+                                                                        z_cache.other_wallet_data_hub = my_wallet_hub ;
+                                                                        z_cache.other_wallet_data_hub_title = merger_sites[my_wallet_hub].content.title ;
+                                                                        z_cache.my_wallet_data_hub = new_wallet_hub ;
+
+                                                                        // end move user profile transaction. using transaction for publish
+                                                                        MoneyNetworkAPILib.end_transaction(transaction_timestamp) ;
+
+                                                                        // sign and publish profile on new wallet data hub now
+                                                                        z_publish({publish: true}, function (res) {
+                                                                            var pgm = service + '.move_user_profile z_site_publish 12a: ';
+                                                                            console.log(pgm + 'z_publish. res = ' + JSON.stringify(res)) ;
+                                                                            // done
+                                                                            cb(res) ;
+
+                                                                        }) ; // z_publish callback 12a
+
+                                                                    }) ; // cleanup_wallet_hub callback 11a
+                                                                    return ;
+                                                                }
+                                                                // path b: copy optional file
+                                                                filename = filenames.shift() ;
+                                                                delete content.files[filename] ;
+                                                                old_inner_path = old_user_path + filename ;
+                                                                new_inner_path = new_user_path + filename ;
+                                                                z_file_get(pgm, {inner_path: old_inner_path}, function (res, extra) {
+                                                                    var json_raw ;
+                                                                    json_raw = unescape(encodeURIComponent(res));
+                                                                    z_file_write(pgm, new_inner_path, btoa(json_raw), {}, function (res) {
+                                                                        var pgm = service + '.move_user_profile z_file_write callback 7b: ' ;
+                                                                        if (res != 'ok') return cb2('cannot move user profile. ' + filename + ' fileWrite failed. res = ' + JSON.stringify(res)) ;
+                                                                        // copy next optional file
+                                                                        copy_optional_file() ;
+                                                                    }) ; // z_file_write callback 7b
+                                                                }) ; // z_file_get callback ?
+
+                                                            } ; // copy_optional_file 10a
+                                                            // start copy optional file loop
+                                                            copy_optional_file() ;
+
+                                                        }) ; // siteSign callback 9a
+
+                                                    }) ; // z_file_write callback 8a
+
+                                                }) ; // z_file_get callback 7a
+
+                                            }) ; // siteSign callback 6a
+                                            return ;
+                                        }
+                                        // path c: copy normal file
+                                        filename = filenames.shift() ;
+                                        delete content.files[filename] ;
+                                        old_inner_path = old_user_path + filename ;
+                                        new_inner_path = new_user_path + filename ;
+                                        format = ['avatar.jpg', 'avatar.png'].indexOf(filename) != -1 ? 'base64' : 'text' ;
+                                        z_file_get(pgm, {inner_path: old_inner_path, format: format}, function (res, extra) {
+                                            var pgm = service + '.move_user_profile z_file_get callback 6c: ' ;
+                                            var image_base64uri, json_raw, post_data ;
+                                            // write file
+                                            if (['avatar.jpg', 'avatar.png'].indexOf(filename) != -1) {
+                                                // images
+                                                image_base64uri = res ;
+                                                post_data = image_base64uri != null ? image_base64uri.replace(/.*?,/, "") : void 0;
+                                            }
+                                            else {
+                                                // json
+                                                json_raw = unescape(encodeURIComponent(res));
+                                                post_data = btoa(json_raw) ;
+                                            }
+                                            z_file_write(pgm, new_inner_path, post_data, {}, function (res) {
+                                                var pgm = service + '.move_user_profile z_file_write callback 7c: ' ;
+                                                if (res != 'ok') return cb2('cannot move user profile. ' + filename + ' fileWrite failed. res = ' + JSON.stringify(res)) ;
+                                                // copy next file
+                                                copy_normal_file() ;
+                                            }) ; // z_file_write callback 7b
+
+                                        }) ; // z_file_get callback 6b
+
+                                    } ; // copy file callback 5
+                                    // start copy file loop
+                                    copy_normal_file() ;
+
+                                }) ; // z_file_get callback 4
+
+                            }) ; // siteSign callback 3
+
+                        }) ; // get_my_user_hub callback 2
+
+                    }) ; // mergerSiteList callback 1
+
+
+                }) ;
+
+
+
+            } // move_wallet_hub
+
             var get_my_wallet_hub_cbs = [] ; // callbacks waiting for query 17 to finish
             function get_my_wallet_hub (cb) {
                 var pgm = service + '.get_my_wallet_hub: ' ;
@@ -975,7 +1244,7 @@ angular.module('MoneyNetworkW2')
                     debug_seq1 = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, 'w2 query 2', 'dbQuery') ;
                     ZeroFrame.cmd("dbQuery", [w2_query_2], function (res) {
                         var pgm = service + '.get_my_wallet_hub.step_3_find_wallet_hub dbQuery callback 1: ';
-                        var i, wallet_hub_selected, get_and_add_default_wallet_hub, cleanup_wallet_hub, priorities, min_priority, priority;
+                        var i, wallet_hub_selected, get_and_add_default_wallet_hub, cleanup_old_wallet_hub, priorities, min_priority, priority;
                         MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq1, (!res || res.error) ? 'Failed. error = ' + JSON.stringify(res) : 'OK. Returned ' + res.length + ' rows');
 
                         if (res.error) {
@@ -986,59 +1255,18 @@ angular.module('MoneyNetworkW2')
                         if (res.length > 1) {
                             // user profile on more than one wallet data hub. delete content in older wallets before continue with latest updated wallet data hub
                             console.log(pgm + 'found user profile on more that one wallet data hub. res = ' + JSON.stringify(res)) ;
-                            cleanup_wallet_hub = function() {
-                                var hub, inner_path, debug_seq2 ;
-                                if (res.length == 1) return ; // cleanup done
-                                // sign last directory in res (w2 query 2).
+                            cleanup_old_wallet_hub = function() {
+                                var hub ;
+                                if (res.length == 1) return ; // done deleting old wallet data hubs
                                 hub = res[res.length-1].hub ;
-                                inner_path = 'merged-' + get_merged_type() + '/' + hub + '/data/users/' + ZeroFrame.site_info.auth_address + '/content.json' ;
-                                debug_seq2 = MoneyNetworkAPILib.debug_z_api_operation_start(pgm, inner_path, 'siteSign') ;
-                                ZeroFrame.cmd("siteSign", {inner_path: inner_path, remove_missing_optional: true}, function (res2) {
-                                    var pgm = service + '.get_my_wallet_hub.step_3_find_wallet_hub.cleanup_wallet_hub siteSign callback: ';
-                                    MoneyNetworkAPILib.debug_z_api_operation_end(debug_seq2, res2);
-                                    if (res2 != 'ok') console.log(pgm + inner_path + ' siteSign failed. error = ' + JSON.stringify(res2));
-                                    // one or more directories to cleanup. read content.json and get list of files to be deleted
-                                    z_file_get(pgm, {inner_path: inner_path}, function(content_str) {
-                                        var pgm = service + '.get_my_wallet_hub.step_3_find_wallet_hub.cleanup_wallet_hub z_file_get callback: ';
-                                        var content, files, key, delete_file ;
-                                        content = JSON.parse(content_str) ;
-                                        files = [] ;
-                                        for (key in content.files) files.push(key) ;
-                                        if (content.files_optional) for (key in content.files_optional) files.push(key) ;
-                                        // delete files loop:
-                                        delete_file = function() {
-                                            var filename, debug_seq2, inner_path ;
-                                            filename = files.shift() ;
-                                            if (!filename) {
-                                                // directory should be empty now. sign and publish. OK if publish fails. Could be a wallet hub without peers.
-                                                inner_path = 'merged-' + get_merged_type() + '/' + hub + '/data/users/' + ZeroFrame.site_info.auth_address + '/content.json' ;
-                                                MoneyNetworkAPILib.z_site_publish({inner_path: inner_path, remove_missing_optional: true, encrypt: encrypt2, reason: 'cleanup old wallet'}, function (res2) {
-                                                    var pgm = service + '.get_my_wallet_hub.step_3_find_wallet_hub.cleanup_wallet_hub z_site_publish callback: ';
-                                                    debug_z_api_operation_end(debug_seq2, res2);
-                                                    if (res2 != 'ok') console.log(pgm + inner_path + ' publish failed. error = ' + JSON.stringify(res2));
-                                                    // continue anyway with next directory. one less directory in res (w2 query 2)
-                                                    res.pop() ;
-                                                    cleanup_wallet_hub() ;
-                                                }) ;
-                                                return ;
-                                            }
-                                            inner_path = 'merged-' + get_merged_type() + '/' + hub + '/data/users/' + ZeroFrame.site_info.auth_address + '/' + filename ;
-                                            MoneyNetworkAPILib.z_file_delete(pgm, inner_path, function (res2) {
-                                                if (res2 != 'ok') console.log(pgm + 'error. fileDelete ' + inner_path + ' failed. error = ' + JSON.stringify(res2)) ;
-                                                // delete next file
-                                                delete_file() ;
-                                            }); // z_file_delete callback
-                                        } ;
-                                        // start delete file loop
-                                        delete_file() ;
-
-                                    }) ; // z_file_get callback
-
-                                }) ; // siteSign callback
-
-                            }; // cleanup_wallet_hub
-                            // start cleanup wallet loop
-                            $timeout(cleanup_wallet_hub,1000) ;
+                                res.pop() ;
+                                cleanup_wallet_hub(hub, function (res) {
+                                    console.log(pgm + 'deleted old wallet data hub ' + hub + '. res = ' + JSON.stringify(res)) ;
+                                    cleanup_old_wallet_hub() ;
+                                }) ;
+                            }; // delete_old_wallet_hub
+                            // start cleanup loop. continue anyway. publish operations can take some time (max one publish operation every 30 seconds)
+                            cleanup_old_wallet_hub() ;
                         }
                         if (res.length == 1) {
                             // old wallet
@@ -1058,7 +1286,7 @@ angular.module('MoneyNetworkW2')
                         //    "5": 'last mergerSiteAdd failed. unavailable hub'
                         //};
                         priorities = [] ; // arrays for priorities
-                        // user_data_hubs = [{"hub":"182Uot1yJ6mZEwQYE5LX1P5f6VPyJ9gUGe"},{"hub":"1PgyTnnACGd1XRdpfiDihgKwYRRnzgz2zh"}]
+                        // wallet_data_hubs = [{"hub":"182Uot1yJ6mZEwQYE5LX1P5f6VPyJ9gUGe"},{"hub":"1PgyTnnACGd1XRdpfiDihgKwYRRnzgz2zh"}]
                         min_priority = 999 ;
                         for (i=0 ; i<wallet_data_hubs.length ; i++) {
                             priority = wallet_data_hubs[i].priority ;
@@ -1363,6 +1591,7 @@ angular.module('MoneyNetworkW2')
             // sign or publish
             var z_publish_interval = 0 ;
             var z_publish_pending = false ;
+            var z_site_publish_no_peers = false ;
 
             function z_publish(options, cb) {
                 var pgm = service + '.z_publish: ';
@@ -1376,11 +1605,13 @@ angular.module('MoneyNetworkW2')
                 if (!cb) cb = function () {};
                 // get full merger site user path
                 get_user_path(function (user_path) {
+                    var pgm = service + '.z_publish get_user_path callback 1: ';
                     var cmd;
                     inner_path = user_path + 'content.json';
                     if (publish) console.log(pgm + 'publishing ' + inner_path);
                     // content.json file must have optional files support
                     encrypt1.add_optional_files_support({group_debug_seq: group_debug_seq}, function () {
+                        var pgm = service + '.z_publish add_optional_files_support callback 2: ';
                         var debug_seq;
 
                         // sign or publish
@@ -1388,33 +1619,151 @@ angular.module('MoneyNetworkW2')
                         if (publish) {
                             // use MN publish queue. max one publish once every 30 seconds to prevent ratelimit errors (false OK publish)
                             MoneyNetworkAPILib.z_site_publish({inner_path: inner_path, remove_missing_optional: true, encrypt: encrypt2, reason: reason}, function (res) {
-                                var pgm = service + '.z_site_publish callback 4: ';
+                                var pgm = service + '.z_publish z_site_publish callback 3a: ';
                                 var pgm2;
                                 pgm2 = MoneyNetworkAPILib.get_group_debug_seq_pgm(pgm, group_debug_seq);
                                 console.log(pgm2 + 'res = ' + JSON.stringify(res));
                                 if (res != "ok") {
 
+                                    // run callback. depending on condition the code will either retry publish or ask user to move user profile to an other user data hub
+                                    cb(res);
 
+                                    // https://github.com/jaros1/Money-Network/issues/321 Publish failed - no peers
+                                    // publish failed. check number of peers for current user data hub
+                                    // refresh list of user data hubs. user may have to move user profile to an other user data hub
+                                    MoneyNetworkAPILib.get_all_hubs(true, function (all_hubs) {
+                                        var pgm = service + '.z_publish get_all_hubs callback 4a: ';
+                                        var i, peers, msg, wallet_data_hubs, hub, new_wallet_hub ;
 
-                                    z_wrapper_notification(["error", "Failed to " + (publish ? "publish" : "sign") + ": " + res.error, 5000]);
-                                    // error - repeat sitePublish in 30, 60, 120, 240 etc seconds (device maybe offline or no peers)
-                                    if (!z_publish_interval) z_publish_interval = 30;
-                                    else z_publish_interval = z_publish_interval * 2;
-                                    console.log(pgm2 + 'Error. Failed to publish: ' + res.error + '. Try again in ' + z_publish_interval + ' seconds');
-                                    var retry_zeronet_site_publish = function () {
-                                        z_publish({publish: publish, reason: reason, group_debug_seq: group_debug_seq}, cb);
-                                    };
-                                    $timeout(retry_zeronet_site_publish, z_publish_interval * 1000);
-                                    // continue processing while waiting for failed sitePublish to finish
-                                    return cb(res);
+                                        // any peers serving my_wallet_data_hub?
+                                        peers = true ;
+                                        for (i=0 ; i<all_hubs.length ; i++) {
+                                            if (all_hubs[i].hub != z_cache.my_wallet_data_hub) continue ;
+                                            if (all_hubs[i].hasOwnProperty('peers') && (all_hubs[i].peers < 2)) peers = false ;
+                                            console.log(pgm + 'publish failed. found ' + all_hubs[i].peers + ' peers for ' + all_hubs[i].hub) ;
+                                        }
 
+                                        if (peers) {
+                                            // publish failed. unknown reason (internet offline, vpn problem, ZeroNet port problem)
+                                            z_wrapper_notification(["error", "Failed to publish: " + res.error, 5000]);
 
+                                            // retry sitePublish in 30, 60, 120, 240 etc seconds (device maybe offline or no peers)
+                                            if (!z_publish_interval) z_publish_interval = 30;
+                                            else z_publish_interval = z_publish_interval * 2;
+                                            console.log(pgm2 + 'Error. Failed to publish: ' + res.error + '. Try again in ' + z_publish_interval + ' seconds');
+                                            var retry_zeronet_site_publish = function () {
+                                                z_publish({publish: publish, reason: reason, group_debug_seq: group_debug_seq}, cb);
+                                            };
+                                            $timeout(retry_zeronet_site_publish, z_publish_interval * 1000);
+
+                                        }
+                                        else {
+                                            // publish failed. No peers for my_wallet_data_hub
+
+                                            // any user data hubs with peers?
+                                            wallet_data_hubs = [] ;
+                                            for (i=0 ; i<all_hubs.length ; i++) {
+                                                if (all_hubs[i].hub_type != 'wallet') continue ;
+                                                if (!all_hubs[i].hub_added) continue ;
+                                                if (!all_hubs[i].hub_title.match(/^W2 /i)) continue;
+                                                if (all_hubs[i].hub == z_cache.my_wallet_data_hub) continue ;
+                                                if (all_hubs[i].peers >= 2) wallet_data_hubs.push(all_hubs[i].hub) ;
+                                            }
+                                            if (!wallet_data_hubs.length) {
+                                                // no wallet data hubs with peers.
+                                                msg = [
+                                                    "Failed to publish: " + res.error,
+                                                    'No peers were found for wallet data hub' + z_cache.my_wallet_data_hub,
+                                                    'No other wallet data hubs with peers were found',
+                                                    'Please add more wallet data hubs',
+                                                    'Please select user profile hub'
+                                                ] ;
+                                                console.log(pgm + msg.join('. ')) ;
+                                                z_wrapper_notification(["error", msg.join('<br>')]);
+                                                new_wallet_hub = null ;
+
+                                            }
+                                            else if (wallet_data_hubs.length == 1) {
+                                                // one user data hub with peers. move user profile
+                                                msg = [
+                                                    "Failed to publish: " + res.error,
+                                                    'No peers were found for wallet data hub' + z_cache.my_wallet_data_hub,
+                                                    'Moving user profile to ' + wallet_data_hubs[0]
+                                                ] ;
+                                                console.log(pgm + msg.join('. ')) ;
+                                                z_wrapper_notification(["error", msg.join('<br>')]);
+                                                new_wallet_hub = wallet_data_hubs[0].hub ;
+
+                                            }
+                                            else {
+                                                // more user data hubs with peers. Select random or ask user to select user data hub in Account page
+                                                msg = [
+                                                    "Failed to publish: " + res.error,
+                                                    'No peers were found for wallet data hub' + z_cache.my_wallet_data_hub,
+                                                    'You should move your user profile to an other wallet data hub',
+                                                    'Press OK to confirm box or change default user data hub'] ;
+                                                console.log(pgm + msg.join('. ')) ;
+                                                z_wrapper_notification(["error", msg.join('<br>')]);
+                                                i = Math.floor(Math.random() * wallet_data_hubs.length) ;
+                                                new_wallet_hub = wallet_data_hubs[i].hub ;
+
+                                            }
+
+                                            // confirm box - move user profile - user may want to create a backup before moving user profile
+                                            if (!z_site_publish_no_peers && new_wallet_hub) {
+                                                // confirm box. offer the user as easy workaround for publish failed and no peers
+                                                z_site_publish_no_peers = true ;
+                                                msg = [
+                                                    'Moving user profile',
+                                                    'from ' + z_cache.my_wallet_data_hub,
+                                                    'to ' + new_wallet_hub,
+                                                    'You may want to create a export/backup before continuing',
+                                                    'Any MN-wallet sessions must be reconnected after move',
+                                                    'Any ongoing money transaction must be restarted after move',
+                                                    'Move user profile?'] ;
+                                                ZeroFrame.cmd("wrapperConfirm", [msg.join('<br>'), 'OK'], function (confirm) {
+                                                    var pgm = service + '.zeronet_site_publish wrapperConfirm callback 7: ';
+                                                    if (!confirm) return ;
+
+                                                    z_wrapper_notification(['info', 'Moving user profile<br>Please wait for receipt<br>Publish operations can take some time', 20000]) ;
+
+                                                    move_user_profile(new_wallet_hub, function (res) {
+                                                        var pgm = service + '.zeronet_site_publish wrapperConfirm callback 8: ';
+                                                        var msg ;
+                                                        if (res) {
+                                                            msg = [
+                                                                'Move user profile failed',
+                                                                'res = ' + JSON.stringify(res) +
+                                                                'You may want to log out + log in to cleanup files',
+                                                                'You may want to import backup (Account page)'
+                                                            ] ;
+                                                            console.log(pgm + msg.join('. ')) ;
+                                                            z_wrapper_notification(['error', msg.join('<br>')]) ;
+                                                        }
+                                                        else {
+                                                            msg = [
+                                                                'User profile was moved',
+                                                                'Any old MN-wallet sessions must be reconnected'
+                                                            ] ;
+                                                            z_wrapper_notification(['done', msg.join('<br>')]) ;
+                                                        }
+
+                                                    }) ; // move_user_hub callback 8
+
+                                                }); // wrapperConfirm callback 7
+                                            }
+
+                                        }
+
+                                    }) ; // get_all_hubs callback 6
+                                    // publish failed
+                                    return;
                                 }
                                 // sign/publish OK
                                 z_publish_interval = 0;
                                 z_publish_pending = false ;
                                 cb(res);
-                            });
+                            }); // z_site_publish callback 3a
                             return;
                         }
                         // sign only. fast operation
@@ -6498,6 +6847,48 @@ angular.module('MoneyNetworkW2')
                 return ZeroFrame.cmd("wrapperOpenWindow", [url, "_blank"]);
             } // open_window
 
+            // download and help distribute all files? (user data hubs). used for public chat
+            var help = { bol: false } ;
+            function set_help (value) {
+                var pgm = service + '.set_help: ' ;
+                var help_str, change_settings ;
+                console.log(pgm + 'value = ' + JSON.stringify(value)) ;
+                if ([true, false].indexOf(value) != -1) {
+                    // set from add hubs section
+                    help.bol = value ;
+                    // change setting for all user data hubs. todo: where to find old value?
+                    MoneyNetworkAPILib.get_all_hubs(false, function (all_hubs) {
+                        var all_hubs_clone, i ;
+                        all_hubs_clone = [] ;
+                        for (i=0 ; i<all_hubs.length ; i++) {
+                            if (all_hubs[i].hub_type == 'user') continue ; // MN user data hub
+                            if (!all_hubs[i].hub_title || all_hubs[i].hub_title.match(/^w2 /i)) all_hubs_clone.push(all_hubs[i]) ;
+                        }
+                        change_settings = function() {
+                            var hub_info ;
+                            hub_info = all_hubs_clone.shift() ;
+                            if (!hub_info) return ; // done
+                            if (hub_info.hub_type != 'wallet') return change_settings() ;
+                            if (hub_info.hub_title && !hub_info.hub_title.match(/w2 /i)) return change_settings() ;
+                            if (!hub_info.hub_added) return change_settings() ;
+                            ZeroFrame.cmd("OptionalHelpAll", [value, hub_info.hub], function (res) {
+                                change_settings() ;
+                            }) ;
+                        } ;
+                        change_settings() ;
+                    }) ;
+                }
+                else {
+                    // startup. get from ls
+                    help.bol = ls.help || false ;
+                }
+                ls.help = help.bol ;
+                ls_save() ;
+            }
+            function get_help () {
+                return help ;
+            }
+
             // export kW2Service
             return {
                 // localStorage functions
@@ -6514,7 +6905,11 @@ angular.module('MoneyNetworkW2')
                 save_permissions: save_permissions,
                 send_balance: send_balance,
                 open_window: open_window,
-                z_wrapper_notification:  z_wrapper_notification
+                z_wrapper_notification:  z_wrapper_notification,
+                move_user_profile: move_user_profile,
+                get_my_wallet_hub: get_my_wallet_hub,
+                set_help: set_help,
+                get_help: get_help
             };
 
             // end W2Service
