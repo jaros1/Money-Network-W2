@@ -51,7 +51,7 @@ angular.module('MoneyNetworkW2')
             // console.log(pgm + 'hub_info = ' + JSON.stringify(hub_info)) ;
             if (hub_info.hub_type == 'user') return false ;
             if (!hub_info.hub_title) return true ;
-            return hub_info.title.match(/w2 /i) ;
+            return hub_info.hub_title.match(/w2 /i) ;
         } ; // filter_hubs
 
         // add/remove data hubs.
