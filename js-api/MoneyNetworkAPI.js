@@ -2731,14 +2731,18 @@ var MoneyNetworkAPILib = (function () {
 
 
         // fileWrite timeout in 1 second (UI error: This file still in sync, if you write it now, then the previous content may be lost)
-        // check fileList and mergerSiteList after fileWrite timeout
+        // the must likely reason is that content.json is in bad_files list in sites.json files
+        // content.json published from an other ZerNet client. content.json only signed and not published in this client.
+        // sign + publish may solve the problem. clearing bad_files list in sites.json may solve the problem.
+        // see https://github.com/HelloZeroNet/ZeroNet/issues/1391, https://github.com/jaros1/Money-Network/issues/359 and https://github.com/jaros1/Money-Network-W3/issues/12
         cb2_timeout = function () {
             var pgm = module + '.z_file_get cb2_timeout 1: ' ;
-            var directory, count, inner_path1 ;
+            var directory, count, inner_path1, cmd, message ;
             if (cb2_done) return ; // cb2 has already run
             // timeout.
-            console.log(pgm + 'issue #359 API - add timeout to fileWrite wrapper') ;
-            console.log(pgm + 'fileWrite timeout after 1 second.') ;
+            console.log(pgm + 'issue #359: API - add timeout to fileWrite wrapper') ;
+            console.log(pgm + 'issue #359: fileWrite timeout after 1 second. inner_path = ' + inner_path) ;
+            cmd = './ZeroNet.sh siteSign ' + hub + ' --inner_path data/users/' + auth_address + '/content.json --remove_missing_optional --publish' ;
 
             // workaround 1: try sign with remove_missing_optional + publish
             // workaround 2: notification only
@@ -2748,16 +2752,27 @@ var MoneyNetworkAPILib = (function () {
             z_file_write_hanging[directory] = count ;
             if (count == 1) {
                 // maybe content.json is in list of bad files. Try if publish solved the problem
-                console.log(pgm + 'trying if sign with remove_missing_optional + publish will solve the problem') ;
+                console.log(pgm + 'issue #359: trying if publish will solve the problem. use terminal and the following command if the problem continues. clearing bad_files list in sites.json file may also fix the problem') ;
+                console.log(pgm + cmd) ;
                 inner_path1 = directory + '/content.json' ;
                 z_site_publish({inner_path: inner_path1, remove_missing_optional: true, reason: 'hanging fileWrite', encrypt: options.encrypt}, function (res) {
-                    if (res == 'ok') ZeroFrame.cmd("wrapperNotification", ['info', 'Problem with hanging fileWrite operation may have been solved', 5000]);
-                    else console.log(pgm + 'publish failed. error = ' + JSON.stringify(res)) ;
+                    if (res == 'ok') {
+                        message = ['Problem with hanging fileWrite operation may have been solved', 'Check bad_files in sites.json if the problem continues', 'Try the following terminal command if the problem continues', cmd] ;
+                        console.log(pgm + 'issue #359: ' + message.join('. ')) ;
+                        ZeroFrame.cmd("wrapperNotification", ['info', message.join('<br>')]);
+                    }
+                    else {
+                        console.log(pgm + 'issue #359: publish failed. error = ' + JSON.stringify(res)) ;
+                        message = ['Problem with hanging fileWrite operation has not been solved', 'Check bad_files in sites.json if the problem continues', 'Try the following terminal command if the problem continues', cmd] ;
+                        console.log(pgm + 'issue #359: ' + message.join('. ')) ;
+                        ZeroFrame.cmd("wrapperNotification", ['info', message.join('<br>')]);
+                    }
                 }) ;
             }
             else {
-                console.log(pgm + 'hanging fileWrite count = ' + count) ;
-                ZeroFrame.cmd("wrapperNotification", ['info', 'Warning. Hanging fileWrite operation<br>Check bad_files for hub ' + hub + '<br>for auth_address ' + auth_address]);
+                message = ['Warning. Hanging fileWrite operation. count = ' + count, 'Check bad_files in sites.json if the problem continues', 'Try the following terminal command if the problem continues', cmd] ;
+                console.log(pgm + 'issue #359: ' + message.join('. ')) ;
+                ZeroFrame.cmd("wrapperNotification", ['info', message.join('<br>')]);
             }
 
         }; // cb2_timeout 1
