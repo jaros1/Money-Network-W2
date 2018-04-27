@@ -1650,7 +1650,7 @@ angular.module('MoneyNetworkW2')
                                                 ] ;
                                                 console.log(pgm + msg.join('. ')) ;
                                                 z_wrapper_notification(["error", msg.join('<br>')]);
-                                                new_wallet_hub = wallet_data_hubs[0].hub ;
+                                                new_wallet_hub = wallet_data_hubs[0] ;
 
                                             }
                                             else {
@@ -1663,13 +1663,13 @@ angular.module('MoneyNetworkW2')
                                                 console.log(pgm + msg.join('. ')) ;
                                                 z_wrapper_notification(["error", msg.join('<br>')]);
                                                 i = Math.floor(Math.random() * wallet_data_hubs.length) ;
-                                                new_wallet_hub = wallet_data_hubs[i].hub ;
+                                                new_wallet_hub = wallet_data_hubs[i] ;
 
                                             }
 
                                             // confirm box - move user profile - user may want to create a backup before moving user profile
                                             if (!z_site_publish_no_peers && new_wallet_hub) {
-                                                // confirm box. offer the user as easy workaround for publish failed and no peers
+                                                // confirm box. offer the user as workaround for publish failed and no peers
                                                 z_site_publish_no_peers = true ;
                                                 msg = [
                                                     'Moving user profile',
@@ -3160,7 +3160,15 @@ angular.module('MoneyNetworkW2')
                                                     console.log(pgm + 'OK. Updated wallet-wallet session information in localStorage');
                                                     step_8_publish();
                                                 }
-                                                catch (e) { return send_exception(pgm, e) }
+                                                catch (e) {
+                                                    if (!e) return ; // exception in MoneyNetworkAPI instance
+                                                    if (!pgm) pgm = 'send_mt post processing. step_7_save_in_ls' ;
+                                                    error = e.message ? e.message : e ;
+                                                    console.log(pgm + error);
+                                                    if (e.stack) console.log(e.stack);
+                                                    report_error(pgm, ['Send money transaction post processing failed', "JS exception", error], {log: false, group_debug_seq: group_debug_seq}) ;
+                                                    throw(e);
+                                                }
                                             });
                                         }; // step_7_save_in_ls
 
@@ -3202,10 +3210,26 @@ angular.module('MoneyNetworkW2')
                                                         session_info.this_status = options.status ;
                                                         step_7_save_in_ls();
                                                     }
-                                                    catch (e) { return send_exception(pgm, e) }
+                                                    catch (e) {
+                                                        if (!e) return ; // exception in MoneyNetworkAPI instance
+                                                        if (!pgm) pgm = 'send_mt post processing. step_6_send_pubkeys_msg 2' ;
+                                                        error = e.message ? e.message : e ;
+                                                        console.log(pgm + error);
+                                                        if (e.stack) console.log(e.stack);
+                                                        report_error(pgm, ['Send money transaction post processing failed', "JS exception", error], {log: false, group_debug_seq: group_debug_seq}) ;
+                                                        throw(e);
+                                                    }
                                                 }); // encrypt_json callback
                                             }
-                                            catch (e) { return send_exception(pgm, e)}
+                                            catch (e) {
+                                                if (!e) return ; // exception in MoneyNetworkAPI instance
+                                                if (!pgm) pgm = 'send_mt post processing. step_6_send_pubkeys_msg 1' ;
+                                                error = e.message ? e.message : e ;
+                                                console.log(pgm + error);
+                                                if (e.stack) console.log(e.stack);
+                                                report_error(pgm, ['Send money transaction post processing failed', "JS exception", error], {log: false, group_debug_seq: group_debug_seq}) ;
+                                                throw(e);
+                                            }
 
                                         }; // step_6_send_pubkeys_msg
 
@@ -3233,7 +3257,15 @@ angular.module('MoneyNetworkW2')
                                                     console.log(pgm + 'OK. Created wallet-wallet session information in localStorage');
                                                     step_5_create_session();
                                                 }
-                                                catch (e) { return send_exception(pgm, e) }
+                                                catch (e) {
+                                                    if (!e) return ; // exception in MoneyNetworkAPI instance
+                                                    if (!pgm) pgm = 'send_mt post processing. step_4_save_in_ls' ;
+                                                    error = e.message ? e.message : e ;
+                                                    console.log(pgm + error);
+                                                    if (e.stack) console.log(e.stack);
+                                                    report_error(pgm, ['Send money transaction post processing failed', "JS exception", error], {log: false, group_debug_seq: group_debug_seq}) ;
+                                                    throw(e);
+                                                }
                                             });
                                         }; // step_4_save_in_ls
 
@@ -3252,7 +3284,15 @@ angular.module('MoneyNetworkW2')
                                                     // console.log(pgm + 'session_info = ' + JSON.stringify(session_info));
                                                     step_4_save_in_ls();
                                                 }
-                                                catch (e) { return send_exception(pgm, e) }
+                                                catch (e) {
+                                                    if (!e) return ; // exception in MoneyNetworkAPI instance
+                                                    if (!pgm) pgm = 'send_mt post processing. step_3_get_pubkey2' ;
+                                                    error = e.message ? e.message : e ;
+                                                    console.log(pgm + error);
+                                                    if (e.stack) console.log(e.stack);
+                                                    report_error(pgm, ['Send money transaction post processing failed', "JS exception", error], {log: false, group_debug_seq: group_debug_seq}) ;
+                                                    throw(e);
+                                                }
                                             }); // userPublickey
                                         }; // step_3_get_pubkey2
 
@@ -3277,10 +3317,21 @@ angular.module('MoneyNetworkW2')
                                         // start callback chain
                                         step_1_check_port();
                                     }
-                                    catch (e) { return send_exception(pgm, e) }
+                                    catch (e) {
+                                        if (!e) return ; // exception in MoneyNetworkAPI instance
+                                        if (!pgm) pgm = 'send_mt post processing' ;
+                                        error = e.message ? e.message : e ;
+                                        console.log(pgm + error);
+                                        if (e.stack) console.log(e.stack);
+                                        report_error(pgm, ['Send money transaction post processing failed', "JS exception", error], {log: false, group_debug_seq: group_debug_seq}) ;
+                                        throw(e);
+                                    }
                                 }); // send_response callback
                             }
-                            catch (e) { return send_exception(pgm, e) }
+                            catch (e) {
+                                // outsite send_response callback. Use normal send_exception response to MN
+                                return send_exception(pgm, e)
+                            }
                         })() ;
                         return ;
                         // end send_mt
@@ -3831,7 +3882,15 @@ angular.module('MoneyNetworkW2')
                                                             console.log(pgm + 'OK. Updated wallet-wallet session information in localStorage');
                                                             step_8_publish();
                                                         }
-                                                        catch (e) { return send_exception(pgm, e) }
+                                                        catch (e) {
+                                                            if (!e) return ; // exception in MoneyNetworkAPI instance
+                                                            if (!pgm) pgm = 'start_mt post processing/step_7_save_in_ls' ;
+                                                            error = e.message ? e.message : e ;
+                                                            console.log(pgm + error);
+                                                            if (e.stack) console.log(e.stack);
+                                                            report_error(pgm, ['Start money transaction post processing failed', "JS exception", error], {log: false, group_debug_seq: group_debug_seq}) ;
+                                                            throw(e);
+                                                        }
                                                     });
                                                 }; // step_7_save_in_ls
 
@@ -3874,10 +3933,26 @@ angular.module('MoneyNetworkW2')
                                                                 session_info.this_status = options.status ;
                                                                 step_7_save_in_ls();
                                                             }
-                                                            catch (e) { return send_exception(pgm, e) }
+                                                            catch (e) {
+                                                                if (!e) return ; // exception in MoneyNetworkAPI instance
+                                                                if (!pgm) pgm = 'start_mt post processing/step_6_send_pubkeys_msg 2' ;
+                                                                error = e.message ? e.message : e ;
+                                                                console.log(pgm + error);
+                                                                if (e.stack) console.log(e.stack);
+                                                                report_error(pgm, ['Start money transaction post processing failed', "JS exception", error], {log: false, group_debug_seq: group_debug_seq}) ;
+                                                                throw(e);
+                                                            }
                                                         }); // send_message callback
                                                     }
-                                                    catch (e) { return send_exception(pgm, e) }
+                                                    catch (e) {
+                                                        if (!e) return ; // exception in MoneyNetworkAPI instance
+                                                        if (!pgm) pgm = 'start_mt post processing/step_6_send_pubkeys_msg 1' ;
+                                                        error = e.message ? e.message : e ;
+                                                        console.log(pgm + error);
+                                                        if (e.stack) console.log(e.stack);
+                                                        report_error(pgm, ['Start money transaction post processing failed', "JS exception", error], {log: false, group_debug_seq: group_debug_seq}) ;
+                                                        throw(e);
+                                                    }
                                                 }; // step_6_send_pubkeys_msg
 
                                                 // start_mt step 5. create wallet session. expects incoming pubkeys message from other wallet session
@@ -3908,7 +3983,15 @@ angular.module('MoneyNetworkW2')
                                                             console.log(pgm + 'OK. Created wallet-wallet session information in localStorage');
                                                             step_5_create_session();
                                                         }
-                                                        catch (e) { return send_exception(pgm, e) }
+                                                        catch (e) {
+                                                            if (!e) return ; // exception in MoneyNetworkAPI instance
+                                                            if (!pgm) pgm = 'start_mt post processing/step_4_save_in_ls' ;
+                                                            error = e.message ? e.message : e ;
+                                                            console.log(pgm + error);
+                                                            if (e.stack) console.log(e.stack);
+                                                            report_error(pgm, ['Start money transaction post processing failed', "JS exception", error], {log: false, group_debug_seq: group_debug_seq}) ;
+                                                            throw(e);
+                                                        }
                                                     });
                                                 }; // step_4_save_in_ls
 
@@ -3930,7 +4013,15 @@ angular.module('MoneyNetworkW2')
                                                             // console.log(pgm + 'session_info = ' + JSON.stringify(session_info));
                                                             step_4_save_in_ls();
                                                         }
-                                                        catch (e) { return send_exception(pgm, e) }
+                                                        catch (e) {
+                                                            if (!e) return ; // exception in MoneyNetworkAPI instance
+                                                            if (!pgm) pgm = 'start_mt post processing/step_3_get_pubkey2' ;
+                                                            error = e.message ? e.message : e ;
+                                                            console.log(pgm + error);
+                                                            if (e.stack) console.log(e.stack);
+                                                            report_error(pgm, ['Start money transaction post processing failed', "JS exception", error], {log: false, group_debug_seq: group_debug_seq}) ;
+                                                            throw(e);
+                                                        }
                                                     }); // userPublickey
                                                 }; // step_3_get_pubkey2
 
@@ -3964,13 +4055,32 @@ angular.module('MoneyNetworkW2')
                                                 // start callback chain
                                                 step_1_check_port();
                                             }
-                                            catch (e) { return send_exception(pgm, e) }
+                                            catch (e) {
+                                                if (!e) return ; // exception in MoneyNetworkAPI instance
+                                                if (!pgm) pgm = 'start_mt post processing/read_w_session' ;
+                                                error = e.message ? e.message : e ;
+                                                console.log(pgm + error);
+                                                if (e.stack) console.log(e.stack);
+                                                report_error(pgm, ['Start money transaction post processing failed', "JS exception", error], {log: false, group_debug_seq: group_debug_seq}) ;
+                                                throw(e);
+                                            }
                                         }) ; // read_w_session callback 2
                                     }
-                                    catch (e) { return send_exception(pgm, e) }
+                                    catch (e) {
+                                        if (!e) return ; // exception in MoneyNetworkAPI instance
+                                        if (!pgm) pgm = 'start_mt post processing/response' ;
+                                        error = e.message ? e.message : e ;
+                                        console.log(pgm + error);
+                                        if (e.stack) console.log(e.stack);
+                                        report_error(pgm, ['Start money transaction post processing failed', "JS exception", error], {log: false, group_debug_seq: group_debug_seq}) ;
+                                        throw(e);
+                                    }
                                 }); // send_response callback 1
                             }
-                            catch (e) { return send_exception(pgm, e) }
+                            catch (e) {
+                                // outside response callback. OK response has not been sent. Use normal exception response to MN
+                                return send_exception(pgm, e)
+                            }
                         })() ;
                         return;
                         // end start_mt
@@ -4023,7 +4133,7 @@ angular.module('MoneyNetworkW2')
                                         var filename, re, m ;
                                         if (!content) send_response('System error. Could not find content.json file');
                                         filenames.push('content.json') ;
-                                        for (filename in content.files) filenames.push(filename) ;
+                                        for (filename in content.files) if (filename != 'content.json') filenames.push(filename) ;
                                         re = new RegExp('^[0-9a-f]{10}(-i|-e|-o|-io|-p)\.[0-9]{13}$'); // pattern for MoneyNetworkAPI files.
                                         if (content.files_optional) for (filename in content.files_optional) {
                                             m=filename.match(re)  ;
@@ -4080,7 +4190,7 @@ angular.module('MoneyNetworkW2')
                         (function restore_wallet_backup() {
                             var pgm = service + '.process_incoming_message.' + request.msgtype + '/' + group_debug_seq + ': ';
                             var restore_ls, restore_files, step_1_confirm, step_2_send_ok_response, step_3_notification,
-                                step_4_delete_user_files, step_5_restore_files, step_7_restore_ls, step_8_restart_w2_session,
+                                step_4_delete_user_files, step_5_restore_files, step_6_restore_ls, step_7_restart_w2_session,
                                 user_path;
 
                             // console.log(pgm + 'request = ' + JSON.stringify(request)) ;
@@ -4098,161 +4208,279 @@ angular.module('MoneyNetworkW2')
                             if (!status.permissions || !status.permissions.restore) return send_response('restore operation is not authorized');
 
 
-                            // callback chain:
+                            // callback chain: step 1-7
 
-                            step_8_restart_w2_session = function (group_debug_seq) {
-                                var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_8_restart_w2_session/' + group_debug_seq + ': ';
+                            // restore wallet backup step 7
+                            step_7_restart_w2_session = function (group_debug_seq) {
+                                var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_7_restart_w2_session/' + group_debug_seq + ': ';
                                 var job ;
+                                try {
+                                    MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq);
 
-                                MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq);
+                                    z_wrapper_notification(['done', 'W2 wallet was restored. Reloading page in 3 seconds']) ;
 
-                                z_wrapper_notification(['done', 'W2 wallet was restored. Reloading page in 3 seconds']) ;
+                                    job = function() { $window.location.reload() } ;
+                                    $timeout(job, 3000) ;
 
-                                job = function() { $window.location.reload() } ;
-                                $timeout(job, 3000) ;
+                                }
+                                catch (e) {
+                                    if (!e) return ; // exception in MoneyNetworkAPI instance
+                                    if (!pgm) pgm = 'restore_wallet_backup/step_7_restart_w2_session' ;
+                                    error = e.message ? e.message : e ;
+                                    console.log(pgm + error);
+                                    if (e.stack) console.log(e.stack);
+                                    report_error(pgm, ['Restore backup failed', "JS exception", error], {log: false, group_debug_seq: group_debug_seq}) ;
+                                    throw(e);
+                                }
+                            } ; // step_7_restart_w2_session
 
-                            } ; // step_8_restart_w2_session
+                            // restore wallet backup step 6
+                            step_6_restore_ls = function (group_debug_seq) {
+                                var pgm ;
+                                try {
+                                    pgm = service + '.process_incoming_message.' + request.msgtype + '.step_6_restore_ls/' + group_debug_seq + ': ';
+                                    // todo: should sign and publish content.json after page reload!!!
 
-                            step_7_restore_ls = function (group_debug_seq) {
-                                var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_7_restore_ls/' + group_debug_seq + ': ';
-
-                                // todo: should sign and publish content.json after page reload!!!
-
-                                // mark localStorage as restored. notification after W2 page reload
-                                restore_ls.wallet_backup_restored = {
-                                    now: new Date().getTime(),
-                                    timestamp: request.timestamp,
-                                    filename: request.filename
-                                } ;
-
-                                ZeroFrame.cmd("wrapperSetLocalStorage", [restore_ls], function () {}) ;
-
-                                step_8_restart_w2_session(group_debug_seq) ;
-
-                            } ; // step_7_restore_ls
-
-                            step_5_restore_files = function (group_debug_seq) {
-                                var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_6_restore_wallet_json/' + group_debug_seq + ': ';
-                                var row ;
-
-                                if (!restore_files || !restore_files.length) return step_7_restore_ls(group_debug_seq) ;
-                                row = restore_files.shift() ;
-                                inner_path = user_path + row.filename ;
-                                z_file_write(pgm, inner_path, btoa(row.content), {group_debug_seq: group_debug_seq}, function (res) {
-                                    if (!res || (res != 'ok')) console.log(pgm + 'fileWrite failed for ' + filename + '. error = ' + JSON.stringify(res)) ;
-                                    step_5_restore_files() ;
-                                }) ;
-
-                            } ; // step_6_restore_wallet_json
-
-                            step_4_delete_user_files = function (group_debug_seq) {
-                                var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_4_delete_user_files/' + group_debug_seq + ': ';
-
-                                z_wrapper_notification(['info', 'W2 wallet restored started. Please wait', 10000]) ;
-
-                                get_content_json(function (content) {
-                                    var delete_files, filename, delete_file ;
-
-                                    if (!content) {
-                                        console.log(pgm + 'error. content.json file has not found. continue with restore of files from backup') ;
-                                        return step_5_restore_files(group_debug_seq) ;
-                                    }
-                                    delete_files = [] ;
-                                    for (filename in content.files) delete_files.push(filename) ;
-                                    if (content.files_optional) for (filename in content.files_optional) delete_files.push(filename) ;
-
-                                    // delete file loop
-                                    delete_file = function() {
-                                        var filename ;
-                                        filename = delete_files.shift() ;
-                                        if (!filename) return step_5_restore_files(group_debug_seq) ; // done. continue to restore
-                                        inner_path = user_path + filename ;
-                                        MoneyNetworkAPILib.z_file_delete(pgm, inner_path, function (res) {
-                                            if (!res || (res != 'ok')) console.log(pgm + 'fileDelete failed for ' + filename + '. error = ' + JSON.stringify(res)) ;
-                                            delete_file() ;
-                                        })
-
+                                    // mark localStorage as restored. notification after W2 page reload
+                                    restore_ls.wallet_backup_restored = {
+                                        now: new Date().getTime(),
+                                        timestamp: request.timestamp,
+                                        filename: request.filename
                                     } ;
-                                    delete_file() ;
-                                }) ; // get_content_json
 
+                                    ZeroFrame.cmd("wrapperSetLocalStorage", [restore_ls], function () {}) ;
+
+                                    step_7_restart_w2_session(group_debug_seq) ;
+                                }
+                                catch (e) {
+                                    if (!e) return ; // exception in MoneyNetworkAPI instance
+                                    if (!pgm) pgm = 'restore_wallet_backup/step_6_restore_ls' ;
+                                    error = e.message ? e.message : e ;
+                                    console.log(pgm + error);
+                                    if (e.stack) console.log(e.stack);
+                                    report_error(pgm, ['Restore backup failed', "JS exception", error], {log: false, group_debug_seq: group_debug_seq}) ;
+                                    throw(e);
+                                }
+                            } ; // step_6_restore_ls
+
+                            // restore wallet backup step 5
+                            step_5_restore_files = function (group_debug_seq) {
+                                var pgm, row ;
+                                try {
+                                    pgm = service + '.process_incoming_message.' + request.msgtype + '.step_5_restore_files/' + group_debug_seq + ': ';
+                                    if (!restore_files || !restore_files.length) return step_6_restore_ls(group_debug_seq) ;
+                                    row = restore_files.shift() ;
+                                    inner_path = user_path + row.filename ;
+                                    z_file_write(pgm, inner_path, btoa(row.content), {group_debug_seq: group_debug_seq}, function (res) {
+                                        var pgm ;
+                                        try {
+                                            pgm = service + '.process_incoming_message.' + request.msgtype + '.step_5_restore_files z_file_write callback 1/' + group_debug_seq + ': ';
+                                            if (!res || (res != 'ok')) console.log(pgm + 'fileWrite failed for ' + filename + '. error = ' + JSON.stringify(res)) ;
+                                            step_5_restore_files() ;
+                                        }
+                                        catch (e) {
+                                            if (!e) return ; // exception in MoneyNetworkAPI instance
+                                            if (!pgm) pgm = 'restore_wallet_backup/step_5_restore_files 1' ;
+                                            error = e.message ? e.message : e ;
+                                            console.log(pgm + error);
+                                            if (e.stack) console.log(e.stack);
+                                            report_error(pgm, ['Restore backup failed', "JS exception", error], {log: false, group_debug_seq: group_debug_seq}) ;
+                                            throw(e);
+                                        }
+                                    }) ;
+                                }
+                                catch (e) {
+                                    if (!e) return ; // exception in MoneyNetworkAPI instance
+                                    if (!pgm) pgm = 'restore_wallet_backup/step_5_restore_files 0' ;
+                                    error = e.message ? e.message : e ;
+                                    console.log(pgm + error);
+                                    if (e.stack) console.log(e.stack);
+                                    report_error(pgm, ['Restore backup failed', "JS exception", error], {log: false, group_debug_seq: group_debug_seq}) ;
+                                    throw(e);
+                                }
+                            } ; // step_5_restore_files
+
+                            // restore wallet backup step 4
+                            step_4_delete_user_files = function (group_debug_seq) {
+                                var pgm ;
+                                try {
+                                    pgm = service + '.process_incoming_message.' + request.msgtype + '.step_4_delete_user_files/' + group_debug_seq + ': ';
+                                    z_wrapper_notification(['info', 'W2 wallet restored started. Please wait', 10000]) ;
+
+                                    get_content_json(function (content) {
+                                        var pgm, delete_files, filename, delete_file ;
+                                        try {
+                                            pgm = service + '.process_incoming_message.' + request.msgtype + '.step_4_delete_user_files get_content_json callback 1/' + group_debug_seq + ': ';
+                                            if (!content) {
+                                                console.log(pgm + 'error. content.json file has not found. continue with restore of files from backup') ;
+                                                return step_5_restore_files(group_debug_seq) ;
+                                            }
+                                            delete_files = [] ;
+                                            for (filename in content.files) delete_files.push(filename) ;
+                                            if (content.files_optional) for (filename in content.files_optional) delete_files.push(filename) ;
+
+                                            // delete file loop
+                                            delete_file = function() {
+                                                var pgm, filename, inner_path ;
+                                                pgm = service + '.process_incoming_message.' + request.msgtype + '.step_4_delete_user_files.delete_file 2/' + group_debug_seq + ': ';
+                                                filename = delete_files.shift() ;
+                                                if (!filename) return step_5_restore_files(group_debug_seq) ; // done. continue to restore
+                                                inner_path = user_path + filename ;
+                                                MoneyNetworkAPILib.z_file_delete(pgm, inner_path, function (res) {
+                                                    var pgm ;
+                                                    try {
+                                                        pgm = service + '.process_incoming_message.' + request.msgtype + '.step_4_delete_user_files z_file_delete callback 3/' + group_debug_seq + ': ';
+                                                        if (!res || (res != 'ok')) console.log(pgm + 'fileDelete failed for ' + filename + '. error = ' + JSON.stringify(res)) ;
+                                                        delete_file() ;
+                                                    }
+                                                    catch (e) {
+                                                        if (!e) return ; // exception in MoneyNetworkAPI instance
+                                                        if (!pgm) pgm = 'restore_wallet_backup/step_4_delete_user_files 2' ;
+                                                        error = e.message ? e.message : e ;
+                                                        console.log(pgm + error);
+                                                        if (e.stack) console.log(e.stack);
+                                                        report_error(pgm, ['Restore backup failed', "JS exception", error], {log: false, group_debug_seq: group_debug_seq}) ;
+                                                        throw(e);
+                                                    }
+                                                }); // z_file_delete callback 3
+                                            } ; // delete_file 2
+                                            delete_file() ;
+                                        }
+                                        catch (e) {
+                                            if (!e) return ; // exception in MoneyNetworkAPI instance
+                                            if (!pgm) pgm = 'restore_wallet_backup/step_4_delete_user_files 1' ;
+                                            error = e.message ? e.message : e ;
+                                            console.log(pgm + error);
+                                            if (e.stack) console.log(e.stack);
+                                            report_error(pgm, ['Restore backup failed', "JS exception", error], {log: false, group_debug_seq: group_debug_seq}) ;
+                                            throw(e);
+                                        }
+                                    }) ; // get_content_json callback 1
+                                }
+                                catch (e) {
+                                    if (!e) return ; // exception in MoneyNetworkAPI instance
+                                    if (!pgm) pgm = 'restore_wallet_backup/step_4_delete_user_files 0' ;
+                                    error = e.message ? e.message : e ;
+                                    console.log(pgm + error);
+                                    if (e.stack) console.log(e.stack);
+                                    report_error(pgm, ['Restore backup failed', "JS exception", error], {log: false, group_debug_seq: group_debug_seq}) ;
+                                    throw(e);
+                                }
                             } ; // step_4_delete_user_files
 
+                            // restore wallet backup step 3
                             // notification before restore. restore starts in 10 seconds. should allow MN to read OK response sent in step_2_send_ok_response
                             step_3_notification = function (group_debug_seq) {
-                                var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_3_notification/' + group_debug_seq + ': ';
-                                var job ;
-                                z_wrapper_notification(['info', 'W2 wallet restore starts in 10 seconds. Please wait', 10000]) ;
-                                // wait 10 seconds and start restore
-                                job = function () { step_4_delete_user_files(group_debug_seq)} ;
-                                $timeout(job, 10000) ;
+                                var pgm, job ;
+                                try {
+                                    pgm = service + '.process_incoming_message.' + request.msgtype + '.step_3_notification/' + group_debug_seq + ': ';
+                                    z_wrapper_notification(['info', 'W2 wallet restore starts in 10 seconds. Please wait', 10000]) ;
+                                    // wait 10 seconds and start restore
+                                    job = function () { step_4_delete_user_files(group_debug_seq)} ;
+                                    $timeout(job, 10000) ;
 
-                                // stop all running operations doing restore
-                                status.restoring = true ;
-                                MoneyNetworkAPILib.clear_all_data() ;
-
+                                    // stop all running operations doing restore
+                                    status.restoring = true ;
+                                    MoneyNetworkAPILib.clear_all_data() ;
+                                    MoneyNetworkAPILib.get_all_hubs(true) ;
+                                }
+                                catch (e) {
+                                    if (!e) return ; // exception in MoneyNetworkAPI instance
+                                    if (!pgm) pgm = 'restore_wallet_backup/step_3_notification' ;
+                                    error = e.message ? e.message : e ;
+                                    console.log(pgm + error);
+                                    if (e.stack) console.log(e.stack);
+                                    report_error(pgm, ['Restore backup failed', "JS exception", error], {log: false, group_debug_seq: group_debug_seq}) ;
+                                    throw(e);
+                                }
                             } ; // step_3_notification
 
+                            // restore wallet backup step 2
                             // optional confirm restore. confirm box in W2. notification to MN. timeout in MN session is 60 seconds. confirm box 45 seconds
                             step_2_send_ok_response = function () {
                                 // send OK response to MN session, wait a few seconds to allow MN to read OK response and start restore process
                                 send_response(null, function () {
+                                    var pgm, group_debug_seq ;
+                                    try {
+                                        // OK restore_wallet_backup response was sent to mn. get a new group debug seq for this start_mt post processing.
+                                        group_debug_seq = MoneyNetworkAPILib.debug_group_operation_start();
+                                        pgm = service + '.process_incoming_message.' + request.msgtype + '.step_2_send_ok_response/' + group_debug_seq + ': ';
+                                        console.log(pgm + 'OK start_mt response was send to MN. continue with restore_wallet_backup post processing');
+                                        console.log(pgm + 'Using group_debug_seq ' + group_debug_seq + ' for this post restore_wallet_backup processing operation');
 
-                                    // OK restore_wallet_backup response was sent to mn. get a new group debug seq for this start_mt post processing.
-                                    var group_debug_seq, pgm;
-                                    group_debug_seq = MoneyNetworkAPILib.debug_group_operation_start();
-                                    var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_2_send_ok_response/' + group_debug_seq + ': ';
-                                    console.log(pgm + 'OK start_mt response was send to MN. continue with restore_wallet_backup post processing');
-                                    console.log(pgm + 'Using group_debug_seq ' + group_debug_seq + ' for this post restore_wallet_backup processing operation');
+                                        console.log(pgm + 'todo: cannot use send_exception in post processing. OK response has already been sent to MN') ;
 
-                                    console.log(pgm + 'todo: 1) wait a few seconds before starting restore. MN session will wait max 60 seconds for restore_wallet_backup OK response') ;
-                                    console.log(pgm + 'todo: 2) display nnotification in W2') ;
-                                    console.log(pgm + 'todo: 3) display spinner with countdown in W2') ;
-                                    console.log(pgm + 'todo: 4) delete all old zeronet files') ;
-                                    console.log(pgm + 'todo: 5) write new wallet.json') ;
-                                    console.log(pgm + 'todo: 6) sign and optional publish new wallet.json') ;
-                                    console.log(pgm + 'todo: 7) best with a publish after new MN-W2 session handshake') ;
-                                    console.log(pgm + 'todo: 8) restore localStorage') ;
-                                    console.log(pgm + 'todo: 9) angularJS reload session data / page reload or ?');
+                                        console.log(pgm + 'todo: 1) wait a few seconds before starting restore. MN session will wait max 60 seconds for restore_wallet_backup OK response') ;
+                                        console.log(pgm + 'todo: 2) display notification in W2') ;
+                                        console.log(pgm + 'todo: 3) display spinner with countdown in W2') ;
+                                        console.log(pgm + 'todo: 4) delete all old zeronet files') ;
+                                        console.log(pgm + 'todo: 5) write new wallet.json') ;
+                                        console.log(pgm + 'todo: 6) sign and optional publish new wallet.json') ;
+                                        console.log(pgm + 'todo: 7) best with a publish after new MN-W2 session handshake') ;
+                                        console.log(pgm + 'todo: 8) restore localStorage') ;
+                                        console.log(pgm + 'todo: 9) angularJS reload session data / page reload or ?');
 
-                                    get_user_path(function (path) {
-                                        user_path = path ;
-                                        step_3_notification(group_debug_seq) ;
-                                    }) ;
-
+                                        get_user_path(function (path) {
+                                            try {
+                                                user_path = path ;
+                                                step_3_notification(group_debug_seq) ;
+                                            }
+                                            catch (e) {
+                                                if (!e) return ; // exception in MoneyNetworkAPI instance
+                                                if (!pgm) pgm = 'restore_wallet_backup/send_response 2' ;
+                                                error = e.message ? e.message : e ;
+                                                console.log(pgm + error);
+                                                if (e.stack) console.log(e.stack);
+                                                report_error(pgm, ['Restore backup failed', "JS exception", error], {log: false, group_debug_seq: group_debug_seq}) ;
+                                                throw(e);
+                                            }
+                                        }) ;
+                                    }
+                                    catch (e) {
+                                        if (!e) return ; // exception in MoneyNetworkAPI instance
+                                        if (!pgm) pgm = 'restore_wallet_backup/send_response 1' ;
+                                        error = e.message ? e.message : e ;
+                                        console.log(pgm + error);
+                                        if (e.stack) console.log(e.stack);
+                                        report_error(pgm, ['Restore backup failed', "JS exception", error], {log: false, group_debug_seq: group_debug_seq}) ;
+                                        throw(e);
+                                    }
                                 }) ;
-
                             }; // step_2_send_ok_response
 
+                            // restore wallet backup step 1
                             // optional confirm restore. See "Confirm backup and restore" checkbox
                             step_1_confirm = function() {
                                 var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_1_confirm/' + group_debug_seq + ': ';
                                 var confirm_status, confirm_timeout_fnk, message ;
-                                if (!status.permissions.confirm_backup_restore) return step_2_send_ok_response() ;
+                                try {
+                                    pgm = service + '.process_incoming_message.' + request.msgtype + '.step_1_confirm/' + group_debug_seq + ': ';
+                                    if (!status.permissions.confirm_backup_restore) return step_2_send_ok_response() ;
 
-                                // user must confirm backup request in W2
-                                confirm_status = {done: false};
-                                confirm_timeout_fnk = function () {
-                                    if (confirm_status.done) return; // confirm dialog done
-                                    confirm_status.done = true;
-                                    send_response('Confirm backup timeout')
-                                };
-                                setTimeout(confirm_timeout_fnk, 45000);
+                                    // user must confirm backup request in W2
+                                    confirm_status = {done: false};
+                                    confirm_timeout_fnk = function () {
+                                        if (confirm_status.done) return; // confirm dialog done
+                                        confirm_status.done = true;
+                                        send_response('Confirm backup timeout')
+                                    };
+                                    setTimeout(confirm_timeout_fnk, 45000);
 
-                                // 1: confirm dialog in W2
-                                // todo: add restore info: timestamp, filename, size etc
-                                message = 'MN restore request. Allow full W2 localStorage restore.<br>All existing data will be deleted. No way back' ;
-                                ZeroFrame.cmd("wrapperConfirm", [message, 'OK'], function (confirm) {
-                                    if (confirm_status.done) return; // confirm dialog done (OK or timeout)
-                                    confirm_status.done = true ;
-                                    if (!confirm) return send_response('backup request was rejected');
-                                    // restore request was confirmed. continue
-                                    step_2_send_ok_response();
-                                }) ;
+                                    // 1: confirm dialog in W2
+                                    // todo: add restore info: timestamp, filename, size etc
+                                    message = 'MN restore request. Allow full W2 localStorage restore.<br>All existing data will be deleted. No way back' ;
+                                    ZeroFrame.cmd("wrapperConfirm", [message, 'OK'], function (confirm) {
+                                        if (confirm_status.done) return; // confirm dialog done (OK or timeout)
+                                        confirm_status.done = true ;
+                                        if (!confirm) return send_response('backup request was rejected');
+                                        // restore request was confirmed. continue
+                                        step_2_send_ok_response();
+                                    }) ;
 
-                                // 2: notification in MN session. xxx
-                                report_error(pgm, 'Please confirm backup restore in W2', {log: false, w2: false, type:'info', timeout: 10000}) ;
-
+                                    // 2: notification in MN session.
+                                    report_error(pgm, 'Please confirm backup restore in W2', {log: false, w2: false, type:'info', timeout: 10000}) ;
+                                }
+                                catch (e) { return send_exception(pgm, e) }
                             }; // step_1_confirm
 
                             step_1_confirm() ;

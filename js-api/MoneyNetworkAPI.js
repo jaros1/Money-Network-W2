@@ -2688,8 +2688,8 @@ var MoneyNetworkAPILib = (function () {
             hub = match4[1] ;
             found_hub = -1 ;
             for (i=0 ; i<all_hubs.length ; i++) if (all_hubs[i].hub == hub) found_hub = i ;
-            if (found_hub == -1) console.log(pgm + 'error. could not find ' + hub + '. fileWrite cmd will fail') ;
-            else if (!all_hubs[found_hub].hub_added) console.log(pgm + 'error. hub ' + hub + ' has not been added. fileWrite will fail') ;
+            if (found_hub == -1) console.log(pgm + 'error. could not find ' + hub + '. fileWrite cmd will fail. all_hubs = ' + JSON.stringify(all_hubs)) ;
+            else if (!all_hubs[found_hub].hub_added) console.log(pgm + 'error. hub ' + hub + ' has not been added. fileWrite will fail. all_hubs = ' + JSON.stringify(all_hubs)) ;
         }
         else throw pgm + 'Invalid fileGet path. Not a merger-site path. inner_path = ' + inner_path ;
 
@@ -2707,7 +2707,7 @@ var MoneyNetworkAPILib = (function () {
 
         // extend cb.
         cb2_done = false ;
-        cb2 = function(res, timeout) {
+        cb2 = function(res) {
             var next_file_write_cb, run_cb ;
             if (process_id) {
                 // kill timeout process
@@ -2730,19 +2730,23 @@ var MoneyNetworkAPILib = (function () {
         }; // cb2
 
 
-        // fileWrite timeout in 1 second (UI error: This file still in sync, if you write it now, then the previous content may be lost)
+        // fileWrite timeout in 5 seconds (UI error: This file still in sync, if you write it now, then the previous content may be lost)
         // the must likely reason is that content.json is in bad_files list in sites.json files
         // content.json published from an other ZerNet client. content.json only signed and not published in this client.
         // sign + publish may solve the problem. clearing bad_files list in sites.json may solve the problem.
         // see https://github.com/HelloZeroNet/ZeroNet/issues/1391, https://github.com/jaros1/Money-Network/issues/359 and https://github.com/jaros1/Money-Network-W3/issues/12
         cb2_timeout = function () {
             var pgm = module + '.z_file_get cb2_timeout 1: ' ;
-            var directory, count, inner_path1, cmd, message ;
+            var directory, count, inner_path1, cmd, message, run_cb2_with_timeout ;
             if (cb2_done) return ; // cb2 has already run
             // timeout.
             console.log(pgm + 'issue #359: API - add timeout to fileWrite wrapper') ;
-            console.log(pgm + 'issue #359: fileWrite timeout after 1 second. inner_path = ' + inner_path) ;
+            console.log(pgm + 'issue #359: fileWrite timeout after 5 seconds. inner_path = ' + inner_path) ;
             cmd = './ZeroNet.sh siteSign ' + hub + ' --inner_path data/users/' + auth_address + '/content.json --remove_missing_optional --publish' ;
+
+            // terminate fileWrite operation with "timeout"
+            run_cb2_with_timeout = function() { cb2('timeout')} ;
+            setTimeout(run_cb2_with_timeout, 0) ;
 
             // workaround 1: try sign with remove_missing_optional + publish
             // workaround 2: notification only
@@ -2776,7 +2780,7 @@ var MoneyNetworkAPILib = (function () {
             }
 
         }; // cb2_timeout 1
-        process_id = setTimeout(cb2_timeout, 1000) ;
+        process_id = setTimeout(cb2_timeout, 5000) ;
 
         debug_seq0 = debug_z_api_operation_start(pgm, inner_path, 'fileWrite', null, options.group_debug_seq) ;
         ZeroFrame.cmd("fileWrite", [inner_path, content], cb2) ;
@@ -5287,7 +5291,7 @@ MoneyNetworkAPI.prototype.send_message = function (request, options, cb) {
                             json_raw = unescape(encodeURIComponent(JSON.stringify(encrypted_json, null, "\t")));
                             MoneyNetworkAPILib.z_file_write(pgm, inner_path5, btoa(json_raw), {group_debug_seq: group_debug_seq, encrypt: self}, function (res) {
                                 var pgm = self.module + '.send_message fileWrite callback 6: ';
-                                // todo: check res == 'ok'
+                                if (res != 'ok') return set_error2('Cannot send message. fileWrite ' + request_filename + ' failed with ' + res) ;
 
                                 // 7: optional update status for wallet to wallet communication.
                                 self.update_wallet_status(status, {group_debug_seq: group_debug_seq, optional: optional}, function (res) {
