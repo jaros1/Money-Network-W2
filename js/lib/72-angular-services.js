@@ -3174,7 +3174,7 @@ angular.module('MoneyNetworkW2')
 
                                         // send_mt step 6. send offline pubkeys message to other wallet session
                                         step_6_send_pubkeys_msg = function () {
-                                            var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_6_save_pubkeys_msg/' + group_debug_seq + ': ';
+                                            var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_6_send_pubkeys_msg/' + group_debug_seq + ': ';
                                             var request2, error, options;
                                             request2 = {
                                                 msgtype: 'w2_pubkeys',
@@ -4212,16 +4212,15 @@ angular.module('MoneyNetworkW2')
 
                             // restore wallet backup step 7
                             step_7_restart_w2_session = function (group_debug_seq) {
-                                var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_7_restart_w2_session/' + group_debug_seq + ': ';
-                                var job ;
+                                var pgm, job ;
                                 try {
+                                    pgm = service + '.process_incoming_message.' + request.msgtype + '.step_7_restart_w2_session/' + group_debug_seq + ': ';
                                     MoneyNetworkAPILib.debug_group_operation_end(group_debug_seq);
 
                                     z_wrapper_notification(['done', 'W2 wallet was restored. Reloading page in 3 seconds']) ;
 
                                     job = function() { $window.location.reload() } ;
                                     $timeout(job, 3000) ;
-
                                 }
                                 catch (e) {
                                     if (!e) return ; // exception in MoneyNetworkAPI instance
@@ -4287,7 +4286,7 @@ angular.module('MoneyNetworkW2')
                                             report_error(pgm, ['Restore backup failed', "JS exception", error], {log: false, group_debug_seq: group_debug_seq}) ;
                                             throw(e);
                                         }
-                                    }) ;
+                                    }) ; // z_file_write callback 1
                                 }
                                 catch (e) {
                                     if (!e) return ; // exception in MoneyNetworkAPI instance
@@ -4408,8 +4407,6 @@ angular.module('MoneyNetworkW2')
                                         console.log(pgm + 'OK start_mt response was send to MN. continue with restore_wallet_backup post processing');
                                         console.log(pgm + 'Using group_debug_seq ' + group_debug_seq + ' for this post restore_wallet_backup processing operation');
 
-                                        console.log(pgm + 'todo: cannot use send_exception in post processing. OK response has already been sent to MN') ;
-
                                         console.log(pgm + 'todo: 1) wait a few seconds before starting restore. MN session will wait max 60 seconds for restore_wallet_backup OK response') ;
                                         console.log(pgm + 'todo: 2) display notification in W2') ;
                                         console.log(pgm + 'todo: 3) display spinner with countdown in W2') ;
@@ -4434,7 +4431,7 @@ angular.module('MoneyNetworkW2')
                                                 report_error(pgm, ['Restore backup failed', "JS exception", error], {log: false, group_debug_seq: group_debug_seq}) ;
                                                 throw(e);
                                             }
-                                        }) ;
+                                        }) ; // get_user_path callback 2
                                     }
                                     catch (e) {
                                         if (!e) return ; // exception in MoneyNetworkAPI instance
@@ -4445,14 +4442,13 @@ angular.module('MoneyNetworkW2')
                                         report_error(pgm, ['Restore backup failed', "JS exception", error], {log: false, group_debug_seq: group_debug_seq}) ;
                                         throw(e);
                                     }
-                                }) ;
+                                }) ; // send_response callback 1
                             }; // step_2_send_ok_response
 
                             // restore wallet backup step 1
                             // optional confirm restore. See "Confirm backup and restore" checkbox
                             step_1_confirm = function() {
-                                var pgm = service + '.process_incoming_message.' + request.msgtype + '.step_1_confirm/' + group_debug_seq + ': ';
-                                var confirm_status, confirm_timeout_fnk, message ;
+                                var pgm, confirm_status, confirm_timeout_fnk, message ;
                                 try {
                                     pgm = service + '.process_incoming_message.' + request.msgtype + '.step_1_confirm/' + group_debug_seq + ': ';
                                     if (!status.permissions.confirm_backup_restore) return step_2_send_ok_response() ;
@@ -4470,12 +4466,15 @@ angular.module('MoneyNetworkW2')
                                     // todo: add restore info: timestamp, filename, size etc
                                     message = 'MN restore request. Allow full W2 localStorage restore.<br>All existing data will be deleted. No way back' ;
                                     ZeroFrame.cmd("wrapperConfirm", [message, 'OK'], function (confirm) {
-                                        if (confirm_status.done) return; // confirm dialog done (OK or timeout)
-                                        confirm_status.done = true ;
-                                        if (!confirm) return send_response('backup request was rejected');
-                                        // restore request was confirmed. continue
-                                        step_2_send_ok_response();
-                                    }) ;
+                                        try {
+                                            if (confirm_status.done) return; // confirm dialog done (OK or timeout)
+                                            confirm_status.done = true ;
+                                            if (!confirm) return send_response('backup request was rejected');
+                                            // restore request was confirmed. continue
+                                            step_2_send_ok_response();
+                                        }
+                                        catch (e) { return send_exception(pgm, e) }
+                                    }) ; // wrapperConfirm callback
 
                                     // 2: notification in MN session.
                                     report_error(pgm, 'Please confirm backup restore in W2', {log: false, w2: false, type:'info', timeout: 10000}) ;
