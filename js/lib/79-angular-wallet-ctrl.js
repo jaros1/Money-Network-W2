@@ -336,7 +336,7 @@ angular.module('MoneyNetworkW2')
         // get list of screen dumps in screendumps folder
         self.screendumps = [] ;
         (function () {
-            MoneyNetworkAPILib.z_file_get(controller, {inner_path: 'screendumps/content.json'}, function (content_str) {
+            MoneyNetworkAPILib.z_file_get(controller + ': ', {inner_path: 'screendumps/content.json'}, function (content_str) {
                 var pgm = controller + ' start z_file_get callback 1: ';
                 var content, files, filename, text ;
                 if (!content_str) {
