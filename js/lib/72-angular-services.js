@@ -4120,7 +4120,7 @@ angular.module('MoneyNetworkW2')
                                 response.auth_address = ZeroFrame.site_info.auth_address ;
                                 response.cert_user_id = ZeroFrame.site_info.cert_user_id ;
                                 console.log(pgm + 'response.filenames = ' + JSON.stringify(response.filenames)) ;
-                                // response.filenames = ["content.json","f02116f927.1516784183846","wallet.json"]
+                                // response.filenames = ["content.json","content.json","wallet.json"]
                                 send_response() ;
                             }; // step_2_backup
 
@@ -4132,8 +4132,7 @@ angular.module('MoneyNetworkW2')
                                     get_content_json(function (content) {
                                         var filename, re, m ;
                                         if (!content) send_response('System error. Could not find content.json file');
-                                        filenames.push('content.json') ;
-                                        for (filename in content.files) if (filename != 'content.json') filenames.push(filename) ;
+                                        for (filename in content.files) filenames.push(filename) ;
                                         re = new RegExp('^[0-9a-f]{10}(-i|-e|-o|-io|-p)\.[0-9]{13}$'); // pattern for MoneyNetworkAPI files.
                                         if (content.files_optional) for (filename in content.files_optional) {
                                             m=filename.match(re)  ;
@@ -4208,7 +4207,7 @@ angular.module('MoneyNetworkW2')
                             if (!status.permissions || !status.permissions.restore) return send_response('restore operation is not authorized');
 
 
-                            // callback chain: step 1-7
+                            // callback chain: step 1-8
 
                             // restore wallet backup step 8
                             step_8_restart_w2_session = function (group_debug_seq) {
@@ -4292,28 +4291,22 @@ angular.module('MoneyNetworkW2')
                                         }
                                         catch (e) {
                                             if (!e) return; // exception in MoneyNetworkAPI instance
-                                            if (!pgm) pgm = 'restore_wallet_backup/step_5_restore_files 1';
+                                            if (!pgm) pgm = 'restore_wallet_backup/step_6_restore_files 1';
                                             error = e.message ? e.message : e;
                                             console.log(pgm + error);
                                             if (e.stack) console.log(e.stack);
-                                            report_error(pgm, ['Restore backup failed', "JS exception", error], {
-                                                log: false,
-                                                group_debug_seq: group_debug_seq
-                                            });
+                                            report_error(pgm, ['Restore backup failed', "JS exception", error], {log: false, group_debug_seq: group_debug_seq}) ;
                                             throw(e);
                                         }
                                     }); // z_file_write callback 1
                                 }
                                 catch (e) {
                                     if (!e) return; // exception in MoneyNetworkAPI instance
-                                    if (!pgm) pgm = 'restore_wallet_backup/step_5_restore_files 0';
+                                    if (!pgm) pgm = 'restore_wallet_backup/step_6_restore_files 0';
                                     error = e.message ? e.message : e;
                                     console.log(pgm + error);
                                     if (e.stack) console.log(e.stack);
-                                    report_error(pgm, ['Restore backup failed', "JS exception", error], {
-                                        log: false,
-                                        group_debug_seq: group_debug_seq
-                                    });
+                                    report_error(pgm, ['Restore backup failed', "JS exception", error], {log: false, group_debug_seq: group_debug_seq}) ;
                                     throw(e);
                                 }
                             }; // step_6_restore_files
@@ -4365,13 +4358,13 @@ angular.module('MoneyNetworkW2')
                                     report_error(pgm, ['Restore backup failed', "JS exception", error], {log: false, group_debug_seq: group_debug_seq}) ;
                                     throw(e);
                                 }
-                            } ;
+                            } ; // step_5_clear_cache
 
                             // restore wallet backup step 4
                             step_4_delete_user_files = function (group_debug_seq) {
                                 var pgm ;
                                 try {
-                                    // cache was cleared in step_3_notification.
+                                    pgm = service + '.process_incoming_message.' + request.msgtype + '.step_4_delete_user_files/' + group_debug_seq + ': ';
                                     z_wrapper_notification(['info', 'W2 wallet restored started. Please wait', 10000]) ;
 
                                     get_content_json(function (content) {
